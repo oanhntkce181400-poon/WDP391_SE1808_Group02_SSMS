@@ -27,3 +27,13 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Documentation files (không push lên Git)
+CHEAT_SHEET.txt
+CLOUDINARY_SOCKETIO_GUIDE.md
+QUICK_START.md
+SUMMARY.md
+TEST_GUIDE.md
+
+# Uploads folder
+uploads/

@@ -1,13 +1,16 @@
 require('dotenv').config();
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { connectDB } = require('./configs/db.config');
+const { initializeSocketIO } = require('./configs/socket.config');
 const authRoutes = require('./modules/auth/auth.routes');
 const actorsRoutes = require('./modules/actors/actors.routes');
 
 const app = express();
+const httpServer = http.createServer(app);
 
 function parseCorsOrigins() {
   const raw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN;
@@ -41,8 +44,15 @@ const PORT = process.env.PORT || 3000;
 async function startServer() {
   await connectDB();
 
-  app.listen(PORT, () => {
+  // Khởi tạo Socket.IO với JWT authentication
+  const io = initializeSocketIO(httpServer);
+  
+  // Lưu io instance vào app để dùng ở các routes khác (nếu cần)
+  app.set('io', io);
+
+  httpServer.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    console.log(`🔌 Socket.IO is ready for connections`);
   });
 }
 
