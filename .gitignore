@@ -34,6 +34,8 @@ CLOUDINARY_SOCKETIO_GUIDE.md
 QUICK_START.md
 SUMMARY.md
 TEST_GUIDE.md
+backend-api/MODELS_DOCUMENTATION.md
+backend-api/SEED_DATA_DOCUMENTATION.md
 
 # Uploads folder
 uploads/
