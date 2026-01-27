@@ -1,7 +1,10 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const {
   verifyGoogleIdToken,
 } = require('../../external/google.provider');
+const mailer = require('../../external/mailer');
 const repo = require('./auth.repository');
 const {
   generateId,
@@ -31,6 +34,111 @@ function buildRefreshExpiresAt() {
   return new Date(Date.now() + refreshCfg.cookieMaxAgeMs);
 }
 
+function normalizeEmail(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase();
+}
+
+function hashText(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+const PASSWORD_SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS || 10);
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('invalid-password-placeholder', PASSWORD_SALT_ROUNDS);
+
+async function hashPassword(password) {
+  return bcrypt.hash(String(password), PASSWORD_SALT_ROUNDS);
+}
+
+async function verifyPassword(password, passwordHash) {
+  if (!passwordHash) {
+    // Perform a dummy compare to make timing less revealing.
+    await bcrypt.compare(String(password || ''), DUMMY_PASSWORD_HASH);
+    return false;
+  }
+  return bcrypt.compare(String(password || ''), passwordHash);
+}
+
+function buildOtpExpiresAt() {
+  const minutes = Number(process.env.OTP_EXPIRES_MINUTES || 10);
+  return new Date(Date.now() + minutes * 60 * 1000);
+}
+
+function generateNumericOtp(length = 6) {
+  const digits = [];
+  for (let i = 0; i < length; i += 1) {
+    digits.push(Math.floor(Math.random() * 10));
+  }
+  return digits.join('');
+}
+
+function sortByDateDesc(a, b) {
+  const aTime = new Date(a).getTime();
+  const bTime = new Date(b).getTime();
+  return bTime - aTime;
+}
+
+function buildSessionsFromTokens(tokens, currentFamilyId) {
+  const now = Date.now();
+  const byFamily = new Map();
+
+  tokens.forEach((token) => {
+    if (!token?.familyId) return;
+    if (!byFamily.has(token.familyId)) {
+      byFamily.set(token.familyId, []);
+    }
+    byFamily.get(token.familyId).push(token);
+  });
+
+  const sessions = Array.from(byFamily.entries()).map(([familyId, familyTokens]) => {
+    const sortedTokens = [...familyTokens].sort((a, b) =>
+      sortByDateDesc(a.issuedAt || a.createdAt, b.issuedAt || b.createdAt),
+    );
+
+    const latest = sortedTokens[0];
+    const deviceSession = latest?.deviceSession;
+    const expiresAt = latest?.expiresAt ? new Date(latest.expiresAt).getTime() : 0;
+
+    const isRevoked = Boolean(latest?.revokedAt);
+    const isExpired = expiresAt > 0 ? expiresAt <= now : false;
+    const isActive = !isRevoked && !isExpired;
+
+    return {
+      familyId,
+      tokenCount: familyTokens.length,
+      issuedAt: latest?.issuedAt || latest?.createdAt,
+      lastUsedAt: latest?.lastUsedAt || latest?.updatedAt || latest?.createdAt,
+      expiresAt: latest?.expiresAt,
+      revokedAt: latest?.revokedAt || null,
+      revokeReason: latest?.revokeReason || null,
+      isActive,
+      isCurrent: familyId === currentFamilyId,
+      ipAddress: latest?.lastUsedIp || latest?.issuedIp || deviceSession?.ipAddress || null,
+      userAgent:
+        latest?.lastUsedUserAgent || latest?.issuedUserAgent || deviceSession?.userAgent || null,
+      deviceSession: deviceSession
+        ? {
+            id: String(deviceSession._id || deviceSession.id),
+            ipAddress: deviceSession.ipAddress,
+            userAgent: deviceSession.userAgent,
+            startedAt: deviceSession.startedAt,
+            endedAt: deviceSession.endedAt,
+            isActive: deviceSession.isActive,
+          }
+        : null,
+    };
+  });
+
+  return sessions.sort((a, b) => {
+    if (a.isCurrent && !b.isCurrent) return -1;
+    if (!a.isCurrent && b.isCurrent) return 1;
+    if (a.isActive && !b.isActive) return -1;
+    if (!a.isActive && b.isActive) return 1;
+    return sortByDateDesc(a.lastUsedAt || a.issuedAt, b.lastUsedAt || b.issuedAt);
+  });
+}
+
 function sanitizeUser(user) {
   if (!user) return null;
   return {
@@ -41,6 +149,7 @@ function sanitizeUser(user) {
     avatarUrl: user.avatarUrl,
     authProvider: user.authProvider,
     status: user.status,
+    mustChangePassword: Boolean(user.mustChangePassword),
   };
 }
 
@@ -216,6 +325,97 @@ async function loginWithGoogle(req, { idToken }) {
   };
 }
 
+async function loginWithPassword(req, { email, password }) {
+  const { ip, userAgent } = extractRequestContext(req);
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail || !password) {
+    throw new Error('email and password are required.');
+  }
+
+  const user = await repo.findUserByEmail(normalizedEmail);
+  const isValidPassword = await verifyPassword(password, user?.password);
+
+  if (!user || !isValidPassword) {
+    await recordLoginEvent({
+      userId: user?._id,
+      ip,
+      userAgent,
+      eventType: 'login',
+      success: false,
+      failureReason: 'invalid-credentials',
+    });
+    throw new Error('Invalid credentials.');
+  }
+
+  if (user.status !== 'active' || user.isActive === false) {
+    await recordLoginEvent({
+      userId: user._id,
+      ip,
+      userAgent,
+      eventType: 'login',
+      success: false,
+      failureReason: 'user-inactive',
+    });
+    throw new Error('User is inactive.');
+  }
+
+  const deviceSession = await repo.createDeviceSession({
+    user: user._id,
+    ipAddress: ip || 'unknown',
+    userAgent,
+    startedAt: new Date(),
+    isActive: true,
+  });
+
+  const familyId = generateId(16);
+  const { accessToken, refreshToken, accessJti, refreshJti } = issueTokenPair({
+    userId: user._id,
+    role: user.role,
+    familyId,
+  });
+
+  const refreshDoc = await persistRefreshToken({
+    userId: user._id,
+    refreshToken,
+    refreshJti,
+    familyId,
+    deviceSessionId: deviceSession._id,
+    ip,
+    userAgent,
+  });
+
+  await repo.updateUser(user._id, {
+    lastLoginAt: new Date(),
+  });
+
+  await recordLoginEvent({
+    userId: user._id,
+    deviceSessionId: deviceSession._id,
+    ip,
+    userAgent,
+    familyId,
+    accessJti,
+    refreshJti,
+    eventType: 'login',
+    success: true,
+  });
+
+  return {
+    user: sanitizeUser(user),
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
+    meta: {
+      familyId,
+      refreshTokenId: String(refreshDoc._id),
+      deviceSessionId: String(deviceSession._id),
+      mustChangePassword: Boolean(user.mustChangePassword),
+    },
+  };
+}
+
 function safeDecodeRefreshToken(token) {
   try {
     return jwt.decode(token);
@@ -371,10 +571,224 @@ async function getMe(req) {
   return sanitizeUser(user);
 }
 
+async function forgotPassword(req, { email }) {
+  const { ip, userAgent } = extractRequestContext(req);
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error('Email is required.');
+  }
+
+  const user = await repo.findUserByEmail(normalizedEmail);
+
+  // Do not reveal whether the account exists.
+  if (!user) {
+    return { success: true };
+  }
+
+  // Google-only accounts should reset via Google, not local OTP.
+  if (user.authProvider === 'google' && !user.password) {
+    return { success: true };
+  }
+
+  await repo.invalidateActiveOtps(user._id, 'forgot-password');
+
+  const otp = generateNumericOtp(6);
+  const otpHash = hashText(otp);
+  const expiresAt = buildOtpExpiresAt();
+
+  await repo.createPasswordResetOtp({
+    user: user._id,
+    email: normalizedEmail,
+    otpHash,
+    purpose: 'forgot-password',
+    expiresAt,
+    attempts: 0,
+    maxAttempts: Number(process.env.OTP_MAX_ATTEMPTS || 5),
+    requestIp: ip,
+    requestUserAgent: userAgent,
+  });
+
+  await mailer.sendOtpMail(normalizedEmail, otp);
+
+  await recordLoginEvent({
+    userId: user._id,
+    ip,
+    userAgent,
+    eventType: 'password-reset',
+    success: true,
+  });
+
+  return { success: true };
+}
+
+async function resetPassword(req, { email, otp, newPassword }) {
+  const { ip, userAgent } = extractRequestContext(req);
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail || !otp || !newPassword) {
+    throw new Error('email, otp and newPassword are required.');
+  }
+
+  const user = await repo.findUserByEmail(normalizedEmail);
+  if (!user) {
+    throw new Error('Invalid reset request.');
+  }
+
+  if (user.authProvider === 'google' && !user.password) {
+    throw new Error('This account uses Google login.');
+  }
+
+  const otpDoc = await repo.findLatestActiveOtp(user._id, 'forgot-password');
+  if (!otpDoc) {
+    throw new Error('OTP is invalid or expired.');
+  }
+
+  if (otpDoc.attempts >= otpDoc.maxAttempts) {
+    await repo.consumeOtp(otpDoc._id);
+    throw new Error('OTP attempt limit exceeded.');
+  }
+
+  const incomingHash = hashText(otp);
+  if (incomingHash !== otpDoc.otpHash) {
+    const updated = await repo.incrementOtpAttempts(otpDoc._id);
+    if (updated && updated.attempts >= updated.maxAttempts) {
+      await repo.consumeOtp(otpDoc._id);
+    }
+    throw new Error('OTP is invalid or expired.');
+  }
+
+  await repo.consumeOtp(otpDoc._id);
+
+  // Store a hash rather than the raw password.
+  const newPasswordHash = await hashPassword(newPassword);
+  await repo.updateUser(user._id, {
+    password: newPasswordHash,
+    authProvider: 'local',
+    mustChangePassword: false,
+    passwordChangedAt: new Date(),
+  });
+
+  await recordLoginEvent({
+    userId: user._id,
+    ip,
+    userAgent,
+    eventType: 'password-reset',
+    success: true,
+  });
+
+  return { success: true };
+}
+
+async function listMySessions(req) {
+  const userId = req.auth?.sub;
+  if (!userId) {
+    throw new Error('Unauthorized.');
+  }
+
+  const tokens = await repo.listRefreshTokensByUser(userId);
+  const sessions = buildSessionsFromTokens(tokens, req.auth?.familyId);
+  return { sessions };
+}
+
+async function logoutAllSessions(req) {
+  const { ip, userAgent } = extractRequestContext(req);
+  const userId = req.auth?.sub;
+  if (!userId) {
+    throw new Error('Unauthorized.');
+  }
+
+  const tokens = await repo.listRefreshTokensByUser(userId);
+  const sessions = buildSessionsFromTokens(tokens, req.auth?.familyId);
+
+  const revokeResult = await repo.revokeAllFamiliesForUser(userId, 'logout-all');
+
+  // End device sessions best-effort.
+  const deviceSessionIds = tokens
+    .map((t) => t?.deviceSession?._id || t?.deviceSession)
+    .filter(Boolean);
+  for (const deviceSessionId of deviceSessionIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await repo.endDeviceSession(deviceSessionId);
+  }
+
+  await recordLoginEvent({
+    userId,
+    ip,
+    userAgent,
+    eventType: 'logout',
+    success: true,
+    failureReason: 'logout-all',
+  });
+
+  return {
+    success: true,
+    revokedFamilies: sessions.length,
+    modifiedTokens: revokeResult?.modifiedCount || 0,
+  };
+}
+
+async function revokeSession(req, { familyId }) {
+  const { ip, userAgent } = extractRequestContext(req);
+  const userId = req.auth?.sub;
+  if (!userId) {
+    throw new Error('Unauthorized.');
+  }
+  if (!familyId) {
+    throw new Error('familyId is required.');
+  }
+
+  const tokens = await repo.listRefreshTokensByUser(userId);
+  const tokensInFamily = tokens.filter((t) => t.familyId === familyId);
+  if (tokensInFamily.length === 0) {
+    throw new Error('Session not found.');
+  }
+
+  const revokeResult = await repo.revokeFamilyForUser(userId, familyId, 'session-revoked');
+
+  const deviceSessionIds = tokensInFamily
+    .map((t) => t?.deviceSession?._id || t?.deviceSession)
+    .filter(Boolean);
+  for (const deviceSessionId of deviceSessionIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await repo.endDeviceSession(deviceSessionId);
+  }
+
+  await recordLoginEvent({
+    userId,
+    ip,
+    userAgent,
+    familyId,
+    eventType: 'logout',
+    success: true,
+    failureReason: 'session-revoked',
+  });
+
+  return {
+    success: true,
+    modifiedTokens: revokeResult?.modifiedCount || 0,
+    familyId,
+  };
+}
+
+async function getMyLoginHistory(req, { limit }) {
+  const userId = req.auth?.sub;
+  if (!userId) {
+    throw new Error('Unauthorized.');
+  }
+
+  const events = await repo.listLoginEventsByUser(userId, limit);
+  return { events };
+}
+
 module.exports = {
+  loginWithPassword,
   loginWithGoogle,
   refreshTokens,
   logout,
   getMe,
+  forgotPassword,
+  resetPassword,
+  listMySessions,
+  logoutAllSessions,
+  revokeSession,
+  getMyLoginHistory,
 };
-

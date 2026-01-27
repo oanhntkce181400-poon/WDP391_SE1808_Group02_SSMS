@@ -1,9 +1,10 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const { fakerVI } = require('@faker-js/faker');
+const bcrypt = require('bcryptjs');
 const { connectDB } = require('../../configs/db.config');
 const User = require('../../models/user.model');
 const Student = require('../../models/student.model');
@@ -19,16 +20,18 @@ const faker = fakerVI;
 faker.seed(20250127);
 
 const MAJORS = [
-  { code: 'CE', name: 'Công nghệ thông tin' },
-  { code: 'BA', name: 'Kinh tế' },
-  { code: 'CA', name: 'Thiết kế đồ họa' },
-  { code: 'SE', name: 'Kỹ thuật phần mềm' },
+  { code: 'CE', name: 'Cﾃｴng ngh盻・thﾃｴng tin' },
+  { code: 'BA', name: 'Kinh t蘯ｿ' },
+  { code: 'CA', name: 'Thi蘯ｿt k蘯ｿ ﾄ黛ｻ・h盻溝' },
+  { code: 'SE', name: 'K盻ｹ thu蘯ｭt ph蘯ｧn m盻［' },
 ];
 
-// Dễ mở rộng cho các khóa sau này
+// D盻・m盻・r盻冢g cho cﾃ｡c khﾃｳa sau nﾃy
 const COHORTS = [16, 17, 18, 19, 20];
 
 const DOMAIN = 'fpt.edu.vn';
+const PASSWORD_SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS || 10);
+const BCRYPT_REGEX = /^\$2[aby]\$/;
 
 function normalizeText(text) {
   return text
@@ -143,17 +146,39 @@ function fakeValue(fieldName, rawType) {
 
 async function seedAdmin() {
   const adminEmail = 'admin@example.com';
+  const adminPlainPassword = '123456';
+  const adminPasswordHash = await bcrypt.hash(adminPlainPassword, PASSWORD_SALT_ROUNDS);
+
   const existingAdmin = await User.findOne({ email: adminEmail });
   if (!existingAdmin) {
     await User.create({
       email: adminEmail,
-      password: '123456', // TODO: hash bằng bcrypt sau
+      password: adminPasswordHash,
       fullName: 'System Admin',
       role: 'admin',
+      authProvider: 'local',
+      mustChangePassword: false,
     });
-    console.log('✅ Seeded admin user:', adminEmail);
+    console.log('Seeded admin user:', adminEmail);
+    return;
+  }
+
+  const needsHashUpdate = existingAdmin.password && !BCRYPT_REGEX.test(String(existingAdmin.password));
+  if (needsHashUpdate) {
+    await User.updateOne(
+      { _id: existingAdmin._id },
+      {
+        $set: {
+          password: adminPasswordHash,
+          authProvider: 'local',
+          mustChangePassword: false,
+          passwordChangedAt: new Date(),
+        },
+      },
+    );
+    console.log('Updated admin password to bcrypt hash.');
   } else {
-    console.log('✅ Admin user already exists, skip seeding.');
+    console.log('Admin user already exists, skip seeding.');
   }
 }
 
@@ -251,12 +276,21 @@ async function seedTeachers() {
 async function seedStudents(curriculums) {
   const curriculumMap = new Map(curriculums.map((c) => [c.cohort, c]));
   const students = [];
+  const suffixCounters = new Map();
+
+  function nextSuffix(majorCode, cohort) {
+    const key = `${majorCode}-${cohort}`;
+    const current = suffixCounters.get(key) || 999;
+    const next = current + 1;
+    suffixCounters.set(key, next);
+    return next;
+  }
 
   for (let i = 0; i < 1000; i += 1) {
     const major = randomFrom(MAJORS);
     const cohort = randomFrom(COHORTS);
     const fullName = faker.person.fullName();
-    const suffixNumber = faker.number.int({ min: 1000, max: 9999 });
+    const suffixNumber = nextSuffix(major.code, cohort);
     const studentCode = buildStudentCode(major.code, cohort, suffixNumber);
     const email = buildStudentEmail(fullName, major.code, cohort, suffixNumber);
     const curriculum = curriculumMap.get(cohort);
@@ -271,13 +305,22 @@ async function seedStudents(curriculums) {
     });
   }
 
-  return Student.insertMany(students);
+  // Use ordered: false and tolerate duplicate key errors so the rest of seeding continues.
+  try {
+    return await Student.insertMany(students, { ordered: false });
+  } catch (err) {
+    if (err?.code === 11000) {
+      console.warn('Duplicate student detected during seeding. Continuing...');
+      return [];
+    }
+    throw err;
+  }
 }
 
 async function seedMissingTablesFromDiagram() {
   const xmlPath = path.join(__dirname, '..', '..', '..', 'DATABASESeed.drawio.xml');
   if (!fs.existsSync(xmlPath)) {
-    console.log('⚠️  DATABASESeed.drawio.xml not found, skip generic seeding.');
+    console.log('笞・・ DATABASESeed.drawio.xml not found, skip generic seeding.');
     return;
   }
 
@@ -292,6 +335,15 @@ async function seedMissingTablesFromDiagram() {
     'rooms',
     'curriculums',
     'majors',
+    'roles',
+    'permissions',
+    'role_permissions',
+    'user_roles',
+    'refresh_tokens',
+    'password_reset_otps',
+    'device_sessions',
+    'login_events',
+    'audit_logs',
   ]);
 
   const tableNames = Object.keys(tables);
@@ -343,10 +395,11 @@ async function seed() {
 
 seed()
   .then(() => {
-    console.log('🎉 Seeding completed');
+    console.log('脂 Seeding completed');
     process.exit(0);
   })
   .catch((err) => {
-    console.error('❌ Seeding failed:', err);
+    console.error('笶・Seeding failed:', err);
     process.exit(1);
   });
+
