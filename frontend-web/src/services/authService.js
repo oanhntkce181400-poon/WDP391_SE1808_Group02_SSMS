@@ -1,8 +1,14 @@
 import axiosClient from './axiosClient';
 
 const authService = {
-  login(data) {
-    return axiosClient.post('/auth/login', data);
+  loginWithGoogle(idToken) {
+    return axiosClient.post('/auth/google', { idToken });
+  },
+  me() {
+    return axiosClient.get('/auth/me');
+  },
+  refresh() {
+    return axiosClient.post('/auth/refresh');
   },
   logout() {
     return axiosClient.post('/auth/logout');
