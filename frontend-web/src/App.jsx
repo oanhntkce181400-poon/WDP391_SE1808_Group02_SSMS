@@ -9,8 +9,12 @@ import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+<<<<<<< HEAD
 import UserListPage from './pages/UserListPage';
 import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
+=======
+import MajorManagement from './pages/admin/MajorManagement';
+>>>>>>> origin/Students
 import authService from './services/authService';
 
 export default function App() {
@@ -32,8 +36,12 @@ export default function App() {
         <Route path="subjects" element={<SubjectManagement />} />
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
         <Route path="curriculum" element={<CurriculumManagement />} />
+<<<<<<< HEAD
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
+=======
+        <Route path="majors" element={<MajorManagement />} />
+>>>>>>> origin/Students
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}

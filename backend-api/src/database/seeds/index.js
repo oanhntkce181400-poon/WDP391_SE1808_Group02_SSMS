@@ -20,13 +20,44 @@ const faker = fakerVI;
 faker.seed(20250127);
 
 const MAJORS = [
-  { code: 'CE', name: 'Cﾃｴng ngh盻・thﾃｴng tin' },
-  { code: 'BA', name: 'Kinh t蘯ｿ' },
-  { code: 'CA', name: 'Thi蘯ｿt k蘯ｿ ﾄ黛ｻ・h盻溝' },
-  { code: 'SE', name: 'K盻ｹ thu蘯ｭt ph蘯ｧn m盻［' },
+  { 
+    code: 'SE', 
+    name: 'Kỹ thuật phần mềm', 
+    nameEn: 'Software Engineering', 
+    faculty: 'Khoa Công nghệ thông tin',
+    studentCount: 1245
+  },
+  { 
+    code: 'AI', 
+    name: 'Trí tuệ nhân tạo', 
+    nameEn: 'Artificial Intelligence', 
+    faculty: 'Khoa Công nghệ thông tin',
+    studentCount: 450
+  },
+  { 
+    code: 'IB', 
+    name: 'Kinh doanh quốc tế', 
+    nameEn: 'International Business', 
+    faculty: 'Khoa Kinh tế và Luật',
+    studentCount: 890
+  },
+  { 
+    code: 'GD', 
+    name: 'Thiết kế đồ họa', 
+    nameEn: 'Graphic Design', 
+    faculty: 'Khoa Ngôn ngữ anh',
+    studentCount: 320
+  },
+  { 
+    code: 'OLD_IT', 
+    name: 'Tin học ứng dụng (Cũ)', 
+    nameEn: 'Applied Informatics', 
+    faculty: 'Khoa Công nghệ thông tin',
+    studentCount: 0
+  },
 ];
 
-// D盻・m盻・r盻冢g cho cﾃ｡c khﾃｳa sau nﾃy
+// Dữ liệu mẫu cho các khóa sau này
 const COHORTS = [16, 17, 18, 19, 20];
 
 const DOMAIN = 'fpt.edu.vn';
@@ -160,25 +191,44 @@ async function seedAdmin() {
       mustChangePassword: false,
     });
     console.log('Seeded admin user:', adminEmail);
-    return;
+  } else {
+    const needsHashUpdate = existingAdmin.password && !BCRYPT_REGEX.test(String(existingAdmin.password));
+    if (needsHashUpdate) {
+      await User.updateOne(
+        { _id: existingAdmin._id },
+        {
+          $set: {
+            password: adminPasswordHash,
+            authProvider: 'local',
+            mustChangePassword: false,
+            passwordChangedAt: new Date(),
+          },
+        },
+      );
+      console.log('Updated admin password to bcrypt hash.');
+    } else {
+      console.log('Admin user already exists, skip seeding.');
+    }
   }
 
-  const needsHashUpdate = existingAdmin.password && !BCRYPT_REGEX.test(String(existingAdmin.password));
-  if (needsHashUpdate) {
-    await User.updateOne(
-      { _id: existingAdmin._id },
-      {
-        $set: {
-          password: adminPasswordHash,
-          authProvider: 'local',
-          mustChangePassword: false,
-          passwordChangedAt: new Date(),
-        },
-      },
-    );
-    console.log('Updated admin password to bcrypt hash.');
+  // Seed student user for testing
+  const studentEmail = 'student@fpt.edu.vn';
+  const studentPlainPassword = '123456';
+  const studentPasswordHash = await bcrypt.hash(studentPlainPassword, PASSWORD_SALT_ROUNDS);
+
+  const existingStudent = await User.findOne({ email: studentEmail });
+  if (!existingStudent) {
+    await User.create({
+      email: studentEmail,
+      password: studentPasswordHash,
+      fullName: 'Nguyen Van A',
+      role: 'student',
+      authProvider: 'local',
+      mustChangePassword: false,
+    });
+    console.log('Seeded student user:', studentEmail);
   } else {
-    console.log('Admin user already exists, skip seeding.');
+    console.log('Student user already exists, skip seeding.');
   }
 }
 
@@ -217,13 +267,15 @@ async function seedSubjects() {
 
 async function seedMajors() {
   await Major.deleteMany({});
-  return Major.insertMany(
-    MAJORS.map((major) => ({
-      majorCode: major.code,
-      majorName: major.name,
-      isActive: true,
-    })),
-  );
+  const majorsToSeed = MAJORS.map((major, index) => ({
+    majorCode: major.code,
+    majorName: major.name,
+    majorNameEn: major.nameEn,
+    faculty: major.faculty,
+    studentCount: major.studentCount || 0,
+    isActive: index < 4, // 4 ngành đầu đang đào tạo, ngành cuối ngừng tuyển sinh
+  }));
+  return Major.insertMany(majorsToSeed);
 }
 
 async function seedRooms() {
@@ -376,6 +428,7 @@ async function seed() {
     Device.deleteMany({}),
     Subject.deleteMany({}),
     Curriculum.deleteMany({}),
+    Major.deleteMany({}),
   ]);
 
   await seedMajors();
