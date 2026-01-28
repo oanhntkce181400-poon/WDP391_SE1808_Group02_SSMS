@@ -49,7 +49,19 @@ exports.createCurriculum = async (req, res) => {
       data: curriculum,
     });
   } catch (error) {
-    res.status(500).json({
+    if (error?.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'Duplicate curriculum code',
+      });
+    }
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -66,7 +78,19 @@ exports.updateCurriculum = async (req, res) => {
       data: curriculum,
     });
   } catch (error) {
-    res.status(500).json({
+    if (error?.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'Duplicate curriculum code',
+      });
+    }
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

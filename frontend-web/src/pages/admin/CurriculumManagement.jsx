@@ -1,6 +1,6 @@
 // Curriculum Management Page - Drag and drop curriculum builder (Tasks #XX)
 // Based on provided HTML design
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import searchIcon from '../../assets/search.png';
 import filterIcon from '../../assets/filter.png';
@@ -9,10 +9,50 @@ import addIcon from '../../assets/circle.png';
 import deleteIcon from '../../assets/delete.png';
 import copyIcon from '../../assets/file.png';
 import subjectService from '../../services/subjectService';
+import curriculumService from '../../services/curriculumService';
+import majorService from '../../services/majorService';
 
 export default function CurriculumManagement() {
   const navigate = useNavigate();
   const { curriculumId } = useParams();
+
+  const normalizeCode = (code) => String(code || '').trim();
+
+  // State for majors data
+  const [majors, setMajors] = useState([]);
+  const majorCodeToName = useMemo(() => {
+    return new Map(
+      (majors || []).map((m) => [normalizeCode(m.majorCode), normalizeCode(m.majorName)])
+    );
+  }, [majors]);
+
+  // Also create name to code map for backward compatibility
+  const majorNameToCode = useMemo(() => {
+    return new Map(
+      (majors || []).map((m) => [normalizeCode(m.majorName), normalizeCode(m.majorCode)])
+    );
+  }, [majors]);
+
+  const handleMajorSelect = (majorCode) => {
+    setCurrentCurriculum((prev) => ({
+      ...prev,
+      major: majorCode,
+    }));
+    setMajorDropdownOpen(false);
+    setHasChanges(true);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (majorDropdownRef.current && !majorDropdownRef.current.contains(event.target)) {
+        setMajorDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // State for current curriculum
   const [currentCurriculum, setCurrentCurriculum] = useState(null);
@@ -25,6 +65,8 @@ export default function CurriculumManagement() {
   // State for subjects data
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [majorDropdownOpen, setMajorDropdownOpen] = useState(false);
+  const majorDropdownRef = useRef(null);
 
   // State for curriculum semesters (empty initially - will be fetched from DB)
   const [semesters, setSemesters] = useState([
@@ -74,6 +116,11 @@ export default function CurriculumManagement() {
           code: item.subjectCode || item.code,
           name: item.subjectName || item.name,
           credits: item.credits,
+          prerequisites: Array.isArray(item.prerequisites)
+            ? item.prerequisites
+                .map((p) => normalizeCode(p.code || p.subjectCode))
+                .filter(Boolean)
+            : [],
           category: 'Cơ sở', // Default category - can be enhanced with actual category data
           color: 'primary',
           isCommon: item.isCommon || false,
@@ -85,13 +132,7 @@ export default function CurriculumManagement() {
         setAvailableSubjects(transformedSubjects);
       } catch (error) {
         console.error('Error fetching subjects:', error);
-        // Fallback to mock data on error
-        setAvailableSubjects([
-          { code: 'CS101', name: 'Nhập môn Khoa học máy tính', credits: 3, category: 'Cơ sở', color: 'primary', isCommon: true },
-          { code: 'MAT102', name: 'Giải tích & Đại số tuyến tính', credits: 4, category: 'Cơ sở', color: 'primary', isCommon: true },
-          { code: 'HUM210', name: 'Đạo đức trong xã hội hiện đại', credits: 2, category: 'Tự chọn', color: 'teal', isCommon: false },
-          { code: 'CS201', name: 'Cấu trúc dữ liệu & Giải thuật', credits: 3, category: 'Cơ sở', color: 'primary', isCommon: false },
-        ]);
+        showToast('Lỗi khi tải danh sách môn học!', 'error');
       } finally {
         setLoading(false);
       }
@@ -100,19 +141,210 @@ export default function CurriculumManagement() {
     fetchSubjects();
   }, []);
 
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        console.log('Fetching majors...');
+        const res = await majorService.getMajors({ isActive: true });
+        console.log('Majors response:', res.data);
+        console.log('Majors array:', res.data?.data);
+        console.log('Majors count:', res.data?.data?.length);
+        setMajors(res.data?.data || []);
+      } catch (e) {
+        console.error('Error fetching majors:', e);
+        setMajors([]);
+      }
+    };
+
+    fetchMajors();
+  }, []);
+
+  // Fetch curriculum data when component mounts or curriculumId changes
+  useEffect(() => {
+    const fetchCurriculum = async () => {
+      if (curriculumId) {
+        try {
+          console.log('Fetching curriculum:', curriculumId);
+          const response = await curriculumService.getCurriculum(curriculumId);
+          const curriculumData = response.data?.data;
+          console.log('Curriculum data:', curriculumData);
+          
+          if (!curriculumData) {
+            console.error('Curriculum not found');
+            showToast('Không tìm thấy khung chương trình!', 'error');
+            navigate('/admin/curriculum');
+            return;
+          }
+          
+          // Convert major name to major code if needed
+          if (curriculumData.major) {
+            const normalizedMajor = normalizeCode(curriculumData.major);
+            // If major is a name, convert to code
+            if (majorNameToCode.get(normalizedMajor)) {
+              curriculumData.major = majorNameToCode.get(normalizedMajor);
+            }
+          }
+          
+          console.log('Updated curriculum major:', curriculumData.major);
+          setCurrentCurriculum(curriculumData);
+          
+          // Set semesters from database if available
+          if (curriculumData.semesters && curriculumData.semesters.length > 0) {
+            setSemesters(curriculumData.semesters);
+          }
+        } catch (error) {
+          console.error('Error fetching curriculum:', error);
+          if (error.response?.status === 404) {
+            showToast('Không tìm thấy khung chương trình!', 'error');
+            navigate('/admin/curriculum');
+          } else {
+            showToast('Lỗi khi tải dữ liệu khung chương trình!', 'error');
+          }
+        }
+      } else {
+        // Create new curriculum with default values
+        console.log('Creating new curriculum');
+        setCurrentCurriculum({
+          code: '',
+          name: '',
+          major: '',
+          academicYear: '2024/2025',
+          description: '',
+          status: 'active',
+          totalCredits: 0,
+          totalCourses: 0,
+          semesters: []
+        });
+      }
+    };
+
+    fetchCurriculum();
+  }, [curriculumId, majorNameToCode, navigate]);
+
   // Calculate stats
   const totalCredits = semesters.reduce((sum, sem) => sum + sem.credits, 0);
   const totalCourses = semesters.reduce((sum, sem) => sum + sem.courses.length, 0);
 
-  // Filter available subjects
-  const filteredSubjects = availableSubjects.filter(
-    (subject) =>
-      subject.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      subject.name.toLowerCase().includes(searchKeyword.toLowerCase())
+  const scheduledCourseCodes = new Set(
+    semesters.flatMap((sem) => (sem.courses || []).map((c) => normalizeCode(c.code)))
   );
 
+  const prereqMap = new Map(
+    availableSubjects.map((s) => [normalizeCode(s.code), (s.prerequisites || []).map(normalizeCode)])
+  );
+
+  const dependentMap = (() => {
+    const m = new Map();
+    for (const [course, prereqs] of prereqMap.entries()) {
+      for (const p of prereqs || []) {
+        if (!m.has(p)) m.set(p, []);
+        m.get(p).push(course);
+      }
+    }
+    return m;
+  })();
+
+  const getSemesterIndexByCourseCode = (courseCode) => {
+    const code = normalizeCode(courseCode);
+    if (!code) return -1;
+    return semesters.findIndex((sem) => (sem.courses || []).some((c) => normalizeCode(c.code) === code));
+  };
+
+  const validatePlacement = (courseCode, targetSemesterIndex) => {
+    const code = normalizeCode(courseCode);
+    if (!code) return { ok: false, message: 'Mã môn học không hợp lệ.' };
+
+    // Rule A: prerequisites must be in earlier semesters
+    const prereqs = prereqMap.get(code) || [];
+    for (const prereqCode of prereqs) {
+      const prereqIndex = getSemesterIndexByCourseCode(prereqCode);
+      if (prereqIndex === -1) {
+        return {
+          ok: false,
+          message: `Không thể xếp ${code} vì chưa xếp môn tiên quyết ${prereqCode} ở học kỳ trước.`,
+        };
+      }
+      if (prereqIndex >= targetSemesterIndex) {
+        return {
+          ok: false,
+          message: `Không thể xếp ${code} trước/đồng học kỳ với môn tiên quyết ${prereqCode}.`,
+        };
+      }
+    }
+
+    // Rule B: do not move prerequisite after its dependents
+    const dependents = dependentMap.get(code) || [];
+    for (const dependentCode of dependents) {
+      const depIndex = getSemesterIndexByCourseCode(dependentCode);
+      if (depIndex !== -1 && depIndex <= targetSemesterIndex) {
+        return {
+          ok: false,
+          message: `Không thể xếp ${code} sau/đồng học kỳ với môn phụ thuộc ${dependentCode}.`,
+        };
+      }
+    }
+
+    return { ok: true };
+  };
+
+  const curriculumMajorCode = (() => {
+    const raw = normalizeCode(currentCurriculum?.major);
+    console.log('Curriculum major raw:', raw);
+    if (!raw) return '';
+
+    const byCode = (majors || []).find((m) => normalizeCode(m.majorCode) === raw);
+    if (byCode?.majorCode) {
+      console.log('Found by code:', normalizeCode(byCode.majorCode));
+      return normalizeCode(byCode.majorCode);
+    }
+
+    const byName = (majors || []).find((m) => normalizeCode(m.majorName).toLowerCase() === raw.toLowerCase());
+    if (byName?.majorCode) {
+      console.log('Found by name:', normalizeCode(byName.majorCode));
+      return normalizeCode(byName.majorCode);
+    }
+
+    console.log('Returning raw as fallback:', raw);
+    return raw;
+  })();
+
+  // Filter available subjects
+  const filteredSubjects = availableSubjects.filter(
+    (subject) => {
+      const isScheduled = scheduledCourseCodes.has(normalizeCode(subject.code));
+      const isCommon = subject.isCommon;
+      const matchesMajor = !curriculumMajorCode ||
+        (Array.isArray(subject.department)
+          ? subject.department.map(normalizeCode).includes(curriculumMajorCode)
+          : [normalizeCode(subject.department)].filter(Boolean).includes(curriculumMajorCode));
+      
+      const matchesSearch = subject.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        subject.name.toLowerCase().includes(searchKeyword.toLowerCase());
+      
+      const passes = !isScheduled && (isCommon || matchesMajor) && matchesSearch;
+      
+      if (subject.code === 'CE001' || subject.code === 'ENG001') {
+        console.log(`Subject ${subject.code}:`, {
+          isScheduled,
+          isCommon,
+          department: subject.department,
+          curriculumMajorCode,
+          matchesMajor,
+          matchesSearch,
+          passes
+        });
+      }
+      
+      return passes;
+    }
+  );
+  
+  console.log('Available subjects count:', availableSubjects.length);
+  console.log('Filtered subjects count:', filteredSubjects.length);
+  console.log('Curriculum major code:', curriculumMajorCode);
+
   // Calculate pagination for "Môn cơ sở"
-  const baseSubjects = filteredSubjects.filter((s) => s.category === 'Cơ sở');
+  const baseSubjects = filteredSubjects.filter((s) => s.category === 'Cơ sở' && !s.isCommon);
   const totalPagesBase = Math.ceil(baseSubjects.length / itemsPerPage);
   const startIndexBase = (currentPageBase - 1) * itemsPerPage;
   const endIndexBase = startIndexBase + itemsPerPage;
@@ -176,21 +408,36 @@ export default function CurriculumManagement() {
     e.preventDefault();
     setDragOverSemester(null);
 
+    const targetSemesterIndex = semesters.findIndex((s) => s.id === targetSemesterId);
+    if (targetSemesterIndex === -1) {
+      setDraggedSubject(null);
+      setDraggedCourse(null);
+      return;
+    }
+
     if (draggedSubject) {
       // Add new subject from sidebar to semester
-      // Check if course already exists in this semester
-      const targetSemester = semesters.find(s => s.id === targetSemesterId);
-      const courseExists = targetSemester?.courses.some(c => c.code === draggedSubject.code);
+      const draggedCode = normalizeCode(draggedSubject.code);
+
+      // Check if course already exists in any semester
+      const courseExists = semesters.some((s) => (s.courses || []).some((c) => normalizeCode(c.code) === draggedCode));
 
       if (courseExists) {
         // Course already exists - show warning
-        // You can add toast notification here
+        showToast('Môn học đã được xếp trong một học kỳ khác!', 'warning');
+        setDraggedSubject(null);
+        return;
+      }
+
+      const validation = validatePlacement(draggedCode, targetSemesterIndex);
+      if (!validation.ok) {
+        showToast(validation.message, 'warning');
         setDraggedSubject(null);
         return;
       }
 
       const newCourse = {
-        code: draggedSubject.code,
+        code: draggedCode,
         name: draggedSubject.name,
         credits: draggedSubject.credits,
         hasPrerequisite: false,
@@ -203,6 +450,7 @@ export default function CurriculumManagement() {
             : sem
         )
       );
+      setHasChanges(true);
       setDraggedSubject(null);
     } else if (draggedCourse) {
       // Move course between semesters
@@ -210,6 +458,27 @@ export default function CurriculumManagement() {
 
       // Don't allow dropping to the same semester
       if (fromSemesterId === targetSemesterId) {
+        setDraggedCourse(null);
+        return;
+      }
+
+      const movingCode = normalizeCode(course.code);
+      const fromIndex = semesters.findIndex((s) => s.id === fromSemesterId);
+
+      // Temporarily allow prerequisite check by considering course removed from old semester
+      // If course is prerequisite of something scheduled in an earlier/equal semester than target, block.
+      const validation = validatePlacement(movingCode, targetSemesterIndex);
+      if (!validation.ok) {
+        showToast(validation.message, 'warning');
+        setDraggedCourse(null);
+        return;
+      }
+
+      // Also ensure moving doesn't violate its own prerequisites relative order (already checked)
+      // and doesn't create duplicates (should not happen but keep safe)
+      const duplicate = semesters.some((s) => s.id !== fromSemesterId && (s.courses || []).some((c) => normalizeCode(c.code) === movingCode));
+      if (duplicate) {
+        showToast('Môn học đã tồn tại ở học kỳ khác!', 'warning');
         setDraggedCourse(null);
         return;
       }
@@ -225,6 +494,7 @@ export default function CurriculumManagement() {
           return sem;
         })
       );
+      setHasChanges(true);
       setDraggedCourse(null);
     }
   };
@@ -239,6 +509,7 @@ export default function CurriculumManagement() {
             : sem
         )
       );
+      setHasChanges(true);
     }
   };
 
@@ -251,21 +522,32 @@ export default function CurriculumManagement() {
       courses: [],
     };
     setSemesters([...semesters, newSemester]);
+    setHasChanges(true);
   };
 
   const handleSaveCurriculum = async () => {
+    if (!curriculumId) {
+      showToast('Thiếu curriculumId trên URL. Vui lòng vào từ trang danh sách để thiết lập.', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       // Calculate totals
       const totalCredits = semesters.reduce((sum, sem) => sum + sem.credits, 0);
       const totalCourses = semesters.reduce((sum, sem) => sum + sem.courses.length, 0);
 
+      const resolvedCode = currentCurriculum?.code || currentCurriculum?.curriculumCode || 'CURR';
+      const resolvedName = currentCurriculum?.name || currentCurriculum?.title || 'Khung chương trình';
+
       // Prepare curriculum data
       const curriculumData = {
-        curriculumId: curriculumId,
-        name: currentCurriculum?.name || 'Cử nhân KH Máy tính',
+        code: resolvedCode,
+        name: resolvedName,
         academicYear: currentCurriculum?.academicYear || '2024/2025',
         major: currentCurriculum?.major || 'Khoa Kỹ thuật & Công nghệ',
+        description: currentCurriculum?.description || '',
+        status: currentCurriculum?.status || 'active',
         totalCredits,
         totalCourses,
         semesters: semesters.map(sem => ({
@@ -274,19 +556,19 @@ export default function CurriculumManagement() {
           credits: sem.credits,
           courses: sem.courses
         })),
-        updatedAt: new Date().toISOString()
       };
 
-      // Simulate API call - in real app, call curriculumService
-      console.log('Saving curriculum:', curriculumData);
-
-      // Simulate delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-
+      const response = await curriculumService.updateCurriculum(curriculumId, curriculumData);
+      setCurrentCurriculum(response.data?.data);
       showToast('Lưu khung chương trình thành công!', 'success');
     } catch (error) {
       console.error('Error saving curriculum:', error);
-      showToast('Lưu thất bại! Vui lòng thử lại.', 'error');
+      if (error.response?.status === 404) {
+        showToast('Không tìm thấy khung chương trình! Đang chuyển hướng...', 'error');
+        setTimeout(() => navigate('/admin/curriculum'), 2000);
+      } else {
+        showToast('Lưu thất bại! ' + (error.response?.data?.message || error.message || 'Vui lòng thử lại.'), 'error');
+      }
     } finally {
       setSaving(false);
     }
@@ -509,9 +791,19 @@ export default function CurriculumManagement() {
                     Đang áp dụng
                   </span>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {currentCurriculum?.academicYear || '2024/2025'} • {currentCurriculum?.major || 'Khoa Kỹ thuật & Công nghệ'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    {currentCurriculum?.academicYear || '2024/2025'} •
+                  </span>
+                  {/* Major Display - Fixed, not editable */}
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                      {currentCurriculum?.major
+                        ? majorCodeToName.get(normalizeCode(currentCurriculum.major)) || currentCurriculum.major
+                        : 'Chọn khoa...'}
+                    </span>
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">

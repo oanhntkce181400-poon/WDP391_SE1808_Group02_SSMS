@@ -1,0 +1,663 @@
+===================================================================================================
+                    TÀI LIỆU CHỨC NĂNG LỌC DỮ LIỆU (FILTER FEATURES)
+===================================================================================================
+
+I. TỔNG QUAN
+============
+Hệ thống có 2 chức năng filter chính:
+1. Filter Môn học (Subject Management)
+2. Filter Học phí (Tuition Fee Management)
+
+Cả 2 chức năng đều cho phép người dùng lọc và tìm kiếm dữ liệu theo nhiều tiêu chí khác nhau.
+
+
+===================================================================================================
+II. CHỨC NĂNG 1: FILTER MÔN HỌC (SUBJECT MANAGEMENT)
+===================================================================================================
+
+A. MÔ TẢ CHỨC NĂNG
+-------------------
+- Cho phép quản trị viên lọc và tìm kiếm môn học theo nhiều tiêu chí
+- Hỗ trợ tìm kiếm realtime khi người dùng nhập keyword
+- Hiển thị kết quả dưới dạng danh sách với đầy đủ thông tin môn học
+
+B. CÁC TIÊU CHÍ LỌC
+--------------------
+1. Keyword tìm kiếm:
+   - Mã môn học (subjectCode)
+   - Tên môn học (subjectName)
+   
+2. Lọc theo tín chỉ:
+   - Tất cả tín chỉ
+   - 2 tín chỉ
+   - 3 tín chỉ
+   - 4 tín chỉ
+   - 5 tín chỉ
+
+3. Lọc theo trạng thái:
+   - Tất cả
+   - Đang áp dụng (active)
+   - Ngừng áp dụng (inactive)
+
+C. CODE CHÍNH - LOGIC QUAN TRỌNG
+---------------------------------
+
+File: frontend-web/src/pages/admin/SubjectManagement.jsx
+
+1. STATE MANAGEMENT:
+```javascript
+const [subjects, setSubjects] = useState([]);
+const [filters, setFilters] = useState({
+  keyword: '',
+  credits: '',
+  status: '',
+});
+```
+
+2. FETCH DATA TỪ API:
+```javascript
+const fetchSubjects = async () => {
+  try {
+    setLoading(true);
+    const params = {
+      limit: 100,
+      ...(filters.keyword && { search: filters.keyword }),
+      ...(filters.credits && { credits: filters.credits }),
+      ...(filters.status && { status: filters.status }),
+    };
+    const response = await subjectService.getSubjects(params);
+    setSubjects(response.data.data || []);
+  } catch (error) {
+    console.error('Error fetching subjects:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+3. EFFECT HOOK - TỰ ĐỘNG FETCH KHI FILTER THAY ĐỔI:
+```javascript
+useEffect(() => {
+  fetchSubjects();
+}, [filters]);
+```
+
+4. HANDLER CẬP NHẬT FILTER:
+```javascript
+const handleFilterChange = (key, value) => {
+  setFilters(prev => ({
+    ...prev,
+    [key]: value,
+  }));
+};
+```
+
+5. UI FILTER COMPONENTS:
+```jsx
+{/* Search Input */}
+<input
+  type="text"
+  placeholder="Tìm theo mã hoặc tên môn học..."
+  value={filters.keyword}
+  onChange={(e) => handleFilterChange('keyword', e.target.value)}
+/>
+
+{/* Credits Filter */}
+<select
+  value={filters.credits}
+  onChange={(e) => handleFilterChange('credits', e.target.value)}
+>
+  <option value="">Tất cả tín chỉ</option>
+  <option value="2">2 tín chỉ</option>
+  <option value="3">3 tín chỉ</option>
+  <option value="4">4 tín chỉ</option>
+  <option value="5">5 tín chỉ</option>
+</select>
+
+{/* Status Filter */}
+<select
+  value={filters.status}
+  onChange={(e) => handleFilterChange('status', e.target.value)}
+>
+  <option value="">Tất cả trạng thái</option>
+  <option value="active">Đang áp dụng</option>
+  <option value="inactive">Ngừng áp dụng</option>
+</select>
+```
+
+D. BACKEND API ENDPOINT
+-----------------------
+
+File: backend-api/src/services/subject.service.js
+
+```javascript
+async getSubjects(query) {
+  const {
+    search,
+    credits,
+    status,
+    page = 1,
+    limit = 10,
+  } = query;
+
+  // Build filter object
+  const filter = {};
+  
+  if (search) {
+    filter.$or = [
+      { subjectCode: { $regex: search, $options: 'i' } },
+      { subjectName: { $regex: search, $options: 'i' } },
+    ];
+  }
+  
+  if (credits) {
+    filter.credits = parseInt(credits);
+  }
+  
+  if (status) {
+    filter.status = status;
+  }
+
+  // Execute query
+  const subjects = await Subject.find(filter)
+    .limit(limit)
+    .skip((page - 1) * limit)
+    .sort({ createdAt: -1 });
+
+  const total = await Subject.countDocuments(filter);
+
+  return {
+    data: subjects,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+```
+
+E. CÁC PHẦN BỔ TRỢ XUNG QUANH
+------------------------------
+
+1. LOADING STATE:
+   - Hiển thị spinner khi đang fetch data
+   - Disable các button khi đang xử lý
+
+2. ERROR HANDLING:
+   - Bắt lỗi khi API call thất bại
+   - Hiển thị toast notification thông báo lỗi
+
+3. EMPTY STATE:
+   - Hiển thị message khi không có kết quả
+   - Gợi ý người dùng thay đổi filter
+
+4. DEBOUNCE SEARCH (Tùy chọn):
+   - Có thể thêm debounce cho keyword search
+   - Giảm số lần gọi API khi người dùng đang gõ
+
+5. RESET FILTERS:
+```javascript
+const handleResetFilters = () => {
+  setFilters({
+    keyword: '',
+    credits: '',
+    status: '',
+  });
+};
+```
+
+
+===================================================================================================
+III. CHỨC NĂNG 2: FILTER HỌC PHÍ (TUITION FEE MANAGEMENT)
+===================================================================================================
+
+A. MÔ TẢ CHỨC NĂNG
+-------------------
+- Lọc học phí theo khung chương trình (Curriculum)
+- Hiển thị dữ liệu từ khung chương trình với tính toán học phí tự động
+- Hỗ trợ lọc theo khóa (K20, K19, ...) và mã ngành (SE, CA, BA, CE)
+- Click vào card để xem chi tiết các học kỳ và môn học
+
+B. CÁC TIÊU CHÍ LỌC
+--------------------
+1. Lọc theo Khóa:
+   - K20, K19, K18, K17, K16
+   - Tất cả khóa
+
+2. Lọc theo Ngành:
+   - SE (Kỹ thuật phần mềm)
+   - CE (Công nghệ thông tin)
+   - CA (Thiết kế đồ họa)
+   - BA (Kinh tế)
+   - Tất cả ngành
+
+C. CODE CHÍNH - LOGIC QUAN TRỌNG
+---------------------------------
+
+File: frontend-web/src/pages/admin/TuitionFeeManagement.jsx
+
+1. STATE MANAGEMENT:
+```javascript
+const [curriculums, setCurriculums] = useState([]);
+const [allCurriculums, setAllCurriculums] = useState([]);
+const [loading, setLoading] = useState(false);
+const [cohort, setCohort] = useState('K20');
+const [majorCode, setMajorCode] = useState('');
+
+// Giá mỗi tín chỉ
+const PRICE_PER_CREDIT = 630000; // 630,000 VND
+
+// Mapping mã ngành
+const majorOptions = [
+  { value: 'SE', label: 'SE - Kỹ thuật phần mềm' },
+  { value: 'CE', label: 'CE - Công nghệ thông tin' },
+  { value: 'CA', label: 'CA - Thiết kế đồ họa' },
+  { value: 'BA', label: 'BA - Kinh tế' },
+];
+```
+
+2. FETCH ALL CURRICULUMS:
+```javascript
+const fetchAllCurriculums = async () => {
+  setLoading(true);
+  try {
+    const response = await curriculumService.getCurriculums({
+      status: 'active',
+      limit: 100,
+    });
+    setAllCurriculums(response.data?.data || []);
+  } catch (error) {
+    console.error('Error fetching curriculums:', error);
+    showToast('Không thể tải dữ liệu khung chương trình', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  fetchAllCurriculums();
+}, []);
+```
+
+3. FILTER LOGIC - CLIENT-SIDE FILTERING:
+```javascript
+useEffect(() => {
+  if (!allCurriculums.length) return;
+  
+  let filtered = allCurriculums;
+  
+  // Filter by cohort (check if code contains the cohort, e.g., "K20")
+  if (cohort) {
+    filtered = filtered.filter(c => c.code.includes(cohort));
+  }
+  
+  // Filter by major code (check if code starts with major code, e.g., "SE", "CA")
+  if (majorCode) {
+    filtered = filtered.filter(c => c.code.startsWith(majorCode));
+  }
+  
+  setCurriculums(filtered);
+}, [cohort, majorCode, allCurriculums]);
+```
+
+Giải thích logic:
+- Lưu TẤT CẢ curriculum vào `allCurriculums` khi fetch lần đầu
+- Filter ở CLIENT-SIDE dựa trên `cohort` và `majorCode`
+- Filter theo CODE của curriculum:
+  + VD: "SEK20" → startsWith("SE") && includes("K20")
+  + VD: "CAK19" → startsWith("CA") && includes("K19")
+
+4. TÍNH TOÁN HỌC PHÍ:
+```javascript
+// Tính tổng học phí cho curriculum
+const calculateTotalPrice = (curriculum) => {
+  return curriculum.totalCredits * PRICE_PER_CREDIT;
+};
+
+// Tính học phí cho từng học kỳ
+const calculateSemesterPrice = (semester) => {
+  return semester.credits * PRICE_PER_CREDIT;
+};
+
+// Tính học phí cho từng môn
+const calculateCoursePrice = (course) => {
+  return course.credits * PRICE_PER_CREDIT;
+};
+```
+
+5. FILTER UI:
+```jsx
+{/* Khóa Filter */}
+<select
+  value={cohort}
+  onChange={(e) => setCohort(e.target.value)}
+>
+  <option value="">Tất cả</option>
+  <option value="K20">K20</option>
+  <option value="K19">K19</option>
+  <option value="K18">K18</option>
+  <option value="K17">K17</option>
+  <option value="K16">K16</option>
+</select>
+
+{/* Ngành Filter */}
+<select
+  value={majorCode}
+  onChange={(e) => setMajorCode(e.target.value)}
+>
+  <option value="">Tất cả</option>
+  {majorOptions.map(opt => (
+    <option key={opt.value} value={opt.value}>{opt.label}</option>
+  ))}
+</select>
+```
+
+6. HIỂN THỊ KẾT QUẢ - CURRICULUM CARDS:
+```jsx
+{curriculums.map((curriculum) => (
+  <div
+    key={curriculum._id}
+    className="card"
+    onClick={() => handleViewDetails(curriculum)}
+  >
+    {/* Header */}
+    <h3>{curriculum.code}</h3>
+    <p>{curriculum.name}</p>
+    
+    {/* Info */}
+    <div>Khóa: {curriculum.academicYear}</div>
+    <div>Ngành: {curriculum.major}</div>
+    <div>Số môn: {curriculum.totalCourses} môn</div>
+    <div>Tổng TC: {curriculum.totalCredits} TC</div>
+    
+    {/* Total Price */}
+    <div className="total-price">
+      {calculateTotalPrice(curriculum).toLocaleString('vi-VN')} ₫
+    </div>
+    <p>{PRICE_PER_CREDIT.toLocaleString('vi-VN')} ₫/tín chỉ</p>
+  </div>
+))}
+```
+
+7. MODAL CHI TIẾT - HIỂN THỊ CÁC HỌC KỲ:
+```jsx
+{selectedCurriculum && isModalOpen && (
+  <div className="modal">
+    {/* Summary */}
+    <div>Tổng tín chỉ: {selectedCurriculum.totalCredits} TC</div>
+    <div>Tổng học phí: {calculateTotalPrice(selectedCurriculum)} ₫</div>
+    
+    {/* Semesters */}
+    {selectedCurriculum.semesters.map((semester) => (
+      <div key={semester.id}>
+        <h4>{semester.name}</h4>
+        <p>{semester.courses.length} môn • {semester.credits} TC</p>
+        <p>Học phí: {calculateSemesterPrice(semester)} ₫</p>
+        
+        {/* Courses */}
+        {semester.courses.map((course) => (
+          <div key={course.code}>
+            <span>{course.code} - {course.name}</span>
+            <span>{course.credits} TC</span>
+            <span>{calculateCoursePrice(course)} ₫</span>
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>
+)}
+```
+
+D. BACKEND API
+--------------
+
+File: backend-api/src/services/curriculum.service.js
+
+```javascript
+async getCurriculums(query) {
+  const {
+    status,
+    academicYear,
+    major,
+    page = 1,
+    limit = 10,
+  } = query;
+
+  const filter = {};
+  
+  if (status) filter.status = status;
+  if (academicYear) filter.academicYear = academicYear;
+  if (major) filter.major = major;
+
+  const curriculums = await Curriculum.find(filter)
+    .limit(limit)
+    .skip((page - 1) * limit)
+    .sort({ createdAt: -1 });
+
+  const total = await Curriculum.countDocuments(filter);
+
+  return {
+    data: curriculums,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+```
+
+E. CẤU TRÚC DỮ LIỆU CURRICULUM
+-------------------------------
+
+```javascript
+{
+  _id: "ObjectId",
+  code: "SEK20",
+  name: "Chương trình đào tạo Kỹ thuật phần mềm K20",
+  major: "Kỹ thuật phần mềm",
+  academicYear: "2020-2021",
+  status: "active",
+  totalCredits: 48,
+  totalCourses: 15,
+  semesters: [
+    {
+      id: 1,
+      name: "Học kỳ 1",
+      credits: 15,
+      courses: [
+        {
+          code: "SUB028",
+          name: "capacitor connect cross-platform",
+          credits: 3,
+          hasPrerequisite: false
+        },
+        // ... more courses
+      ]
+    },
+    // ... more semesters
+  ]
+}
+```
+
+F. CÁC PHẦN BỔ TRỢ XUNG QUANH
+------------------------------
+
+1. LOADING STATE:
+```javascript
+{loading ? (
+  <div className="spinner">Loading...</div>
+) : (
+  <div className="content">...</div>
+)}
+```
+
+2. EMPTY STATE:
+```javascript
+{!loading && curriculums.length === 0 && (
+  <div className="empty-state">
+    <p>Không có dữ liệu khung chương trình 
+       {cohort && ` cho khóa ${cohort}`} 
+       {majorCode && ` ngành ${majorCode}`}
+    </p>
+  </div>
+)}
+```
+
+3. MODAL CONTROL:
+```javascript
+const handleViewDetails = (curriculum) => {
+  setSelectedCurriculum(curriculum);
+  setIsModalOpen(true);
+};
+
+const handleCloseModal = () => {
+  setIsModalOpen(false);
+  setSelectedCurriculum(null);
+};
+```
+
+4. TOAST NOTIFICATIONS:
+```javascript
+const showToast = (message, type = 'success') => {
+  setToast({ show: true, message, type });
+  setTimeout(() => {
+    setToast({ show: false, message: '', type: 'success' });
+  }, 3000);
+};
+```
+
+5. FORMAT CURRENCY:
+```javascript
+const formatCurrency = (amount) => {
+  return amount.toLocaleString('vi-VN') + ' ₫';
+};
+```
+
+
+===================================================================================================
+IV. SO SÁNH 2 PHƯƠNG PHÁP FILTER
+===================================================================================================
+
+A. SUBJECT FILTER (Server-side filtering)
+------------------------------------------
+✅ Ưu điểm:
+   - Giảm tải dữ liệu về client
+   - Phù hợp với dataset lớn
+   - Query database trực tiếp, hiệu quả
+   
+❌ Nhược điểm:
+   - Mỗi lần filter phải gọi API
+   - Có độ trễ do network latency
+   - Phụ thuộc vào backend
+
+B. TUITION FEE FILTER (Client-side filtering)
+----------------------------------------------
+✅ Ưu điểm:
+   - Filter nhanh, không cần gọi API
+   - UX tốt hơn (instant feedback)
+   - Giảm tải cho server
+   
+❌ Nhược điểm:
+   - Phải load toàn bộ data lúc đầu
+   - Không phù hợp với dataset cực lớn
+   - Tốn memory ở client
+
+
+===================================================================================================
+V. BEST PRACTICES & OPTIMIZATION
+===================================================================================================
+
+1. DEBOUNCE SEARCH INPUT:
+```javascript
+import { debounce } from 'lodash';
+
+const debouncedSearch = useCallback(
+  debounce((keyword) => {
+    setFilters(prev => ({ ...prev, keyword }));
+  }, 300),
+  []
+);
+```
+
+2. MEMOIZATION:
+```javascript
+import { useMemo } from 'react';
+
+const filteredData = useMemo(() => {
+  return allData.filter(item => {
+    // filter logic
+  });
+}, [allData, filterParams]);
+```
+
+3. PAGINATION:
+```javascript
+const [currentPage, setCurrentPage] = useState(1);
+const itemsPerPage = 20;
+
+const paginatedData = useMemo(() => {
+  const start = (currentPage - 1) * itemsPerPage;
+  return filteredData.slice(start, start + itemsPerPage);
+}, [filteredData, currentPage]);
+```
+
+4. CACHE API RESPONSES:
+```javascript
+// Using React Query
+import { useQuery } from 'react-query';
+
+const { data, isLoading } = useQuery(
+  ['subjects', filters],
+  () => subjectService.getSubjects(filters),
+  {
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  }
+);
+```
+
+
+===================================================================================================
+VI. TESTING CHECKLIST
+===================================================================================================
+
+SUBJECT FILTER:
+☐ Tìm kiếm theo mã môn học
+☐ Tìm kiếm theo tên môn học
+☐ Lọc theo tín chỉ (2, 3, 4, 5)
+☐ Lọc theo trạng thái (active/inactive)
+☐ Combine nhiều filters
+☐ Reset filters
+☐ Empty state khi không có kết quả
+☐ Loading state
+☐ Error handling
+
+TUITION FEE FILTER:
+☐ Lọc theo khóa (K20, K19, ...)
+☐ Lọc theo ngành (SE, CA, BA, CE)
+☐ Combine khóa + ngành
+☐ Tính toán học phí đúng
+☐ Hiển thị chi tiết học kỳ
+☐ Modal đóng/mở chính xác
+☐ Empty state
+☐ Loading state
+☐ Format tiền tệ đúng
+
+
+===================================================================================================
+VII. TÀI LIỆU THAM KHẢO
+===================================================================================================
+
+Files liên quan:
+1. frontend-web/src/pages/admin/SubjectManagement.jsx
+2. frontend-web/src/pages/admin/TuitionFeeManagement.jsx
+3. frontend-web/src/services/subjectService.js
+4. frontend-web/src/services/curriculumService.js
+5. backend-api/src/services/subject.service.js
+6. backend-api/src/services/curriculum.service.js
+7. backend-api/src/controllers/subject.controller.js
+8. backend-api/src/controllers/curriculum.controller.js
+
+API Endpoints:
+- GET /api/subjects?search=&credits=&status=
+- GET /api/curriculums?status=active&limit=100
+
+===================================================================================================
