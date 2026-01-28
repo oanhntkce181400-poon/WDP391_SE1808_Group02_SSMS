@@ -8,8 +8,9 @@ const curriculumService = {
       const query = keyword
         ? {
             $or: [
-              { curriculumCode: { $regex: keyword, $options: 'i' } },
-              { title: { $regex: keyword, $options: 'i' } },
+              { code: { $regex: keyword, $options: 'i' } },
+              { name: { $regex: keyword, $options: 'i' } },
+              { major: { $regex: keyword, $options: 'i' } },
             ],
           }
         : {};
@@ -21,7 +22,7 @@ const curriculumService = {
         .limit(limit);
 
       return {
-        curriculums,
+        data: curriculums,
         total,
         page,
         totalPages: Math.ceil(total / limit),

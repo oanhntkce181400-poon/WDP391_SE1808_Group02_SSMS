@@ -6,46 +6,8 @@ import addIcon from '../../assets/circle.png';
 import editIcon from '../../assets/edit.png';
 import deleteIcon from '../../assets/delete.png';
 import setupIcon from '../../assets/next.png';
-
-// Mock data for curriculum frameworks
-const MOCK_CURRICULUMS = [
-  {
-    _id: '1',
-    code: 'CKH2024',
-    name: 'Cử nhân KH Máy tính 2024',
-    major: 'Khoa Kỹ thuật & Công nghệ',
-    academicYear: '2024/2025',
-    totalCredits: 120,
-    totalCourses: 42,
-    status: 'active',
-    description: 'Chương trình đào tạo cử nhân khoa học máy tính',
-    createdAt: '2024-01-15',
-  },
-  {
-    _id: '2',
-    code: 'CKH2023',
-    name: 'Cử nhân KH Máy tính 2023',
-    major: 'Khoa Kỹ thuật & Công nghệ',
-    academicYear: '2023/2024',
-    totalCredits: 120,
-    totalCourses: 42,
-    status: 'inactive',
-    description: 'Chương trình đào tạo cử nhân khoa học máy tính (cũ)',
-    createdAt: '2023-01-10',
-  },
-  {
-    _id: '3',
-    code: 'CQT2024',
-    name: 'Cử nhân Quản trị 2024',
-    major: 'Khoa Quản trị kinh doanh',
-    academicYear: '2024/2025',
-    totalCredits: 110,
-    totalCourses: 38,
-    status: 'active',
-    description: 'Chương trình đào tạo cử nhân quản trị kinh doanh',
-    createdAt: '2024-02-01',
-  },
-];
+import curriculumService from '../../services/curriculumService';
+import majorService from '../../services/majorService';
 
 const STATUS_COLORS = {
   active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
@@ -55,11 +17,13 @@ const STATUS_COLORS = {
 export default function CurriculumList() {
   const [curriculums, setCurriculums] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedCurriculum, setSelectedCurriculum] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [deletingId, setDeletingId] = useState(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -71,30 +35,48 @@ export default function CurriculumList() {
     status: 'active',
   });
 
-  // Fetch curriculums
+  // State for majors
+  const [majors, setMajors] = useState([]);
+
+  // Fetch curriculums from database
   useEffect(() => {
     const fetchCurriculums = async () => {
       try {
         setLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-          setCurriculums(MOCK_CURRICULUMS);
-          setLoading(false);
-        }, 500);
+        const response = await curriculumService.getCurriculums();
+        setCurriculums(response.data.data || []);
       } catch (error) {
         console.error('Error fetching curriculums:', error);
+        showToast('Lỗi khi tải danh sách khung chương trình!', 'error');
+      } finally {
         setLoading(false);
       }
     };
     fetchCurriculums();
   }, []);
 
+  // Fetch majors from database
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        const response = await majorService.getMajors({ isActive: true });
+        setMajors(response.data?.data || []);
+      } catch (error) {
+        console.error('Error fetching majors:', error);
+        setMajors([]);
+      }
+    };
+    fetchMajors();
+  }, []);
+
   // Filter curriculums
-  const filteredCurriculums = curriculums.filter((item) =>
-    item.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    item.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    item.major.toLowerCase().includes(searchKeyword.toLowerCase())
-  );
+  const filteredCurriculums = curriculums.filter((item) => {
+    const code = String(item.code || item.curriculumCode || '').toLowerCase();
+    const name = String(item.name || item.title || '').toLowerCase();
+    const major = String(item.major || '').toLowerCase();
+    const keyword = searchKeyword.toLowerCase();
+    return code.includes(keyword) || name.includes(keyword) || major.includes(keyword);
+  });
 
   // Handlers
   const handleOpenCreateModal = () => {
@@ -114,42 +96,62 @@ export default function CurriculumList() {
     setModalMode('edit');
     setSelectedCurriculum(curriculum);
     setFormData({
-      code: curriculum.code,
-      name: curriculum.name,
-      major: curriculum.major,
-      academicYear: curriculum.academicYear,
-      description: curriculum.description,
-      status: curriculum.status,
+      code: curriculum.code || curriculum.curriculumCode || '',
+      name: curriculum.name || curriculum.title || '',
+      major: curriculum.major || '',
+      academicYear: curriculum.academicYear || '',
+      description: curriculum.description || '',
+      status: curriculum.status || 'active',
     });
     setIsModalOpen(true);
   };
 
-  const handleSubmitForm = (e) => {
+  const handleSubmitForm = async (e) => {
     e.preventDefault();
-    if (modalMode === 'create') {
-      const newCurriculum = {
-        _id: Date.now().toString(),
-        ...formData,
-        totalCredits: 0,
-        totalCourses: 0,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      setCurriculums([...curriculums, newCurriculum]);
-      showToast('Thêm khung chương trình thành công!', 'success');
-    } else {
-      setCurriculums(
-        curriculums.map((item) =>
-          item._id === selectedCurriculum._id ? { ...item, ...formData } : item
-        )
+    setSaving(true);
+    try {
+      if (modalMode === 'create') {
+        const response = await curriculumService.createCurriculum(formData);
+        setCurriculums([...curriculums, response.data?.data]);
+        showToast('Thêm khung chương trình thành công!', 'success');
+      } else {
+        const response = await curriculumService.updateCurriculum(selectedCurriculum._id, formData);
+        const updated = response.data?.data;
+        setCurriculums(
+          curriculums.map((item) =>
+            item._id === selectedCurriculum._id ? updated : item
+          )
+        );
+        showToast('Cập nhật khung chương trình thành công!', 'success');
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Error saving curriculum:', error);
+      showToast(
+        modalMode === 'create' ? 'Thêm khung chương trình thất bại!' : 'Cập nhật khung chương trình thất bại!',
+        'error'
       );
-      showToast('Cập nhật khung chương trình thành công!', 'success');
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (curriculum) => {
-    setCurriculums(curriculums.filter((item) => item._id !== curriculum._id));
-    showToast('Xóa khung chương trình thành công!', 'success');
+  const handleDelete = async (curriculum) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa khung chương trình này?')) {
+      return;
+    }
+    
+    setDeletingId(curriculum._id);
+    try {
+      await curriculumService.deleteCurriculum(curriculum._id);
+      setCurriculums(curriculums.filter((item) => item._id !== curriculum._id));
+      showToast('Xóa khung chương trình thành công!', 'success');
+    } catch (error) {
+      console.error('Error deleting curriculum:', error);
+      showToast('Xóa khung chương trình thất bại!', 'error');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const showToast = (message, type) => {
@@ -245,25 +247,25 @@ export default function CurriculumList() {
                   {filteredCurriculums.map((curriculum) => (
                     <tr key={curriculum._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-primary">{curriculum.code}</span>
+                        <span className="text-sm font-bold text-primary">{curriculum.code || curriculum.curriculumCode || '-'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white">{curriculum.name}</p>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">{curriculum.name || curriculum.title || '-'}</p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
                             {curriculum.description}
                           </p>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{curriculum.major}</span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{curriculum.major || '-'}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{curriculum.academicYear}</span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{curriculum.academicYear || '-'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                          {curriculum.totalCredits} Tín chỉ
+                          {curriculum.totalCredits ?? 0} Tín chỉ
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -274,7 +276,7 @@ export default function CurriculumList() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <Link
-                            to={`/curriculum/${curriculum._id}/setup`}
+                            to={`/admin/curriculum/${curriculum._id}/setup`}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
                           >
                             <img src={setupIcon} alt="Thiết lập" className="w-4 h-4" />
@@ -283,14 +285,20 @@ export default function CurriculumList() {
                           <button
                             onClick={() => handleOpenEditModal(curriculum)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            disabled={deletingId === curriculum._id}
                           >
                             <img src={editIcon} alt="Sửa" className="w-5 h-5" />
                           </button>
                           <button
                             onClick={() => handleDelete(curriculum)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            disabled={deletingId === curriculum._id}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <img src={deleteIcon} alt="Xóa" className="w-5 h-5" />
+                            {deletingId === curriculum._id ? (
+                              <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <img src={deleteIcon} alt="Xóa" className="w-5 h-5" />
+                            )}
                           </button>
                         </div>
                       </td>
@@ -365,10 +373,11 @@ export default function CurriculumList() {
                   required
                 >
                   <option value="">Chọn khoa/viện</option>
-                  <option value="Khoa Kỹ thuật & Công nghệ">Khoa Kỹ thuật & Công nghệ</option>
-                  <option value="Khoa Quản trị kinh doanh">Khoa Quản trị kinh doanh</option>
-                  <option value="Khoa Công nghệ thông tin">Khoa Công nghệ thông tin</option>
-                  <option value="Khoa Thiết kế đồ họa">Khoa Thiết kế đồ họa</option>
+                  {majors.map((major) => (
+                    <option key={major.majorCode} value={major.majorCode}>
+                      {major.majorName}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -440,9 +449,17 @@ export default function CurriculumList() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {modalMode === 'create' ? 'Thêm mới' : 'Lưu thay đổi'}
+                  {saving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2"></div>
+                      {modalMode === 'create' ? 'Đang thêm...' : 'Đang lưu...'}
+                    </>
+                  ) : (
+                    modalMode === 'create' ? 'Thêm mới' : 'Lưu thay đổi'
+                  )}
                 </button>
               </div>
             </form>
