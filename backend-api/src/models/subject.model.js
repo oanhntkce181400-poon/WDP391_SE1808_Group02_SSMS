@@ -1,11 +1,19 @@
 const mongoose = require('mongoose');
 
+const prerequisiteSchema = new mongoose.Schema({
+  code: { type: String, required: true },
+  name: { type: String, required: true },
+});
+
 const subjectSchema = new mongoose.Schema(
   {
     subjectCode: { type: String, required: true, unique: true, trim: true },
     subjectName: { type: String, required: true, trim: true },
     credits: { type: Number, required: true },
-    majorCode: { type: String, required: true, trim: true },
+    majorCode: { type: String, trim: true }, // Single department (backward compatibility)
+    majorCodes: [{ type: String, trim: true }], // Multiple departments
+    isCommon: { type: Boolean, default: false }, // Môn chung cho toàn khoa
+    prerequisites: [prerequisiteSchema],
   },
   { timestamps: true },
 );

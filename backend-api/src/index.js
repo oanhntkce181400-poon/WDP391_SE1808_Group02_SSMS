@@ -31,6 +31,10 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
+// Routes
+app.use('/api/subjects', require('./routes/subject.routes'));
+app.use('/api/curriculums', require('./routes/curriculum.routes'));
+
 // Health check đơn giản
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

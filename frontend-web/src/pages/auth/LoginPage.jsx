@@ -44,7 +44,7 @@ export default function LoginPage() {
         return;
       }
 
-      navigate('/dashboard', { replace: true });
+      navigate('/admin', { replace: true });
     },
     [navigate],
   );
