@@ -6,6 +6,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { connectDB } = require('./configs/db.config');
 const { initializeSocketIO } = require('./configs/socket.config');
+const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
 const authRoutes = require('./modules/auth/auth.routes');
 const actorsRoutes = require('./modules/actors/actors.routes');
 
@@ -35,6 +36,7 @@ app.use(express.json());
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
 app.use('/api/majors', require('./routes/major.routes'));
+app.use('/api/error-logs', require('./routes/errorLog.routes'));
 
 // Health check đơn giản
 app.get('/health', (req, res) => {
@@ -43,6 +45,12 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/actors', actorsRoutes);
+
+// 404 handler - must be after all routes
+app.use(notFoundHandler);
+
+// Global error handler - must be last
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 

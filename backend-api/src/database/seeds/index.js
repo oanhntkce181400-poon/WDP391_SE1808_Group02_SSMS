@@ -191,25 +191,44 @@ async function seedAdmin() {
       mustChangePassword: false,
     });
     console.log('Seeded admin user:', adminEmail);
-    return;
+  } else {
+    const needsHashUpdate = existingAdmin.password && !BCRYPT_REGEX.test(String(existingAdmin.password));
+    if (needsHashUpdate) {
+      await User.updateOne(
+        { _id: existingAdmin._id },
+        {
+          $set: {
+            password: adminPasswordHash,
+            authProvider: 'local',
+            mustChangePassword: false,
+            passwordChangedAt: new Date(),
+          },
+        },
+      );
+      console.log('Updated admin password to bcrypt hash.');
+    } else {
+      console.log('Admin user already exists, skip seeding.');
+    }
   }
 
-  const needsHashUpdate = existingAdmin.password && !BCRYPT_REGEX.test(String(existingAdmin.password));
-  if (needsHashUpdate) {
-    await User.updateOne(
-      { _id: existingAdmin._id },
-      {
-        $set: {
-          password: adminPasswordHash,
-          authProvider: 'local',
-          mustChangePassword: false,
-          passwordChangedAt: new Date(),
-        },
-      },
-    );
-    console.log('Updated admin password to bcrypt hash.');
+  // Seed student user for testing
+  const studentEmail = 'student@fpt.edu.vn';
+  const studentPlainPassword = '123456';
+  const studentPasswordHash = await bcrypt.hash(studentPlainPassword, PASSWORD_SALT_ROUNDS);
+
+  const existingStudent = await User.findOne({ email: studentEmail });
+  if (!existingStudent) {
+    await User.create({
+      email: studentEmail,
+      password: studentPasswordHash,
+      fullName: 'Nguyen Van A',
+      role: 'student',
+      authProvider: 'local',
+      mustChangePassword: false,
+    });
+    console.log('Seeded student user:', studentEmail);
   } else {
-    console.log('Admin user already exists, skip seeding.');
+    console.log('Student user already exists, skip seeding.');
   }
 }
 
