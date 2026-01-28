@@ -6,6 +6,11 @@ const roomSchema = new mongoose.Schema(
     roomName: { type: String, required: true, trim: true },
     roomType: { type: String, required: true, trim: true },
     capacity: { type: Number, required: true },
+    status: { 
+      type: String, 
+      enum: ['available', 'occupied'], 
+      default: 'available' 
+    },
   },
   { timestamps: true },
 );

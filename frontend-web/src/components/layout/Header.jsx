@@ -15,6 +15,8 @@ export default function Header() {
     { label: 'Chuyên ngành', href: '/admin/majors' },
     { label: 'Giảng viên', href: '#' },
     { label: 'Môn học', href: '/admin/subjects' },
+    { label: 'Phòng học', href: '/admin/rooms' },
+    { label: 'Giờ học', href: '/admin/timeslots' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
     { label: 'Học phí', href: '/admin/tuition-fees' },
     { label: 'Cấu hình', href: '#' },
@@ -24,6 +26,12 @@ export default function Header() {
   const getActiveItem = (href) => {
     if (href === '#') return false;
     if (href === '/admin/subjects' && (location.pathname === '/admin/subjects' || location.pathname.startsWith('/admin/prerequisites/'))) {
+      return true;
+    }
+    if (href === '/admin/rooms' && location.pathname === '/admin/rooms') {
+      return true;
+    }
+    if (href === '/admin/timeslots' && location.pathname === '/admin/timeslots') {
       return true;
     }
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {

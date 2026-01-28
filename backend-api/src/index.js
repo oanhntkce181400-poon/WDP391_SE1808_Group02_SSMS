@@ -34,6 +34,8 @@ app.use(express.json());
 // Routes
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
+app.use('/api/rooms', require('./routes/room.routes'));
+app.use('/api/timeslots', require('./routes/timeslot.routes'));
 app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
 app.use('/api/majors', require('./routes/major.routes'));
 

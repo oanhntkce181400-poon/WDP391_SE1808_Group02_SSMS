@@ -9,6 +9,8 @@ import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+import RoomManagement from './pages/admin/RoomManagement';
+import TimeslotManagement from './pages/admin/TimeslotManagement';
 import MajorManagement from './pages/admin/MajorManagement';
 import CurriculumList from './components/features/CurriculumList';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
@@ -32,6 +34,8 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+        <Route path="rooms" element={<RoomManagement />} />
+        <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
