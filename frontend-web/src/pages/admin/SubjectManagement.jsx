@@ -6,6 +6,7 @@ import SubjectModal from '../../components/features/SubjectModal';
 import SubjectDeleteModal from '../../components/features/SubjectDeleteModal';
 import SubjectDetail from '../../components/features/SubjectDetail';
 import subjectService from '../../services/subjectService';
+import majorService from '../../services/majorService';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
@@ -36,6 +37,26 @@ export default function SubjectManagement() {
 
   // State for toast notifications
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // State for majors mapping
+  const [majors, setMajors] = useState([]);
+  const majorCodeToName = new Map(
+    (majors || []).map((m) => [String(m.majorCode || '').trim(), String(m.majorName || '').trim()])
+  );
+
+  // Fetch majors for mapping
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        const res = await majorService.getMajors({ isActive: true });
+        setMajors(res.data?.data || []);
+      } catch (e) {
+        console.error('Error fetching majors:', e);
+        setMajors([]);
+      }
+    };
+    fetchMajors();
+  }, []);
 
   // Fetch subjects from API
   const fetchSubjects = useCallback(async (page = 1, keyword = '') => {
@@ -198,19 +219,25 @@ export default function SubjectManagement() {
         isCommon: formData.isCommon || false, // Môn chung cho toàn khoa
       };
 
+      console.log('Submitting subject data:', backendData);
+      console.log('Department field:', backendData.department);
+
       if (selectedSubject) {
         // Update existing subject
-        await subjectService.updateSubject(selectedSubject._id, backendData);
+        const response = await subjectService.updateSubject(selectedSubject._id, backendData);
+        console.log('Update response:', response.data);
         showToast('Cập nhật môn học thành công!', 'success');
       } else {
         // Create new subject
-        await subjectService.createSubject(backendData);
+        const response = await subjectService.createSubject(backendData);
+        console.log('Create response:', response.data);
         showToast('Tạo môn học mới thành công!', 'success');
       }
       setIsModalOpen(false);
       fetchSubjects(pagination.currentPage);
     } catch (err) {
       console.error('Error saving subject:', err);
+      console.error('Error response:', err.response?.data);
       showToast(selectedSubject ? 'Cập nhật thất bại!' : 'Tạo mới thất bại!', 'error');
     } finally {
       setModalLoading(false);
@@ -299,12 +326,14 @@ export default function SubjectManagement() {
             pagination={pagination}
             onSearch={handleSearch}
             onFilter={handleFilter}
-            onView={handleView}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onView={handleView}
             onPrerequisites={handlePrerequisites}
             onPageChange={handlePageChange}
+            majorCodeToName={majorCodeToName}
           />
+
         </div>
       </main>
 

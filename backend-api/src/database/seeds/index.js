@@ -183,35 +183,167 @@ async function seedAdmin() {
 }
 
 async function seedCurriculums(subjects) {
+  await Curriculum.deleteMany({});
   const curricula = [];
-  for (const cohort of COHORTS) {
-    const curriculumCode = `K${cohort}`;
-    const pickedSubjects = faker.helpers.arrayElements(subjects, faker.number.int({ min: 20, max: 30 }));
-    const curriculum = await Curriculum.create({
-      curriculumCode,
-      cohort,
-      title: `Curriculum ${curriculumCode}`,
-      subjects: pickedSubjects.map((s) => s._id),
-    });
-    curricula.push(curriculum);
+  
+  // Tạo curriculum cho từng khoa
+  for (const major of MAJORS) {
+    for (const cohort of COHORTS) {
+      const curriculumCode = `${major.code}${cohort}`;
+      const curriculumName = `Chương trình đào tạo ${major.name} Khóa ${cohort}`;
+      
+      // Lấy các môn thuộc khoa này + môn chung
+      const majorSubjects = subjects.filter(subject => 
+        subject.isCommon || 
+        (subject.majorCodes && subject.majorCodes.includes(major.code))
+      );
+      
+      // Chọn ngẫu nhiên 20-30 môn cho curriculum
+      const pickedSubjects = faker.helpers.arrayElements(majorSubjects, faker.number.int({ min: 20, max: 30 }));
+      
+      // Tạo cấu trúc semesters
+      const semesters = [];
+      const subjectsPerSemester = Math.ceil(pickedSubjects.length / 8); // Giả sử 8 học kỳ
+      
+      for (let sem = 1; sem <= 8; sem++) {
+        const startIndex = (sem - 1) * subjectsPerSemester;
+        const endIndex = Math.min(startIndex + subjectsPerSemester, pickedSubjects.length);
+        const semesterSubjects = pickedSubjects.slice(startIndex, endIndex);
+        
+        if (semesterSubjects.length > 0) {
+          semesters.push({
+            id: sem,
+            name: `Học kỳ ${sem}`,
+            credits: semesterSubjects.reduce((sum, subject) => sum + subject.credits, 0),
+            courses: semesterSubjects.map(subject => ({
+              code: subject.subjectCode,
+              name: subject.subjectName,
+              credits: subject.credits,
+              hasPrerequisite: false // Có thể cập nhật sau
+            }))
+          });
+        }
+      }
+      
+      const curriculum = {
+        code: curriculumCode,
+        name: curriculumName,
+        major: major.code, // Lưu majorCode
+        academicYear: `${2020 + cohort}-${2021 + cohort}`,
+        description: `Chương trình đào tạo ngành ${major.name} khóa ${cohort}`,
+        status: 'active',
+        totalCredits: semesters.reduce((sum, sem) => sum + sem.credits, 0),
+        totalCourses: pickedSubjects.length,
+        semesters
+      };
+      
+      curricula.push(curriculum);
+    }
   }
-  return curricula;
+  
+  return Curriculum.insertMany(curricula);
 }
 
 async function seedSubjects() {
+  await Subject.deleteMany({});
   const subjects = [];
-  for (let i = 0; i < 50; i += 1) {
-    const major = randomFrom(MAJORS);
-    const subjectCode = `SUB${String(i + 1).padStart(3, '0')}`;
-    const subjectName = `${faker.hacker.noun()} ${faker.hacker.verb()} ${faker.hacker.adjective()}`;
-    const credits = faker.number.int({ min: 2, max: 5 });
+  
+  // Môn chung cho toàn khoa (isCommon: true)
+  const commonSubjects = [
+    { code: 'ENG001', name: 'Tiếng Anh Công nghệ 1', credits: 3 },
+    { code: 'ENG002', name: 'Tiếng Anh Công nghệ 2', credits: 3 },
+    { code: 'PE001', name: 'Giáo dục thể chất', credits: 1 },
+    { code: 'POL001', name: 'Tư tưởng Hồ Chí Minh', credits: 2 },
+    { code: 'POL002', name: 'Kinh tế chính trị Mác-Lênin', credits: 2 },
+  ];
+  
+  commonSubjects.forEach((subject, index) => {
     subjects.push({
-      subjectCode,
-      subjectName,
-      credits,
-      majorCode: major.code,
+      subjectCode: subject.code,
+      subjectName: subject.name,
+      credits: subject.credits,
+      majorCodes: [], // Môn chung không thuộc khoa nào
+      isCommon: true,
     });
-  }
+  });
+  
+  // Môn chuyên ngành theo từng khoa
+  const subjectsByMajor = {
+    CE: [
+      { name: 'Lập trình cơ bản', credits: 3 },
+      { name: 'Cấu trúc dữ liệu và giải thuật', credits: 4 },
+      { name: 'Cơ sở dữ liệu', credits: 3 },
+      { name: 'Mạng máy tính', credits: 3 },
+      { name: 'Hệ điều hành', credits: 3 },
+      { name: 'Lập trình hướng đối tượng', credits: 3 },
+      { name: 'Phân tích thiết kế hệ thống', credits: 3 },
+      { name: 'Trí tuệ nhân tạo', credits: 3 },
+    ],
+    BA: [
+      { name: 'Kinh tế vi mô', credits: 3 },
+      { name: 'Kinh tế vĩ mô', credits: 3 },
+      { name: 'Tài chính doanh nghiệp', credits: 3 },
+      { name: 'Marketing cơ bản', credits: 3 },
+      { name: 'Quản trị kinh doanh', credits: 3 },
+      { name: 'Thống kê kinh tế', credits: 3 },
+      { name: 'Kinh tế quốc tế', credits: 3 },
+      { name: 'Ngân hàng và tài chính', credits: 3 },
+    ],
+    CA: [
+      { name: 'Nghệ thuật thị giác', credits: 3 },
+      { name: 'Thiết kế đồ họa cơ bản', credits: 3 },
+      { name: 'Màu sắc và hình ảnh', credits: 3 },
+      { name: 'Typography', credits: 3 },
+      { name: 'Thiết kế thương hiệu', credits: 3 },
+      { name: 'Thiết kế bao bì', credits: 3 },
+      { name: 'Thiết kế web', credits: 3 },
+      { name: 'Video editing', credits: 3 },
+    ],
+    SE: [
+      { name: 'Kiểm thử phần mềm', credits: 3 },
+      { name: 'Quản lý dự án phần mềm', credits: 3 },
+      { name: 'Phát triển phần mềm nhanh', credits: 3 },
+      { name: 'Kiến trúc phần mềm', credits: 3 },
+      { name: 'Bảo mật phần mềm', credits: 3 },
+      { name: 'DevOps', credits: 3 },
+      { name: 'Phát triển web ứng dụng', credits: 3 },
+      { name: 'Phát triển di động', credits: 3 },
+    ],
+  };
+  
+  // Tạo môn cho từng khoa
+  Object.entries(subjectsByMajor).forEach(([majorCode, majorSubjects]) => {
+    majorSubjects.forEach((subject, index) => {
+      const subjectCode = `${majorCode}${String(index + 1).padStart(3, '0')}`;
+      subjects.push({
+        subjectCode,
+        subjectName: subject.name,
+        credits: subject.credits,
+        majorCodes: [majorCode], // Môn thuộc 1 khoa
+        isCommon: false,
+      });
+    });
+  });
+  
+  // Tạo một số môn liên khoa (majorCodes có nhiều khoa)
+  const interdisciplinarySubjects = [
+    { code: 'MATH001', name: 'Toán cao cấp 1', credits: 4, majors: ['CE', 'SE'] },
+    { code: 'MATH002', name: 'Toán cao cấp 2', credits: 4, majors: ['CE', 'SE'] },
+    { code: 'STAT001', name: 'Xác suất thống kê', credits: 3, majors: ['CE', 'BA', 'SE'] },
+    { code: 'BUS001', name: 'Kỹ năng mềm', credits: 2, majors: ['BA', 'SE'] },
+    { code: 'TECH001', name: 'Tổng quan công nghệ', credits: 3, majors: ['CE', 'CA', 'SE'] },
+  ];
+  
+  interdisciplinarySubjects.forEach((subject) => {
+    subjects.push({
+      subjectCode: subject.code,
+      subjectName: subject.name,
+      credits: subject.credits,
+      majorCodes: subject.majors, // Môn thuộc nhiều khoa
+      isCommon: false,
+    });
+  });
+  
   return Subject.insertMany(subjects);
 }
 
