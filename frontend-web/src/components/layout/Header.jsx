@@ -12,7 +12,7 @@ export default function Header() {
   const navItems = [
     { label: 'Lớp học', href: '#' },
     { label: 'Xếp lịch', href: '#' },
-    { label: 'Đợt đăng ký', href: '#' },
+    { label: 'Chuyên ngành', href: '/admin/majors' },
     { label: 'Giảng viên', href: '#' },
     { label: 'Môn học', href: '/admin/subjects' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
@@ -26,6 +26,9 @@ export default function Header() {
       return true;
     }
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
+      return true;
+    }
+    if (href === '/admin/majors' && location.pathname === '/admin/majors') {
       return true;
     }
     return false;
