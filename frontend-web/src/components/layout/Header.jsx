@@ -16,7 +16,8 @@ export default function Header() {
     { label: 'Giảng viên', href: '#' },
     { label: 'Môn học', href: '/admin/subjects' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
-    { label: 'Cấu hình', href: '#' },
+    { label: 'Quản lý người dùng', href: '/admin/users' }, // NEW: User management nav
+    { label: 'Cấu hình', href: '/admin/settings' },
   ];
 
   // Determine active item based on current path
@@ -28,7 +29,10 @@ export default function Header() {
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
       return true;
     }
-    return false;
+    if (href === '/admin/settings' && location.pathname === '/admin/settings') {
+      return true;
+    }
+    return location.pathname === href;
   };
 
   return (

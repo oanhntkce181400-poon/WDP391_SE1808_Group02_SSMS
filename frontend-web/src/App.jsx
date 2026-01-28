@@ -3,11 +3,14 @@ import { useEffect, useState } from 'react';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import StudentProfilePage from './pages/StudentProfilePage';
 import AdminLayout from './components/layout/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+import UserListPage from './pages/UserListPage';
+import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
 import authService from './services/authService';
 
 export default function App() {
@@ -29,6 +32,8 @@ export default function App() {
         <Route path="subjects" element={<SubjectManagement />} />
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
         <Route path="curriculum" element={<CurriculumManagement />} />
+        <Route path="users" element={<UserListPage />} />
+        <Route path="settings" element={<GeneralSettingsPage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -37,6 +42,16 @@ export default function App() {
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Student profile route */}
+      <Route
+        path="/student/profile"
+        element={
+          <ProtectedRoute>
+            <StudentProfilePage />
           </ProtectedRoute>
         }
       />

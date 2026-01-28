@@ -4,37 +4,37 @@ import axiosClient from './axiosClient';
 const curriculumService = {
   // Get all curriculum frameworks
   getCurriculums(params) {
-    return axiosClient.get('/api/curriculums', { params });
+    return axiosClient.get('/curriculums', { params });
   },
 
   // Get single curriculum by ID
   getCurriculum(id) {
-    return axiosClient.get(`/api/curriculums/${id}`);
+    return axiosClient.get(`/curriculums/${id}`);
   },
 
   // Create new curriculum
   createCurriculum(data) {
-    return axiosClient.post('/api/curriculums', data);
+    return axiosClient.post('/curriculums', data);
   },
 
   // Update existing curriculum
   updateCurriculum(id, data) {
-    return axiosClient.put(`/api/curriculums/${id}`, data);
+    return axiosClient.put(`/curriculums/${id}`, data);
   },
 
   // Delete curriculum
   deleteCurriculum(id) {
-    return axiosClient.delete(`/api/curriculums/${id}`);
+    return axiosClient.delete(`/curriculums/${id}`);
   },
 
   // Update curriculum semesters (courses in each semester)
   updateCurriculumSemesters(id, semesters) {
-    return axiosClient.put(`/api/curriculums/${id}/semesters`, { semesters });
+    return axiosClient.put(`/curriculums/${id}/semesters`, { semesters });
   },
 
   // Get curriculum semesters
   getCurriculumSemesters(id) {
-    return axiosClient.get(`/api/curriculums/${id}/semesters`);
+    return axiosClient.get(`/curriculums/${id}/semesters`);
   },
 };
 

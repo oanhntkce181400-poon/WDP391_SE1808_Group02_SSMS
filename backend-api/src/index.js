@@ -34,14 +34,15 @@ app.use(express.json());
 // Routes
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
+app.use('/api/users', require('./routes/user.routes'));
+app.use('/api/settings', require('./routes/settings.routes'));
+app.use('/api/auth', authRoutes);
+app.use('/api/actors', actorsRoutes);
 
 // Health check đơn giản
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
-
-app.use('/auth', authRoutes);
-app.use('/actors', actorsRoutes);
 
 const PORT = process.env.PORT || 3000;
 

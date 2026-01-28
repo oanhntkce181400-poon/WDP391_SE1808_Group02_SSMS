@@ -564,7 +564,15 @@ async function logout(req, { refreshToken }) {
 
 async function getMe(req) {
   const userId = req.auth?.sub;
+  console.log('[getMe] userId:', userId, 'req.auth:', req.auth);
+  
+  if (!userId) {
+    throw new Error('User ID not found in token.');
+  }
+
   const user = await repo.findUserById(userId);
+  console.log('[getMe] user found:', !!user);
+  
   if (!user) {
     throw new Error('User not found.');
   }

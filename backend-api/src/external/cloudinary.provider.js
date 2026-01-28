@@ -15,7 +15,7 @@ cloudinary.config({
 
 /**
  * Upload ảnh lên Cloudinary
- * @param {string} filePath - Đường dẫn file hoặc base64 string hoặc buffer
+ * @param {string|Buffer} filePath - Đường dẫn file hoặc Buffer hoặc base64 string
  * @param {object} options - Các options bổ sung cho upload
  * @param {string} options.folder - Thư mục lưu trữ trên Cloudinary (mặc định: 'ssms')
  * @param {string} options.public_id - ID tùy chỉnh cho ảnh
@@ -30,20 +30,41 @@ async function uploadImage(filePath, options = {}) {
   try {
     const defaultOptions = {
       folder: 'ssms', // Thư mục mặc định
-      resource_type: 'image', // Loại tài nguyên: image, video, raw, auto
+      resource_type: 'auto', // Loại tài nguyên: image, video, raw, auto
       ...options,
     };
 
-    const result = await cloudinary.uploader.upload(filePath, defaultOptions);
-
-    return {
-      url: result.url,
-      secure_url: result.secure_url,
-      public_id: result.public_id,
-      width: result.width,
-      height: result.height,
-      format: result.format,
-    };
+    // Support both file path and buffer
+    let uploadSource;
+    if (Buffer.isBuffer(filePath)) {
+      // If it's a buffer, use stream upload
+      uploadSource = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(defaultOptions, (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        });
+        uploadStream.end(filePath);
+      });
+      return {
+        url: uploadSource.url,
+        secure_url: uploadSource.secure_url,
+        public_id: uploadSource.public_id,
+        width: uploadSource.width,
+        height: uploadSource.height,
+        format: uploadSource.format,
+      };
+    } else {
+      // If it's a file path or data URI
+      const result = await cloudinary.uploader.upload(filePath, defaultOptions);
+      return {
+        url: result.url,
+        secure_url: result.secure_url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+      };
+    }
   } catch (error) {
     console.error('Cloudinary upload error:', error);
     throw new Error(`Failed to upload image: ${error.message}`);
