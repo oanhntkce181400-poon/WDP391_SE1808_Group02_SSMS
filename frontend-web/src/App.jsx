@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import SocketTestPage from './pages/SocketTestPage';
 import AdminLayout from './components/layout/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
 import CurriculumList from './components/features/CurriculumList';
+import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
 import authService from './services/authService';
 
 export default function App() {
@@ -31,7 +33,18 @@ export default function App() {
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
         <Route path="curriculum" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
+        <Route path="tuition-fees" element={<TuitionFeeManagement />} />
       </Route>
+
+      {/* Socket Test Page */}
+      <Route
+        path="/socket-test"
+        element={
+          <ProtectedRoute>
+            <SocketTestPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Legacy dashboard route - redirect to admin */}
       <Route

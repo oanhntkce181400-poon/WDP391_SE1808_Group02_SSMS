@@ -5,6 +5,7 @@ import SubjectList from '../../components/features/SubjectList';
 import SubjectModal from '../../components/features/SubjectModal';
 import SubjectDeleteModal from '../../components/features/SubjectDeleteModal';
 import SubjectDetail from '../../components/features/SubjectDetail';
+import SubjectFilterModal from '../../components/features/SubjectFilterModal';
 import subjectService from '../../services/subjectService';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
@@ -29,16 +30,21 @@ export default function SubjectManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
 
   // State for selected subject
   const [selectedSubject, setSelectedSubject] = useState(null);
 
+  // State for filters
+  const [activeFilters, setActiveFilters] = useState({});
+  const [searchKeyword, setSearchKeyword] = useState('');
+
   // State for toast notifications
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Fetch subjects from API
-  const fetchSubjects = useCallback(async (page = 1, keyword = '') => {
+  const fetchSubjects = useCallback(async (page = 1, keyword = '', filters = {}) => {
     setLoading(true);
     setError(null);
     try {
@@ -46,31 +52,38 @@ export default function SubjectManagement() {
         page,
         limit: pagination.limit,
         keyword,
+        ...filters,
       });
 
       const { data, total, page: currentPage, totalPages } = response.data;
 
       // Transform data to match frontend field names
-      const transformedData = (data || []).map((item) => ({
+      let transformedData = (data || []).map((item) => ({
         _id: item._id,
         id: item._id,
         code: item.subjectCode,
         name: item.subjectName,
         credits: item.credits,
+        tuitionFee: item.tuitionFee || item.credits * 630000, // Default nếu chưa có
         department: item.majorCodes || item.majorCode || [],
         isCommon: item.isCommon || false,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }));
 
+      // Apply client-side filters if needed
+      if (Object.keys(filters).length > 0) {
+        transformedData = applyFilters(transformedData, filters);
+      }
+
       setSubjects(transformedData);
       setPagination((prev) => ({
         ...prev,
         currentPage,
         totalPages,
-        totalItems: total,
+        totalItems: transformedData.length || total,
         currentStart: (currentPage - 1) * prev.limit + 1,
-        currentEnd: Math.min(currentPage * prev.limit, total),
+        currentEnd: Math.min(currentPage * prev.limit, transformedData.length || total),
       }));
     } catch (err) {
       console.error('Error fetching subjects:', err);
@@ -95,24 +108,81 @@ export default function SubjectManagement() {
     }
   }, [pagination.limit]);
 
+  // Apply filters to data
+  const applyFilters = (data, filters) => {
+    let filtered = [...data];
+
+    // Filter by credits
+    if (filters.credits) {
+      filtered = filtered.filter((subject) => subject.credits === parseInt(filters.credits));
+    }
+
+    // Filter by code prefix
+    if (filters.codePrefix) {
+      filtered = filtered.filter((subject) => 
+        subject.code.toUpperCase().startsWith(filters.codePrefix.toUpperCase())
+      );
+    }
+
+    // Filter by department
+    if (filters.department) {
+      filtered = filtered.filter((subject) => {
+        const dept = Array.isArray(subject.department) 
+          ? subject.department 
+          : [subject.department];
+        return dept.some(d => d && d.includes(filters.department));
+      });
+    }
+
+    // Filter by isCommon status
+    if (filters.isCommon !== '' && filters.isCommon !== undefined) {
+      const isCommonBool = filters.isCommon === 'true' || filters.isCommon === true;
+      filtered = filtered.filter((subject) => subject.isCommon === isCommonBool);
+    }
+
+    return filtered;
+  };
+
   // Initial fetch
   useEffect(() => {
-    fetchSubjects();
-  }, [fetchSubjects]);
+    fetchSubjects(1, searchKeyword, activeFilters);
+  }, []);
+
+  // Refetch when filters or search change
+  useEffect(() => {
+    if (searchKeyword || Object.keys(activeFilters).length > 0) {
+      fetchSubjects(1, searchKeyword, activeFilters);
+    }
+  }, [searchKeyword, activeFilters]);
 
   // Handle search
   const handleSearch = (keyword) => {
-    fetchSubjects(1, keyword);
+    setSearchKeyword(keyword);
+    fetchSubjects(1, keyword, activeFilters);
   };
 
-  // Handle filter (placeholder - implement based on requirements)
-  const handleFilter = () => {
-    showToast('Chức năng lọc đang được phát triển', 'info');
+  // Handle filter modal open
+  const handleFilterOpen = () => {
+    setIsFilterModalOpen(true);
+  };
+
+  // Handle filter apply
+  const handleFilterApply = (filters) => {
+    setActiveFilters(filters);
+    fetchSubjects(1, searchKeyword, filters);
+    
+    // Show toast with filter count
+    const filterCount = Object.keys(filters).length;
+    if (filterCount > 0) {
+      showToast(`Đã áp dụng ${filterCount} bộ lọc`, 'success');
+    } else {
+      showToast('Đã xóa tất cả bộ lọc', 'info');
+    }
   };
 
   // Handle page change
   const handlePageChange = (page) => {
-    fetchSubjects(page);
+    fetchSubjects(page, searchKeyword, activeFilters);
   };
 
   // Handle create new subject
@@ -292,13 +362,50 @@ export default function SubjectManagement() {
             </div>
           )}
 
+          {/* Active Filters Badge */}
+          {Object.keys(activeFilters).length > 0 && (
+            <div className="flex items-center gap-2 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                Đang lọc: {Object.keys(activeFilters).length} tiêu chí
+              </span>
+              <div className="flex flex-wrap gap-1.5 ml-2">
+                {activeFilters.credits && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
+                    Tín chỉ: {activeFilters.credits}
+                  </span>
+                )}
+                {activeFilters.codePrefix && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
+                    Mã: {activeFilters.codePrefix}*
+                  </span>
+                )}
+                {activeFilters.department && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
+                    Khoa: {activeFilters.department}
+                  </span>
+                )}
+                {activeFilters.isCommon !== undefined && activeFilters.isCommon !== '' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded">
+                    {activeFilters.isCommon === 'true' || activeFilters.isCommon === true ? 'Môn chung' : 'Môn chuyên ngành'}
+                  </span>
+                )}
+              </div>
+              <button
+                className="ml-auto text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 text-sm font-medium"
+                onClick={() => handleFilterApply({})}
+              >
+                Xóa bộ lọc
+              </button>
+            </div>
+          )}
+
           {/* Subject List Component */}
           <SubjectList
             subjects={subjects}
             loading={loading}
             pagination={pagination}
             onSearch={handleSearch}
-            onFilter={handleFilter}
+            onFilter={handleFilterOpen}
             onView={handleView}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -331,6 +438,14 @@ export default function SubjectManagement() {
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         subject={selectedSubject}
+      />
+
+      {/* Filter Modal */}
+      <SubjectFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApply={handleFilterApply}
+        currentFilters={activeFilters}
       />
 
       {/* Toast Notification */}
