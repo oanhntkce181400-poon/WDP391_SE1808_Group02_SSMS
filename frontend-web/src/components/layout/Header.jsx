@@ -29,17 +29,16 @@ export default function Header() {
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
       return true;
     }
-<<<<<<< HEAD
+
     if (href === '/admin/settings' && location.pathname === '/admin/settings') {
       return true;
     }
     return location.pathname === href;
-=======
+
     if (href === '/admin/majors' && location.pathname === '/admin/majors') {
       return true;
     }
     return false;
->>>>>>> origin/Students
   };
 
   return (
