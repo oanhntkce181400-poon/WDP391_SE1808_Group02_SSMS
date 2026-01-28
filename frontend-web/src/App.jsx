@@ -4,11 +4,13 @@ import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminLayout from './components/layout/AdminLayout';
+import StudentLayout from './components/layout/StudentLayout';
 import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
 import MajorManagement from './pages/admin/MajorManagement';
+import StudentHome from './pages/student/StudentHome';
 import authService from './services/authService';
 
 export default function App() {
@@ -21,7 +23,7 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['admin', 'staff']}>
             <AdminLayout />
           </ProtectedRoute>
         }
@@ -31,6 +33,18 @@ export default function App() {
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
         <Route path="curriculum" element={<CurriculumManagement />} />
         <Route path="majors" element={<MajorManagement />} />
+      </Route>
+
+      {/* Student routes with layout */}
+      <Route
+        path="/student"
+        element={
+          <ProtectedRoute allowedRoles={['student']}>
+            <StudentLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<StudentHome />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -49,16 +63,20 @@ export default function App() {
   );
 }
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
   const [status, setStatus] = useState('checking');
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
     authService
       .me()
-      .then(() => {
-        if (isMounted) setStatus('authenticated');
+      .then((response) => {
+        if (isMounted) {
+          setUser(response.data.user);
+          setStatus('authenticated');
+        }
       })
       .catch(() => {
         if (isMounted) setStatus('unauthenticated');
@@ -81,6 +99,15 @@ function ProtectedRoute({ children }) {
 
   if (status === 'unauthenticated') {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // Check role-based access
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    // Redirect based on user's role
+    if (user.role === 'student') {
+      return <Navigate to="/student" replace />;
+    }
+    return <Navigate to="/admin" replace />;
   }
 
   return children;
