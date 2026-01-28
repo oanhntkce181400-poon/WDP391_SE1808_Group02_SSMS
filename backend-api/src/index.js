@@ -35,6 +35,7 @@ app.use(express.json());
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
 app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
+app.use('/api/majors', require('./routes/major.routes'));
 
 // Health check đơn giản
 app.get('/health', (req, res) => {

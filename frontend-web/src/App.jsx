@@ -9,6 +9,7 @@ import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+import MajorManagement from './pages/admin/MajorManagement';
 import CurriculumList from './components/features/CurriculumList';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
 import authService from './services/authService';
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="curriculum" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
+        <Route path="majors" element={<MajorManagement />} />
       </Route>
 
       {/* Socket Test Page */}

@@ -6,6 +6,7 @@ import editIcon from '../../assets/edit.png';
 import deleteIcon from '../../assets/delete.png';
 import setupIcon from '../../assets/next.png';
 import curriculumService from '../../services/curriculumService';
+import majorService from '../../services/majorService';
 
 const STATUS_COLORS = {
   active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
@@ -33,6 +34,9 @@ export default function CurriculumList() {
     status: 'active',
   });
 
+  // State for majors
+  const [majors, setMajors] = useState([]);
+
   // Fetch curriculums from database
   useEffect(() => {
     const fetchCurriculums = async () => {
@@ -48,6 +52,20 @@ export default function CurriculumList() {
       }
     };
     fetchCurriculums();
+  }, []);
+
+  // Fetch majors from database
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        const response = await majorService.getMajors({ isActive: true });
+        setMajors(response.data?.data || []);
+      } catch (error) {
+        console.error('Error fetching majors:', error);
+        setMajors([]);
+      }
+    };
+    fetchMajors();
   }, []);
 
   // Filter curriculums
@@ -352,10 +370,11 @@ export default function CurriculumList() {
                   required
                 >
                   <option value="">Chọn khoa/viện</option>
-                  <option value="Khoa Kỹ thuật & Công nghệ">Khoa Kỹ thuật & Công nghệ</option>
-                  <option value="Khoa Quản trị kinh doanh">Khoa Quản trị kinh doanh</option>
-                  <option value="Khoa Công nghệ thông tin">Khoa Công nghệ thông tin</option>
-                  <option value="Khoa Thiết kế đồ họa">Khoa Thiết kế đồ họa</option>
+                  {majors.map((major) => (
+                    <option key={major.majorCode} value={major.majorCode}>
+                      {major.majorName}
+                    </option>
+                  ))}
                 </select>
               </div>
 

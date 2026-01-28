@@ -23,6 +23,7 @@ export default function SubjectList({
   onView,
   onPrerequisites,
   onPageChange,
+  majorCodeToName,
 }) {
   const [searchKeyword, setSearchKeyword] = useState('');
 
@@ -145,11 +146,15 @@ export default function SubjectList({
                     </div>
                   </td>
                   <td className="px-6 py-5 text-slate-500 text-sm dark:text-slate-400">
-                    {subject.department
+                    {subject.isCommon
+                      ? 'Môn chung cho toàn khoa'
+                      : subject.department
                       ? (Array.isArray(subject.department)
-                          ? subject.department.join(', ')
-                          : subject.department)
-                      : subject.major?.name || 'Chưa phân công'}
+                          ? subject.department
+                              .map((code) => majorCodeToName.get(String(code || '').trim()) || code)
+                              .join(', ')
+                          : majorCodeToName.get(String(subject.department || '').trim()) || subject.department)
+                      : ''}
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex justify-end gap-1">

@@ -1,6 +1,6 @@
 // Curriculum Management Page - Drag and drop curriculum builder (Tasks #XX)
 // Based on provided HTML design
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import searchIcon from '../../assets/search.png';
 import filterIcon from '../../assets/filter.png';
@@ -10,12 +10,49 @@ import deleteIcon from '../../assets/delete.png';
 import copyIcon from '../../assets/file.png';
 import subjectService from '../../services/subjectService';
 import curriculumService from '../../services/curriculumService';
+import majorService from '../../services/majorService';
 
 export default function CurriculumManagement() {
   const navigate = useNavigate();
   const { curriculumId } = useParams();
 
   const normalizeCode = (code) => String(code || '').trim();
+
+  // State for majors data
+  const [majors, setMajors] = useState([]);
+  const majorCodeToName = useMemo(() => {
+    return new Map(
+      (majors || []).map((m) => [normalizeCode(m.majorCode), normalizeCode(m.majorName)])
+    );
+  }, [majors]);
+
+  // Also create name to code map for backward compatibility
+  const majorNameToCode = useMemo(() => {
+    return new Map(
+      (majors || []).map((m) => [normalizeCode(m.majorName), normalizeCode(m.majorCode)])
+    );
+  }, [majors]);
+
+  const handleMajorSelect = (majorCode) => {
+    setCurrentCurriculum((prev) => ({
+      ...prev,
+      major: majorCode,
+    }));
+    setMajorDropdownOpen(false);
+    setHasChanges(true);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (majorDropdownRef.current && !majorDropdownRef.current.contains(event.target)) {
+        setMajorDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // State for current curriculum
   const [currentCurriculum, setCurrentCurriculum] = useState(null);
@@ -28,6 +65,8 @@ export default function CurriculumManagement() {
   // State for subjects data
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [majorDropdownOpen, setMajorDropdownOpen] = useState(false);
+  const majorDropdownRef = useRef(null);
 
   // State for curriculum semesters (empty initially - will be fetched from DB)
   const [semesters, setSemesters] = useState([
@@ -102,13 +141,51 @@ export default function CurriculumManagement() {
     fetchSubjects();
   }, []);
 
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        console.log('Fetching majors...');
+        const res = await majorService.getMajors({ isActive: true });
+        console.log('Majors response:', res.data);
+        console.log('Majors array:', res.data?.data);
+        console.log('Majors count:', res.data?.data?.length);
+        setMajors(res.data?.data || []);
+      } catch (e) {
+        console.error('Error fetching majors:', e);
+        setMajors([]);
+      }
+    };
+
+    fetchMajors();
+  }, []);
+
   // Fetch curriculum data when component mounts or curriculumId changes
   useEffect(() => {
     const fetchCurriculum = async () => {
       if (curriculumId) {
         try {
+          console.log('Fetching curriculum:', curriculumId);
           const response = await curriculumService.getCurriculum(curriculumId);
           const curriculumData = response.data?.data;
+          console.log('Curriculum data:', curriculumData);
+          
+          if (!curriculumData) {
+            console.error('Curriculum not found');
+            showToast('Không tìm thấy khung chương trình!', 'error');
+            navigate('/admin/curriculum');
+            return;
+          }
+          
+          // Convert major name to major code if needed
+          if (curriculumData.major) {
+            const normalizedMajor = normalizeCode(curriculumData.major);
+            // If major is a name, convert to code
+            if (majorNameToCode.get(normalizedMajor)) {
+              curriculumData.major = majorNameToCode.get(normalizedMajor);
+            }
+          }
+          
+          console.log('Updated curriculum major:', curriculumData.major);
           setCurrentCurriculum(curriculumData);
           
           // Set semesters from database if available
@@ -117,13 +194,32 @@ export default function CurriculumManagement() {
           }
         } catch (error) {
           console.error('Error fetching curriculum:', error);
-          showToast('Lỗi khi tải dữ liệu khung chương trình!', 'error');
+          if (error.response?.status === 404) {
+            showToast('Không tìm thấy khung chương trình!', 'error');
+            navigate('/admin/curriculum');
+          } else {
+            showToast('Lỗi khi tải dữ liệu khung chương trình!', 'error');
+          }
         }
+      } else {
+        // Create new curriculum with default values
+        console.log('Creating new curriculum');
+        setCurrentCurriculum({
+          code: '',
+          name: '',
+          major: '',
+          academicYear: '2024/2025',
+          description: '',
+          status: 'active',
+          totalCredits: 0,
+          totalCourses: 0,
+          semesters: []
+        });
       }
     };
 
     fetchCurriculum();
-  }, [curriculumId]);
+  }, [curriculumId, majorNameToCode, navigate]);
 
   // Calculate stats
   const totalCredits = semesters.reduce((sum, sem) => sum + sem.credits, 0);
@@ -191,13 +287,61 @@ export default function CurriculumManagement() {
     return { ok: true };
   };
 
+  const curriculumMajorCode = (() => {
+    const raw = normalizeCode(currentCurriculum?.major);
+    console.log('Curriculum major raw:', raw);
+    if (!raw) return '';
+
+    const byCode = (majors || []).find((m) => normalizeCode(m.majorCode) === raw);
+    if (byCode?.majorCode) {
+      console.log('Found by code:', normalizeCode(byCode.majorCode));
+      return normalizeCode(byCode.majorCode);
+    }
+
+    const byName = (majors || []).find((m) => normalizeCode(m.majorName).toLowerCase() === raw.toLowerCase());
+    if (byName?.majorCode) {
+      console.log('Found by name:', normalizeCode(byName.majorCode));
+      return normalizeCode(byName.majorCode);
+    }
+
+    console.log('Returning raw as fallback:', raw);
+    return raw;
+  })();
+
   // Filter available subjects
   const filteredSubjects = availableSubjects.filter(
-    (subject) =>
-      !scheduledCourseCodes.has(normalizeCode(subject.code)) &&
-      (subject.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        subject.name.toLowerCase().includes(searchKeyword.toLowerCase()))
+    (subject) => {
+      const isScheduled = scheduledCourseCodes.has(normalizeCode(subject.code));
+      const isCommon = subject.isCommon;
+      const matchesMajor = !curriculumMajorCode ||
+        (Array.isArray(subject.department)
+          ? subject.department.map(normalizeCode).includes(curriculumMajorCode)
+          : [normalizeCode(subject.department)].filter(Boolean).includes(curriculumMajorCode));
+      
+      const matchesSearch = subject.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        subject.name.toLowerCase().includes(searchKeyword.toLowerCase());
+      
+      const passes = !isScheduled && (isCommon || matchesMajor) && matchesSearch;
+      
+      if (subject.code === 'CE001' || subject.code === 'ENG001') {
+        console.log(`Subject ${subject.code}:`, {
+          isScheduled,
+          isCommon,
+          department: subject.department,
+          curriculumMajorCode,
+          matchesMajor,
+          matchesSearch,
+          passes
+        });
+      }
+      
+      return passes;
+    }
   );
+  
+  console.log('Available subjects count:', availableSubjects.length);
+  console.log('Filtered subjects count:', filteredSubjects.length);
+  console.log('Curriculum major code:', curriculumMajorCode);
 
   // Calculate pagination for "Môn cơ sở"
   const baseSubjects = filteredSubjects.filter((s) => s.category === 'Cơ sở' && !s.isCommon);
@@ -419,7 +563,12 @@ export default function CurriculumManagement() {
       showToast('Lưu khung chương trình thành công!', 'success');
     } catch (error) {
       console.error('Error saving curriculum:', error);
-      showToast('Lưu thất bại! Vui lòng thử lại.', 'error');
+      if (error.response?.status === 404) {
+        showToast('Không tìm thấy khung chương trình! Đang chuyển hướng...', 'error');
+        setTimeout(() => navigate('/admin/curriculum'), 2000);
+      } else {
+        showToast('Lưu thất bại! ' + (error.response?.data?.message || error.message || 'Vui lòng thử lại.'), 'error');
+      }
     } finally {
       setSaving(false);
     }
@@ -642,9 +791,19 @@ export default function CurriculumManagement() {
                     Đang áp dụng
                   </span>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {currentCurriculum?.academicYear || '2024/2025'} • {currentCurriculum?.major || 'Khoa Kỹ thuật & Công nghệ'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    {currentCurriculum?.academicYear || '2024/2025'} •
+                  </span>
+                  {/* Major Display - Fixed, not editable */}
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                      {currentCurriculum?.major
+                        ? majorCodeToName.get(normalizeCode(currentCurriculum.major)) || currentCurriculum.major
+                        : 'Chọn khoa...'}
+                    </span>
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button className="flex items-center gap-2 h-10 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
