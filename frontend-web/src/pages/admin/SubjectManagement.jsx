@@ -1,15 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import SubjectList from '../../components/features/SubjectList';
 import SubjectModal from '../../components/features/SubjectModal';
 import SubjectDeleteModal from '../../components/features/SubjectDeleteModal';
 import SubjectDetail from '../../components/features/SubjectDetail';
 import SubjectFilterModal from '../../components/features/SubjectFilterModal';
 import subjectService from '../../services/subjectService';
+import majorService from '../../services/majorService';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
 export default function SubjectManagement() {
   const [subjects, setSubjects] = useState([]);
+  const [majors, setMajors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -34,6 +36,16 @@ export default function SubjectManagement() {
   const [searchKeyword, setSearchKeyword] = useState('');
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const majorCodeToName = useMemo(() => {
+    const map = new Map();
+    majors.forEach((major) => {
+      if (major.majorCode && major.majorName) {
+        map.set(major.majorCode, major.majorName);
+      }
+    });
+    return map;
+  }, [majors]);
 
   const fetchSubjects = useCallback(async (page = 1, keyword = '', filters = {}) => {
     setLoading(true);
@@ -96,6 +108,17 @@ export default function SubjectManagement() {
     }
   }, [pagination.limit]);
 
+  const fetchMajors = useCallback(async () => {
+    try {
+      const response = await majorService.getMajors({});
+      if (response?.data?.success && response.data.data) {
+        setMajors(response.data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching majors:', err);
+    }
+  }, []);
+
   // Apply filters to data
   const applyFilters = (data, filters) => {
     let filtered = [...data];
@@ -133,6 +156,7 @@ export default function SubjectManagement() {
 
   // Initial fetch
   useEffect(() => {
+    fetchMajors();
     fetchSubjects(1, searchKeyword, activeFilters);
   }, []);
 
@@ -399,6 +423,7 @@ export default function SubjectManagement() {
             onDelete={handleDelete}
             onPrerequisites={handlePrerequisites}
             onPageChange={handlePageChange}
+            majorCodeToName={majorCodeToName}
           />
         </div>
       </main>
