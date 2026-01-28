@@ -80,6 +80,9 @@ export default function SubjectList({
                 Số tín chỉ
               </th>
               <th className="px-6 py-4 text-slate-700 dark:text-slate-200 text-[13px] font-bold uppercase tracking-wider">
+                Học phí
+              </th>
+              <th className="px-6 py-4 text-slate-700 dark:text-slate-200 text-[13px] font-bold uppercase tracking-wider">
                 Khoa quản lý
               </th>
               <th className="px-6 py-4 text-slate-500 dark:text-slate-400 text-[13px] font-bold uppercase tracking-wider text-right">
@@ -90,7 +93,7 @@ export default function SubjectList({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {loading ? (
               <tr>
-                <td colSpan="5" className="px-6 py-12 text-center">
+                <td colSpan="6" className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#1A237E] border-t-transparent"></div>
                     <span className="text-slate-500 dark:text-slate-400 text-sm">Đang tải dữ liệu...</span>
@@ -99,7 +102,7 @@ export default function SubjectList({
               </tr>
             ) : subjects.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-6 py-12 text-center">
+                <td colSpan="6" className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <img src={searchOffIcon} alt="Không tìm thấy" className="w-12 h-12 opacity-50" />
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
@@ -130,6 +133,16 @@ export default function SubjectList({
                           Chung
                         </span>
                       )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-5 text-sm">
+                    <div className="flex flex-col">
+                      <span className="text-slate-900 dark:text-white font-semibold">
+                        {subject.tuitionFee ? subject.tuitionFee.toLocaleString('vi-VN') : (subject.credits * 630000).toLocaleString('vi-VN')} VNĐ
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {subject.credits * 630000 === subject.tuitionFee || !subject.tuitionFee ? `${(subject.credits * 630000 / 1000000).toFixed(1)}tr` : 'Tùy chỉnh'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-5 text-slate-500 text-sm dark:text-slate-400">

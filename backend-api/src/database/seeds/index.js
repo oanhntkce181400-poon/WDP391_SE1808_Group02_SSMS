@@ -14,50 +14,20 @@ const Device = require('../../models/device.model');
 const Subject = require('../../models/subject.model');
 const Curriculum = require('../../models/curriculum.model');
 const Major = require('../../models/major.model');
+const TuitionFee = require('../../models/tuitionFee.model');
 
 const faker = fakerVI;
 
 faker.seed(20250127);
 
 const MAJORS = [
-  { 
-    code: 'SE', 
-    name: 'Kỹ thuật phần mềm', 
-    nameEn: 'Software Engineering', 
-    faculty: 'Khoa Công nghệ thông tin',
-    studentCount: 1245
-  },
-  { 
-    code: 'AI', 
-    name: 'Trí tuệ nhân tạo', 
-    nameEn: 'Artificial Intelligence', 
-    faculty: 'Khoa Công nghệ thông tin',
-    studentCount: 450
-  },
-  { 
-    code: 'IB', 
-    name: 'Kinh doanh quốc tế', 
-    nameEn: 'International Business', 
-    faculty: 'Khoa Kinh tế và Luật',
-    studentCount: 890
-  },
-  { 
-    code: 'GD', 
-    name: 'Thiết kế đồ họa', 
-    nameEn: 'Graphic Design', 
-    faculty: 'Khoa Ngôn ngữ anh',
-    studentCount: 320
-  },
-  { 
-    code: 'OLD_IT', 
-    name: 'Tin học ứng dụng (Cũ)', 
-    nameEn: 'Applied Informatics', 
-    faculty: 'Khoa Công nghệ thông tin',
-    studentCount: 0
-  },
+  { code: 'CE', name: 'Cﾃｴng ngh盻・thﾃｴng tin' },
+  { code: 'BA', name: 'Kinh t蘯ｿ' },
+  { code: 'CA', name: 'Thi蘯ｿt k蘯ｿ ﾄ黛ｻ・h盻溝' },
+  { code: 'SE', name: 'K盻ｹ thu蘯ｭt ph蘯ｧn m盻［' },
 ];
 
-// Dữ liệu mẫu cho các khóa sau này
+// D盻・m盻・r盻冢g cho cﾃ｡c khﾃｳa sau nﾃy
 const COHORTS = [16, 17, 18, 19, 20];
 
 const DOMAIN = 'fpt.edu.vn';
@@ -214,189 +184,182 @@ async function seedAdmin() {
 }
 
 async function seedCurriculums(subjects) {
-  await Curriculum.deleteMany({});
   const curricula = [];
-  
-  // Tạo curriculum cho từng khoa
-  for (const major of MAJORS) {
-    for (const cohort of COHORTS) {
-      const curriculumCode = `${major.code}${cohort}`;
-      const curriculumName = `Chương trình đào tạo ${major.name} Khóa ${cohort}`;
-      
-      // Lấy các môn thuộc khoa này + môn chung
-      const majorSubjects = subjects.filter(subject => 
-        subject.isCommon || 
-        (subject.majorCodes && subject.majorCodes.includes(major.code))
+  for (const cohort of COHORTS) {
+    for (const major of MAJORS) {
+      const curriculumCode = `${major.code}K${cohort}`;
+      const academicYear = `20${cohort}-20${cohort + 1}`;
+      const pickedSubjects = faker.helpers.arrayElements(
+        subjects.filter(s => s.majorCode === major.code), 
+        faker.number.int({ min: 10, max: 20 })
       );
       
-      // Chọn ngẫu nhiên 20-30 môn cho curriculum
-      const pickedSubjects = faker.helpers.arrayElements(majorSubjects, faker.number.int({ min: 20, max: 30 }));
-      
-      // Tạo cấu trúc semesters
+      // Tạo dữ liệu semesters
       const semesters = [];
-      const subjectsPerSemester = Math.ceil(pickedSubjects.length / 8); // Giả sử 8 học kỳ
-      
-      for (let sem = 1; sem <= 8; sem++) {
-        const startIndex = (sem - 1) * subjectsPerSemester;
-        const endIndex = Math.min(startIndex + subjectsPerSemester, pickedSubjects.length);
-        const semesterSubjects = pickedSubjects.slice(startIndex, endIndex);
+      let subjectIndex = 0;
+      for (let semId = 1; semId <= 8; semId++) {
+        const semesterCourses = [];
+        const coursesInSem = Math.min(faker.number.int({ min: 3, max: 6 }), pickedSubjects.length - subjectIndex);
         
-        if (semesterSubjects.length > 0) {
+        for (let i = 0; i < coursesInSem && subjectIndex < pickedSubjects.length; i++) {
+          const subject = pickedSubjects[subjectIndex];
+          semesterCourses.push({
+            code: subject.subjectCode,
+            name: subject.subjectName,
+            credits: subject.credits,
+            hasPrerequisite: faker.datatype.boolean(0.3)
+          });
+          subjectIndex++;
+        }
+        
+        if (semesterCourses.length > 0) {
           semesters.push({
-            id: sem,
-            name: `Học kỳ ${sem}`,
-            credits: semesterSubjects.reduce((sum, subject) => sum + subject.credits, 0),
-            courses: semesterSubjects.map(subject => ({
-              code: subject.subjectCode,
-              name: subject.subjectName,
-              credits: subject.credits,
-              hasPrerequisite: false // Có thể cập nhật sau
-            }))
+            id: semId,
+            name: `Học kỳ ${semId}`,
+            credits: semesterCourses.reduce((sum, c) => sum + c.credits, 0),
+            courses: semesterCourses
           });
         }
       }
       
-      const curriculum = {
+      const curriculum = await Curriculum.create({
         code: curriculumCode,
-        name: curriculumName,
-        major: major.code, // Lưu majorCode
-        academicYear: `${2020 + cohort}-${2021 + cohort}`,
-        description: `Chương trình đào tạo ngành ${major.name} khóa ${cohort}`,
+        name: `Chương trình đào tạo ${major.name} K${cohort}`,
+        major: major.name,
+        academicYear: academicYear,
+        description: `Chương trình đào tạo ngành ${major.name} cho sinh viên khóa ${cohort}`,
         status: 'active',
         totalCredits: semesters.reduce((sum, sem) => sum + sem.credits, 0),
         totalCourses: pickedSubjects.length,
-        semesters
-      };
-      
+        semesters: semesters
+      });
       curricula.push(curriculum);
     }
   }
+  return curricula;
+}
+
+async function seedTuitionFees(curriculums, subjects) {
+  const tuitionFees = [];
   
-  return Curriculum.insertMany(curricula);
+  // Chỉ seed cho K18, K19, K20
+  const targetCohorts = [18, 19, 20];
+  
+  for (const curriculum of curriculums) {
+    // Extract cohort từ code (ví dụ: CEK18 -> 18)
+    const cohortMatch = curriculum.code.match(/K(\d+)$/);
+    if (!cohortMatch) continue;
+    
+    const cohort = parseInt(cohortMatch[1]);
+    if (!targetCohorts.includes(cohort)) continue;
+    
+    // Extract majorCode từ code (ví dụ: CEK18 -> CE)
+    const majorCode = curriculum.code.replace(/K\d+$/, '');
+    const academicYearStart = 2000 + cohort;
+    
+    // Tạo học phí cho mỗi semester trong curriculum
+    for (const semester of curriculum.semesters) {
+      // Lấy thông tin subjects từ curriculum
+      const semesterSubjects = [];
+      let totalCredits = 0;
+      let baseTuitionFee = 0;
+      
+      for (const course of semester.courses) {
+        const subject = subjects.find(s => s.subjectCode === course.code);
+        if (subject) {
+          const fee = subject.tuitionFee || subject.credits * 630000;
+          totalCredits += course.credits;
+          baseTuitionFee += fee;
+          
+          semesterSubjects.push({
+            subjectId: subject._id,
+            subjectCode: course.code,
+            subjectName: course.name,
+            credits: course.credits,
+            tuitionFee: fee
+          });
+        }
+      }
+      
+      if (semesterSubjects.length === 0) continue;
+      
+      // Tạo tuition fee
+      const tuitionFee = {
+        semester: semester.name,
+        cohort: `K${cohort}`,
+        academicYear: `${academicYearStart}-${academicYearStart + 1}`,
+        majorCode: majorCode,
+        subjects: semesterSubjects,
+        totalCredits: totalCredits,
+        baseTuitionFee: baseTuitionFee,
+        discounts: [],
+        totalDiscount: 0,
+        finalTuitionFee: baseTuitionFee,
+        status: 'active'
+      };
+      
+      tuitionFees.push(tuitionFee);
+    }
+  }
+  
+  if (tuitionFees.length > 0) {
+    await TuitionFee.insertMany(tuitionFees);
+    console.log(`✅ Đã seed ${tuitionFees.length} tuition fees cho K18-K20`);
+  }
+  
+  return tuitionFees;
 }
 
 async function seedSubjects() {
-  await Subject.deleteMany({});
   const subjects = [];
-  
-  // Môn chung cho toàn khoa (isCommon: true)
-  const commonSubjects = [
-    { code: 'ENG001', name: 'Tiếng Anh Công nghệ 1', credits: 3 },
-    { code: 'ENG002', name: 'Tiếng Anh Công nghệ 2', credits: 3 },
-    { code: 'PE001', name: 'Giáo dục thể chất', credits: 1 },
-    { code: 'POL001', name: 'Tư tưởng Hồ Chí Minh', credits: 2 },
-    { code: 'POL002', name: 'Kinh tế chính trị Mác-Lênin', credits: 2 },
-  ];
-  
-  commonSubjects.forEach((subject, index) => {
+  for (let i = 0; i < 50; i += 1) {
+    const major = randomFrom(MAJORS);
+    const subjectCode = `SUB${String(i + 1).padStart(3, '0')}`;
+    const subjectName = `${faker.hacker.noun()} ${faker.hacker.verb()} ${faker.hacker.adjective()}`;
+    const credits = faker.number.int({ min: 2, max: 5 });
     subjects.push({
-      subjectCode: subject.code,
-      subjectName: subject.name,
-      credits: subject.credits,
-      majorCodes: [], // Môn chung không thuộc khoa nào
-      isCommon: true,
+      subjectCode,
+      subjectName,
+      credits,
+      majorCode: major.code,
     });
-  });
-  
-  // Môn chuyên ngành theo từng khoa
-  const subjectsByMajor = {
-    CE: [
-      { name: 'Lập trình cơ bản', credits: 3 },
-      { name: 'Cấu trúc dữ liệu và giải thuật', credits: 4 },
-      { name: 'Cơ sở dữ liệu', credits: 3 },
-      { name: 'Mạng máy tính', credits: 3 },
-      { name: 'Hệ điều hành', credits: 3 },
-      { name: 'Lập trình hướng đối tượng', credits: 3 },
-      { name: 'Phân tích thiết kế hệ thống', credits: 3 },
-      { name: 'Trí tuệ nhân tạo', credits: 3 },
-    ],
-    BA: [
-      { name: 'Kinh tế vi mô', credits: 3 },
-      { name: 'Kinh tế vĩ mô', credits: 3 },
-      { name: 'Tài chính doanh nghiệp', credits: 3 },
-      { name: 'Marketing cơ bản', credits: 3 },
-      { name: 'Quản trị kinh doanh', credits: 3 },
-      { name: 'Thống kê kinh tế', credits: 3 },
-      { name: 'Kinh tế quốc tế', credits: 3 },
-      { name: 'Ngân hàng và tài chính', credits: 3 },
-    ],
-    CA: [
-      { name: 'Nghệ thuật thị giác', credits: 3 },
-      { name: 'Thiết kế đồ họa cơ bản', credits: 3 },
-      { name: 'Màu sắc và hình ảnh', credits: 3 },
-      { name: 'Typography', credits: 3 },
-      { name: 'Thiết kế thương hiệu', credits: 3 },
-      { name: 'Thiết kế bao bì', credits: 3 },
-      { name: 'Thiết kế web', credits: 3 },
-      { name: 'Video editing', credits: 3 },
-    ],
-    SE: [
-      { name: 'Kiểm thử phần mềm', credits: 3 },
-      { name: 'Quản lý dự án phần mềm', credits: 3 },
-      { name: 'Phát triển phần mềm nhanh', credits: 3 },
-      { name: 'Kiến trúc phần mềm', credits: 3 },
-      { name: 'Bảo mật phần mềm', credits: 3 },
-      { name: 'DevOps', credits: 3 },
-      { name: 'Phát triển web ứng dụng', credits: 3 },
-      { name: 'Phát triển di động', credits: 3 },
-    ],
-  };
-  
-  // Tạo môn cho từng khoa
-  Object.entries(subjectsByMajor).forEach(([majorCode, majorSubjects]) => {
-    majorSubjects.forEach((subject, index) => {
-      const subjectCode = `${majorCode}${String(index + 1).padStart(3, '0')}`;
-      subjects.push({
-        subjectCode,
-        subjectName: subject.name,
-        credits: subject.credits,
-        majorCodes: [majorCode], // Môn thuộc 1 khoa
-        isCommon: false,
-      });
-    });
-  });
-  
-  // Tạo một số môn liên khoa (majorCodes có nhiều khoa)
-  const interdisciplinarySubjects = [
-    { code: 'MATH001', name: 'Toán cao cấp 1', credits: 4, majors: ['CE', 'SE'] },
-    { code: 'MATH002', name: 'Toán cao cấp 2', credits: 4, majors: ['CE', 'SE'] },
-    { code: 'STAT001', name: 'Xác suất thống kê', credits: 3, majors: ['CE', 'BA', 'SE'] },
-    { code: 'BUS001', name: 'Kỹ năng mềm', credits: 2, majors: ['BA', 'SE'] },
-    { code: 'TECH001', name: 'Tổng quan công nghệ', credits: 3, majors: ['CE', 'CA', 'SE'] },
-  ];
-  
-  interdisciplinarySubjects.forEach((subject) => {
-    subjects.push({
-      subjectCode: subject.code,
-      subjectName: subject.name,
-      credits: subject.credits,
-      majorCodes: subject.majors, // Môn thuộc nhiều khoa
-      isCommon: false,
-    });
-  });
-  
+  }
   return Subject.insertMany(subjects);
 }
 
 async function seedMajors() {
   await Major.deleteMany({});
-  const majorsToSeed = MAJORS.map((major, index) => ({
-    majorCode: major.code,
-    majorName: major.name,
-    majorNameEn: major.nameEn,
-    faculty: major.faculty,
-    studentCount: major.studentCount || 0,
-    isActive: index < 4, // 4 ngành đầu đang đào tạo, ngành cuối ngừng tuyển sinh
-  }));
-  return Major.insertMany(majorsToSeed);
+  return Major.insertMany(
+    MAJORS.map((major) => ({
+      majorCode: major.code,
+      majorName: major.name,
+      isActive: true,
+    })),
+  );
 }
 
 async function seedRooms() {
   const rooms = [];
+  const usedRoomCodes = new Set();
+  
   for (let i = 0; i < 50; i += 1) {
-    const floor = faker.number.int({ min: 1, max: 5 });
-    const roomNumber = faker.number.int({ min: 100, max: 599 });
-    const roomCode = `R${floor}${roomNumber}`;
+    let roomCode;
+    let attempts = 0;
+    
+    // Tạo roomCode unique
+    do {
+      const floor = faker.number.int({ min: 1, max: 5 });
+      const roomNumber = faker.number.int({ min: 100, max: 599 });
+      roomCode = `R${floor}${roomNumber}`;
+      attempts++;
+      if (attempts > 100) {
+        // Nếu thử quá nhiều lần, dùng index để đảm bảo unique
+        roomCode = `R${Math.floor(i / 10) + 1}${String(100 + i).padStart(3, '0')}`;
+        break;
+      }
+    } while (usedRoomCodes.has(roomCode));
+    
+    usedRoomCodes.add(roomCode);
     rooms.push({
       roomCode,
       roomName: `Room ${roomCode}`,
@@ -439,7 +402,20 @@ async function seedTeachers() {
 }
 
 async function seedStudents(curriculums) {
-  const curriculumMap = new Map(curriculums.map((c) => [c.cohort, c]));
+  // Tạo map từ majorCode-cohort -> curriculum
+  const curriculumMap = new Map();
+  curriculums.forEach(c => {
+    // Extract cohort từ code (ví dụ: CEK16 -> 16)
+    const cohortMatch = c.code.match(/K(\d+)$/);
+    if (cohortMatch) {
+      const cohort = parseInt(cohortMatch[1]);
+      // Extract majorCode từ code (ví dụ: CEK16 -> CE)
+      const majorCode = c.code.replace(/K\d+$/, '');
+      const key = `${majorCode}-${cohort}`;
+      curriculumMap.set(key, c);
+    }
+  });
+  
   const students = [];
   const suffixCounters = new Map();
 
@@ -458,7 +434,8 @@ async function seedStudents(curriculums) {
     const suffixNumber = nextSuffix(major.code, cohort);
     const studentCode = buildStudentCode(major.code, cohort, suffixNumber);
     const email = buildStudentEmail(fullName, major.code, cohort, suffixNumber);
-    const curriculum = curriculumMap.get(cohort);
+    const curriculumKey = `${major.code}-${cohort}`;
+    const curriculum = curriculumMap.get(curriculumKey);
 
     students.push({
       studentCode,
@@ -466,7 +443,7 @@ async function seedStudents(curriculums) {
       email,
       majorCode: major.code,
       cohort,
-      curriculum: curriculum._id,
+      curriculum: curriculum?._id,
     });
   }
 
@@ -534,6 +511,14 @@ async function seedMissingTablesFromDiagram() {
 async function seed() {
   await connectDB();
 
+  // Drop old indexes nếu có
+  try {
+    await Curriculum.collection.dropIndex('curriculumCode_1');
+    console.log('✅ Dropped old curriculumCode index');
+  } catch (err) {
+    // Index không tồn tại, bỏ qua
+  }
+
   await Promise.all([
     Student.deleteMany({}),
     Teacher.deleteMany({}),
@@ -541,7 +526,7 @@ async function seed() {
     Device.deleteMany({}),
     Subject.deleteMany({}),
     Curriculum.deleteMany({}),
-    Major.deleteMany({}),
+    TuitionFee.deleteMany({}),
   ]);
 
   await seedMajors();
@@ -554,6 +539,9 @@ async function seed() {
     seedTeachers(),
     seedStudents(curriculums),
   ]);
+
+  // Seed tuition fees cho K18-K20
+  await seedTuitionFees(curriculums, subjects);
 
   await seedAdmin();
   await seedMissingTablesFromDiagram();

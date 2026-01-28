@@ -16,6 +16,7 @@ export default function Header() {
     { label: 'Giảng viên', href: '#' },
     { label: 'Môn học', href: '/admin/subjects' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
+    { label: 'Học phí', href: '/admin/tuition-fees' },
     { label: 'Cấu hình', href: '#' },
   ];
 
@@ -26,6 +27,9 @@ export default function Header() {
       return true;
     }
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
+      return true;
+    }
+    if (href === '/admin/tuition-fees' && location.pathname === '/admin/tuition-fees') {
       return true;
     }
     if (href === '/admin/majors' && location.pathname === '/admin/majors') {
