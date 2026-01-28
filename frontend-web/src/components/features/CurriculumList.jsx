@@ -1,7 +1,6 @@
 // Curriculum List Page - CRUD for Curriculum Frameworks
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import Header from '../layout/Header';
 import addIcon from '../../assets/circle.png';
 import editIcon from '../../assets/edit.png';
 import deleteIcon from '../../assets/delete.png';
@@ -143,8 +142,6 @@ export default function CurriculumList() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background-light dark:bg-background-dark">
-      <Header />
-
       {/* Main Content */}
       <main className="flex-1 p-6">
         {/* Page Header */}

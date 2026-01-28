@@ -1,4 +1,3 @@
-// Seed tuition fees data - Tạo dữ liệu học phí mẫu
 require('dotenv').config();
 const mongoose = require('mongoose');
 const TuitionFee = require('../../models/tuitionFee.model');
@@ -20,11 +19,9 @@ const seedTuitionFees = async () => {
   try {
     console.log('🌱 Bắt đầu seed tuition fees...\n');
 
-    // Xóa dữ liệu cũ
     await TuitionFee.deleteMany({});
     console.log('🗑️  Đã xóa dữ liệu cũ\n');
 
-    // Lấy tất cả môn học
     const allSubjects = await Subject.find({}).lean();
     if (allSubjects.length === 0) {
       console.log('⚠️  Không có môn học nào. Chạy seedSubjectsWithPrices.js trước!');
@@ -33,7 +30,6 @@ const seedTuitionFees = async () => {
 
     console.log(`📚 Tìm thấy ${allSubjects.length} môn học\n`);
 
-    // Tạo học phí cho các kỳ mẫu
     const cohorts = ['K20', 'K21', 'K22'];
     const majors = ['SE', 'AI', 'GD', 'IB'];
     const academicYears = ['2023-2024', '2024-2025'];
@@ -42,10 +38,8 @@ const seedTuitionFees = async () => {
 
     for (const cohort of cohorts) {
       for (const major of majors) {
-        // Tạo 8 kỳ học
         for (let sem = 1; sem <= 8; sem++) {
-          // Chọn ngẫu nhiên 5-7 môn cho mỗi kỳ
-          const numSubjects = Math.floor(Math.random() * 3) + 5; // 5-7 môn
+          const numSubjects = Math.floor(Math.random() * 3) + 5;
           const semesterSubjects = [];
           const usedSubjects = new Set();
           
@@ -76,7 +70,6 @@ const seedTuitionFees = async () => {
             });
           }
 
-          // Tạo discounts ngẫu nhiên
           const discounts = [];
           const hasEarlyBird = Math.random() > 0.5;
           const hasFullPayment = Math.random() > 0.6;
@@ -109,7 +102,6 @@ const seedTuitionFees = async () => {
             });
           }
 
-          // Tính discount
           let totalDiscount = 0;
           discounts.forEach(d => {
             if (d.type === 'percentage') {
@@ -138,11 +130,9 @@ const seedTuitionFees = async () => {
       }
     }
 
-    // Insert vào database
     const result = await TuitionFee.insertMany(tuitionFees);
     console.log(`✅ Đã tạo ${result.length} tuition fees\n`);
 
-    // Hiển thị mẫu
     console.log('📊 Một số học phí mẫu:\n');
     const samples = result.slice(0, 5);
     samples.forEach(tf => {

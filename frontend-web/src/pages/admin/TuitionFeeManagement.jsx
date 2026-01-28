@@ -12,19 +12,19 @@ export default function TuitionFeeManagement() {
   
   // Filter
   const [cohort, setCohort] = useState('K20');
-  const [majorName, setMajorName] = useState('');
+  const [majorCode, setMajorCode] = useState('');
   
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Price per credit (Giá mỗi tín chỉ)
   const PRICE_PER_CREDIT = 630000; // 630,000 VND per credit
 
-  // Major mapping
+  // Major mapping - sử dụng mã ngành
   const majorOptions = [
-    { value: 'Kỹ thuật phần mềm', label: 'SE - Kỹ thuật phần mềm' },
-    { value: 'Công nghệ thông tin', label: 'CE - Công nghệ thông tin' },
-    { value: 'Thiết kế đồ họa', label: 'CA - Thiết kế đồ họa' },
-    { value: 'Kinh tế', label: 'BA - Kinh tế' },
+    { value: 'SE', label: 'SE - Kỹ thuật phần mềm' },
+    { value: 'CE', label: 'CE - Công nghệ thông tin' },
+    { value: 'CA', label: 'CA - Thiết kế đồ họa' },
+    { value: 'BA', label: 'BA - Kinh tế' },
   ];
 
   // Fetch all curriculums once
@@ -60,13 +60,13 @@ export default function TuitionFeeManagement() {
       filtered = filtered.filter(c => c.code.includes(cohort));
     }
     
-    // Filter by major name
-    if (majorName) {
-      filtered = filtered.filter(c => c.major === majorName);
+    // Filter by major code (check if code starts with major code, e.g., "SE", "CA")
+    if (majorCode) {
+      filtered = filtered.filter(c => c.code.startsWith(majorCode));
     }
     
     setCurriculums(filtered);
-  }, [cohort, majorName, allCurriculums]);
+  }, [cohort, majorCode, allCurriculums]);
 
   // Handle view details
   const handleViewDetails = (curriculum) => {
@@ -135,8 +135,8 @@ export default function TuitionFeeManagement() {
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-200">Ngành:</label>
                 <select
                   className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                  value={majorName}
-                  onChange={(e) => setMajorName(e.target.value)}
+                  value={majorCode}
+                  onChange={(e) => setMajorCode(e.target.value)}
                 >
                   <option value="">Tất cả</option>
                   {majorOptions.map(opt => (
@@ -225,7 +225,7 @@ export default function TuitionFeeManagement() {
           {!loading && curriculums.length === 0 && (
             <div className="text-center py-20">
               <p className="text-slate-500 dark:text-slate-400">
-                Không có dữ liệu khung chương trình {cohort && `cho khóa ${cohort}`} {majorName && `ngành ${majorName}`}
+                Không có dữ liệu khung chương trình {cohort && `cho khóa ${cohort}`} {majorCode && `ngành ${majorCode}`}
               </p>
             </div>
           )}

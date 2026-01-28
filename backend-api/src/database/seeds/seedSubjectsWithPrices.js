@@ -1,17 +1,12 @@
-// Seed subjects with tuition fees using Faker.js
-// Formula: tuitionFee = credits × 630,000 VNĐ
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { faker } = require('@faker-js/faker');
 const Subject = require('../../models/subject.model');
 
-// Giá 1 tín chỉ
-const PRICE_PER_CREDIT = 630000; // 630,000 VNĐ
+const PRICE_PER_CREDIT = 630000;
 
-// Danh sách khoa
 const DEPARTMENTS = ['AI', 'GD', 'IB', 'SE', 'IA', 'MC', 'SA', 'CS', 'IT'];
 
-// Danh sách tiền tố mã môn học
 const CODE_PREFIXES = {
   'AI': ['AI', 'ML', 'DL'],
   'GD': ['GD', 'DES', 'ART'],
@@ -24,7 +19,6 @@ const CODE_PREFIXES = {
   'IT': ['IT', 'WEB', 'MOB']
 };
 
-// Kết nối MongoDB
 const connectDB = async () => {
   try {
     const dbConfig = require('../../configs/db.config');
@@ -37,7 +31,6 @@ const connectDB = async () => {
   }
 };
 
-// Tạo mã môn học ngẫu nhiên
 const generateSubjectCode = (department) => {
   const prefixes = CODE_PREFIXES[department] || ['SUB'];
   const prefix = faker.helpers.arrayElement(prefixes);
@@ -45,7 +38,6 @@ const generateSubjectCode = (department) => {
   return `${prefix}${number}`;
 };
 
-// Tạo tên môn học
 const generateSubjectName = (department) => {
   const topics = {
     'AI': ['Machine Learning', 'Deep Learning', 'Neural Networks', 'Computer Vision', 'NLP'],
@@ -66,12 +58,10 @@ const generateSubjectName = (department) => {
   return `${level} ${topic}`;
 };
 
-// Seed subjects
 const seedSubjects = async (count = 50) => {
   try {
     console.log(`🌱 Bắt đầu seed ${count} môn học...\n`);
 
-    // Xóa dữ liệu cũ
     await Subject.deleteMany({});
     console.log('🗑️  Đã xóa dữ liệu cũ\n');
 
@@ -81,8 +71,7 @@ const seedSubjects = async (count = 50) => {
     for (let i = 0; i < count; i++) {
       const department = faker.helpers.arrayElement(DEPARTMENTS);
       let subjectCode = generateSubjectCode(department);
-      
-      // Đảm bảo mã môn học không trùng
+
       let attempts = 0;
       while (usedCodes.has(subjectCode) && attempts < 10) {
         subjectCode = generateSubjectCode(department);
@@ -93,9 +82,8 @@ const seedSubjects = async (count = 50) => {
       const credits = faker.helpers.arrayElement([1, 2, 3, 4, 5, 6]);
       const tuitionFee = credits * PRICE_PER_CREDIT;
       const subjectName = generateSubjectName(department);
-      const isCommon = faker.datatype.boolean({ probability: 0.2 }); // 20% là môn chung
+      const isCommon = faker.datatype.boolean({ probability: 0.2 });
 
-      // Random 1-3 khoa quản lý
       const numDepts = faker.number.int({ min: 1, max: isCommon ? 3 : 1 });
       const majorCodes = faker.helpers.arrayElements(DEPARTMENTS, numDepts);
 
@@ -113,11 +101,9 @@ const seedSubjects = async (count = 50) => {
       subjects.push(subject);
     }
 
-    // Insert vào database
     const result = await Subject.insertMany(subjects);
     console.log(`✅ Đã tạo ${result.length} môn học\n`);
 
-    // Hiển thị mẫu
     console.log('📊 Một số môn học mẫu:\n');
     const samples = result.slice(0, 10);
     samples.forEach(subject => {
@@ -127,7 +113,6 @@ const seedSubjects = async (count = 50) => {
       console.log('');
     });
 
-    // Thống kê
     console.log('='.repeat(60));
     console.log('📈 Thống kê:');
     
@@ -154,12 +139,10 @@ const seedSubjects = async (count = 50) => {
   }
 };
 
-// Main function
 const main = async () => {
   try {
     await connectDB();
     
-    // Lấy số lượng từ argument hoặc mặc định 50
     const count = parseInt(process.argv[2]) || 50;
     await seedSubjects(count);
     
@@ -171,5 +154,4 @@ const main = async () => {
   }
 };
 
-// Run script
 main();

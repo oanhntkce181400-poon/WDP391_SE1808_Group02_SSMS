@@ -1,5 +1,3 @@
-// Subject Management Page - Main page for Subject CRUD operations (Tasks #XX)
-// Features: Create, Read, Update, Delete, Search, Filter, Pagination, Export
 import { useState, useEffect, useCallback } from 'react';
 import SubjectList from '../../components/features/SubjectList';
 import SubjectModal from '../../components/features/SubjectModal';
@@ -11,12 +9,10 @@ import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
 export default function SubjectManagement() {
-  // State for subjects data
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // State for pagination
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -26,24 +22,19 @@ export default function SubjectManagement() {
     limit: 10,
   });
 
-  // State for modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
 
-  // State for selected subject
   const [selectedSubject, setSelectedSubject] = useState(null);
 
-  // State for filters
   const [activeFilters, setActiveFilters] = useState({});
   const [searchKeyword, setSearchKeyword] = useState('');
 
-  // State for toast notifications
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Fetch subjects from API
   const fetchSubjects = useCallback(async (page = 1, keyword = '', filters = {}) => {
     setLoading(true);
     setError(null);
@@ -57,21 +48,19 @@ export default function SubjectManagement() {
 
       const { data, total, page: currentPage, totalPages } = response.data;
 
-      // Transform data to match frontend field names
       let transformedData = (data || []).map((item) => ({
         _id: item._id,
         id: item._id,
         code: item.subjectCode,
         name: item.subjectName,
         credits: item.credits,
-        tuitionFee: item.tuitionFee || item.credits * 630000, // Default nếu chưa có
+        tuitionFee: item.tuitionFee || item.credits * 630000,
         department: item.majorCodes || item.majorCode || [],
         isCommon: item.isCommon || false,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       }));
 
-      // Apply client-side filters if needed
       if (Object.keys(filters).length > 0) {
         transformedData = applyFilters(transformedData, filters);
       }
@@ -89,7 +78,6 @@ export default function SubjectManagement() {
       console.error('Error fetching subjects:', err);
       setError('Không thể tải danh sách môn học. Vui lòng thử lại sau.');
 
-      // Mock data for development
       setSubjects([
         { _id: '1', code: 'CS101', name: 'Lập trình cơ bản', credits: 3, department: 'Khoa CNTT' },
         { _id: '2', code: 'CS102', name: 'Cấu trúc dữ liệu và Giải thuật', credits: 4, department: 'Khoa CNTT' },
