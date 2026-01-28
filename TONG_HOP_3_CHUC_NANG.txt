@@ -1,0 +1,361 @@
+================================================================================
+     TỔNG HỢP 3 CHỨC NĂNG CHÍNH - SSMS PROJECT (PHIÊN BẢN RÚT GỌN)
+     1. Socket.IO   2. Cloudinary   3. Seed Data (Faker.js)
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━ 1. SOCKET.IO - REAL-TIME ━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 MỤC ĐÍCH: Giao tiếp real-time 2 chiều giữa server-client, gửi notification/chat ngay lập tức
+
+📌 FILES:
+   Backend: socket.config.js, socket.middleware.js, index.js
+   Frontend: SocketContext.jsx, main.jsx
+   Mobile: SocketContext.js, App.js
+
+📌 LUỒNG HOẠT ĐỘNG:
+   User login → Nhận JWT token → Client connect socket với token → Server verify JWT
+   → Lưu userId vào socket → Join room "user:{userId}" → Server có thể gửi message
+
+📌 CODE BACKEND (socket.config.js):
+
+const { Server } = require('socket.io');
+const { socketAuthMiddleware } = require('../middlewares/socket.middleware');
+
+function initializeSocketIO(httpServer) {
+  const io = new Server(httpServer, {
+    cors: { origin: '*', credentials: true, methods: ['GET', 'POST'] },
+    pingTimeout: 60000, pingInterval: 25000,
+  });
+
+  io.use(socketAuthMiddleware); // JWT authentication
+
+  io.on('connection', (socket) => {
+    console.log(`🔌 Socket: ${socket.id}, User: ${socket.email}`);
+    socket.join(`user:${socket.userId}`); // Join room theo userId
+    
+    socket.emit('welcome', { message: 'Connected', userId: socket.userId });
+    
+    socket.on('disconnect', (reason) => {
+      console.log(`❌ Disconnected: ${reason}`);
+    });
+  });
+
+  // Helper gửi message tới user cụ thể
+  io.sendToUser = (userId, event, data) => io.to(`user:${userId}`).emit(event, data);
+  io.broadcastToAll = (event, data) => io.emit(event, data);
+
+  return io;
+}
+
+📌 CODE MIDDLEWARE (socket.middleware.js):
+
+function socketAuthMiddleware(socket, next) {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token) return next(new Error('No token provided'));
+
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    
+    socket.userId = decoded.userId;
+    socket.email = decoded.email;
+    socket.role = decoded.role;
+    
+    next(); // Cho phép connect
+  } catch (error) {
+    next(new Error('Authentication error'));
+  }
+}
+
+📌 CODE FRONTEND (SocketContext.jsx):
+
+export const SocketProvider = ({ url, getToken, children }) => {
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    const token = getToken?.();
+    if (!token) return;
+
+    const newSocket = io(url || 'http://localhost:3000', {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
+
+    newSocket.on('connect', () => setIsConnected(true));
+    newSocket.on('disconnect', () => setIsConnected(false));
+    
+    setSocket(newSocket);
+    return () => newSocket.disconnect();
+  }, [url, getToken]);
+
+  return <SocketContext.Provider value={{ socket, isConnected }}>{children}</SocketContext.Provider>;
+};
+
+📌 SỬ DỤNG TRONG COMPONENT:
+
+const { socket, isConnected } = useSocket();
+
+useEffect(() => {
+  if (!socket) return;
+  socket.on('notification', (data) => console.log('New:', data));
+  return () => socket.off('notification');
+}, [socket]);
+
+socket?.emit('send_message', { message: 'Hello' });
+
+📌 TRẠLỜI THẦY:
+- Socket.IO hoạt động như thế nào? 
+  → WebSocket 2 chiều, client gửi JWT khi handshake, server verify và lưu user info vào socket
+- Làm sao bảo mật? → JWT authentication middleware, token hết hạn = reject
+- Ứng dụng? → Notification real-time, chat, dashboard auto-update
+
+
+━━━━━━━━━━━━━━━━━━━━━ 2. CLOUDINARY - CLOUD STORAGE ━━━━━━━━━━━━━━━━━━━━
+
+📌 MỤC ĐÍCH: Upload/delete ảnh lên cloud, tiết kiệm server storage, auto optimize
+
+📌 FILES: cloudinary.provider.js, .env (credentials)
+
+📌 LUỒNG:
+   User chọn ảnh → Frontend gửi file → Multer lưu tạm uploads/ → uploadImage() 
+   → Cloudinary upload → Trả URL + public_id → Lưu DB → Xóa file tạm
+
+📌 CODE (cloudinary.provider.js):
+
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+async function uploadImage(filePath, options = {}) {
+  const result = await cloudinary.uploader.upload(filePath, {
+    folder: 'ssms',
+    resource_type: 'image',
+    ...options,
+  });
+  
+  return {
+    url: result.url,
+    secure_url: result.secure_url,
+    public_id: result.public_id,
+    width: result.width,
+    height: result.height,
+  };
+}
+
+async function deleteImage(publicId) {
+  const result = await cloudinary.uploader.destroy(publicId);
+  if (result.result === 'not found') throw new Error('Image not found');
+  return result;
+}
+
+📌 SỬ DỤNG TRONG ROUTE:
+
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 5 * 1024 * 1024 } });
+
+router.post('/avatar', upload.single('avatar'), async (req, res) => {
+  const result = await uploadImage(req.file.path, { folder: 'avatars' });
+  
+  await User.findByIdAndUpdate(req.userId, {
+    avatar: result.secure_url,
+    avatarPublicId: result.public_id,
+  });
+  
+  fs.unlinkSync(req.file.path); // Xóa file tạm
+  res.json({ url: result.secure_url });
+});
+
+router.delete('/avatar', async (req, res) => {
+  const user = await User.findById(req.userId);
+  await deleteImage(user.avatarPublicId);
+  await User.findByIdAndUpdate(req.userId, { avatar: null, avatarPublicId: null });
+  res.json({ message: 'Deleted' });
+});
+
+📌 ENV:
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=123456789012345
+CLOUDINARY_API_SECRET=abc123secret
+
+Lấy tại: https://console.cloudinary.com/ → Dashboard
+
+📌 TRẢ LỜI THẦY:
+- Cloudinary là gì? → Cloud storage chuyên ảnh/video, có CDN, auto optimize
+- Tại sao không lưu server? → Hết dung lượng nhanh, khó scale, không tự optimize
+- Upload như thế nào? → Multer nhận file → uploadImage() → Lưu URL + public_id vào DB
+- Xóa ảnh? → deleteImage(public_id)
+
+
+━━━━━━━━━━━━━━━━━━━━━ 3. SEED DATA VỚI FAKER.JS ━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 MỤC ĐÍCH: Generate fake data (1000 students, 100 teachers) để test
+
+📌 FILE: backend-api/src/database/seeds/index.js
+
+📌 LUỒNG:
+   npm run seed → Connect MongoDB → Xóa data cũ → Seed Majors → Subjects → Curriculums
+   → Rooms → Devices → Teachers → Students → Admin user → Done
+
+📌 CODE QUAN TRỌNG:
+
+const { fakerVI } = require('@faker-js/faker');
+const faker = fakerVI;
+faker.seed(20250127); // Fixed seed
+
+const MAJORS = [
+  { code: 'CE', name: 'Công nghệ thông tin' },
+  { code: 'SE', name: 'Kỹ thuật phần mềm' },
+  { code: 'BA', name: 'Kinh tế' },
+  { code: 'CA', name: 'Thiết kế đồ họa' },
+];
+
+// Generate email: tuanasce190001@fpt.edu.vn
+function buildStudentEmail(fullName, majorCode, cohort, suffixNumber) {
+  const parts = fullName.trim().split(/\s+/);
+  const firstName = normalizeText(parts[parts.length - 1]); // "tuấn" → "tuan"
+  const initials = normalizeText(parts.slice(0, -1).map(p => p[0]).join('')); // "na"
+  return `${firstName}${initials}${majorCode.toLowerCase()}${cohort}${String(suffixNumber).padStart(4, '0')}@fpt.edu.vn`;
+}
+
+// Generate mã SV: SE190001
+function buildStudentCode(majorCode, cohort, suffix) {
+  return `${majorCode}${cohort}${String(suffix).padStart(4, '0')}`;
+}
+
+function normalizeText(text) {
+  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-zA-Z]/g, '').toLowerCase();
+}
+
+// Seed 1000 students
+async function seedStudents(curriculums) {
+  const students = [];
+  const suffixCounters = new Map();
+
+  for (let i = 0; i < 1000; i++) {
+    const major = randomFrom(MAJORS);
+    const cohort = randomFrom([16, 17, 18, 19, 20]);
+    const fullName = faker.person.fullName();
+    const suffix = (suffixCounters.get(`${major.code}-${cohort}`) || 999) + 1;
+    suffixCounters.set(`${major.code}-${cohort}`, suffix);
+
+    students.push({
+      studentCode: buildStudentCode(major.code, cohort, suffix),
+      fullName,
+      email: buildStudentEmail(fullName, major.code, cohort, suffix),
+      majorCode: major.code,
+      cohort,
+      curriculum: curriculums.find(c => c.cohort === cohort)._id,
+    });
+  }
+
+  await Student.insertMany(students, { ordered: false });
+}
+
+// Seed 50 subjects
+async function seedSubjects() {
+  const subjects = [];
+  for (let i = 0; i < 50; i++) {
+    subjects.push({
+      subjectCode: `SUB${String(i+1).padStart(3, '0')}`,
+      subjectName: `${faker.hacker.noun()} ${faker.hacker.verb()}`,
+      credits: faker.number.int({ min: 2, max: 5 }),
+      majorCode: randomFrom(MAJORS).code,
+    });
+  }
+  return Subject.insertMany(subjects);
+}
+
+// Seed admin
+async function seedAdmin() {
+  const hashedPwd = await bcrypt.hash('123456', 10);
+  const exists = await User.findOne({ email: 'admin@example.com' });
+  if (!exists) {
+    await User.create({
+      email: 'admin@example.com',
+      password: hashedPwd,
+      fullName: 'System Admin',
+      role: 'admin',
+    });
+  }
+}
+
+// Main seed
+async function seed() {
+  await connectDB();
+  await Promise.all([Student.deleteMany({}), Teacher.deleteMany({}), ...]);
+  
+  await seedMajors();
+  const subjects = await seedSubjects();
+  const curriculums = await seedCurriculums(subjects);
+  const rooms = await seedRooms();
+  
+  await Promise.all([seedDevices(rooms), seedTeachers(), seedStudents(curriculums)]);
+  await seedAdmin();
+  
+  console.log('✅ Seeding completed');
+}
+
+seed().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
+
+📌 KẾT QUẢ:
+✅ 4 majors, 50 subjects, 5 curriculums (K16-K20), 50 rooms, 200 devices
+✅ 100 teachers, 1000 students
+✅ Admin: admin@example.com / 123456
+
+📌 TRẢ LỜI THẦY:
+- Seed data như thế nào? → Script dùng Faker.js generate tên/email giống thật
+- Tại sao cần seed? → Test pagination/search/filter với data lớn, không nhập tay
+- Email format? → firstname + initials + major + cohort + số (tuanasce190001@fpt.edu.vn)
+- Faker.js là gì? → Thư viện generate fake data realistic, em dùng fakerVI (tiếng Việt)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━ TỔNG KẾT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────┬──────────────────────────────────────────────────────────┐
+│ CHỨC NĂNG   │ TÓM TẮT                                                  │
+├─────────────┼──────────────────────────────────────────────────────────┤
+│ Socket.IO   │ Real-time 2-way, JWT auth, gửi notification/chat ngay   │
+│ Cloudinary  │ Cloud storage ảnh, auto optimize, CDN, lưu URL+publicID │
+│ Seed Data   │ Faker.js generate 1000 students, test với data lớn      │
+└─────────────┴──────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━ COMMANDS & CONFIG ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Backend
+cd backend-api
+npm install                    # socket.io, cloudinary, @faker-js/faker, multer, bcryptjs, jsonwebtoken
+npm run seed                   # Chạy seed data
+npm start                      # Start server + Socket.IO
+
+# Frontend
+cd frontend-web
+npm install                    # socket.io-client
+npm run dev
+
+# .env
+MONGODB_URI=mongodb://localhost:27017/ssms
+JWT_ACCESS_SECRET=your-secret
+CLOUDINARY_CLOUD_NAME=name
+CLOUDINARY_API_KEY=key
+CLOUDINARY_API_SECRET=secret
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+PORT=5000
+
+━━━━━━━━━━━━━━━━━━━━━━━━━ TESTING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 Socket.IO: F12 → Console → Check "Socket connected" log → Test: socket.emit('ping')
+🧪 Cloudinary: Postman POST /api/users/avatar (form-data: avatar=file) → Check URL response
+🧪 Seed Data: npm run seed → Check logs → MongoDB Compass count documents
+
+━━━━━━━━━━━━━━━━━━━━━━━━━ LƯU Ý ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  Socket: Token hết hạn = auto disconnect, phải có JWT hợp lệ
+⚠️  Cloudinary: KHÔNG commit .env, free tier 25GB/tháng
+⚠️  Seed: XÓA toàn bộ data cũ, chỉ chạy trên local/dev DB
+
+================================================================================
+📅 28/01/2026 | WDP391_SE1808_Group02_SSMS | 🚀 Good luck!

@@ -3,6 +3,11 @@ import { useEffect, useState } from 'react';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminLayout from './components/layout/AdminLayout';
+import Dashboard from './pages/admin/Dashboard';
+import SubjectManagement from './pages/admin/SubjectManagement';
+import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
+import CurriculumManagement from './pages/admin/CurriculumManagement';
 import authService from './services/authService';
 
 export default function App() {
@@ -10,6 +15,23 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      
+      {/* Admin routes with layout */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="subjects" element={<SubjectManagement />} />
+        <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+        <Route path="curriculum" element={<CurriculumManagement />} />
+      </Route>
+
+      {/* Legacy dashboard route - redirect to admin */}
       <Route
         path="/dashboard"
         element={
@@ -18,8 +40,9 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      
+      <Route path="/" element={<Navigate to="/admin" replace />} />
+      <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   );
 }
