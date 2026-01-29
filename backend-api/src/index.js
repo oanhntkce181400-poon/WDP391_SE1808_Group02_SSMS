@@ -35,16 +35,13 @@ app.use(express.json());
 // Routes
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
-<<<<<<< HEAD
 app.use('/api/users', require('./routes/user.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/auth', authRoutes);
 app.use('/api/actors', actorsRoutes);
-=======
 app.use('/api/rooms', require('./routes/room.routes'));
 app.use('/api/timeslots', require('./routes/timeslot.routes'));
 app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
->>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
 app.use('/api/majors', require('./routes/major.routes'));
 app.use('/api/error-logs', require('./routes/errorLog.routes'));
 

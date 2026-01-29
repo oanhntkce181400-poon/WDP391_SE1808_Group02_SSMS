@@ -6,70 +6,63 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-<<<<<<< HEAD
-/**
- * Upload ảnh lên Cloudinary
- * @param {string|Buffer} filePath - Đường dẫn file hoặc Buffer hoặc base64 string
- * @param {object} options - Các options bổ sung cho upload
- * @param {string} options.folder - Thư mục lưu trữ trên Cloudinary (mặc định: 'ssms')
- * @param {string} options.public_id - ID tùy chỉnh cho ảnh
- * @returns {Promise<object>} - Thông tin ảnh đã upload (url, public_id, secure_url, etc.)
- * 
- * Ví dụ sử dụng:
- * const result = await uploadImage(file.path, { folder: 'avatars' });
- * console.log(result.secure_url); // URL HTTPS của ảnh
- * console.log(result.public_id);  // ID để xóa ảnh sau này
- */
-async function uploadImage(filePath, options = {}) {
-  try {
-    const defaultOptions = {
-      folder: 'ssms', // Thư mục mặc định
-      resource_type: 'auto', // Loại tài nguyên: image, video, raw, auto
-=======
-async function uploadImage(filePath, options = {}) {
-  try {
-    const defaultOptions = {
-      folder: 'ssms',
-      resource_type: 'image',
->>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
-      ...options,
-    };
+function uploadImage(filePathOrBuffer, options = {}) {
+  return new Promise((resolve, reject) => {
+    try {
+      const defaultOptions = {
+        folder: 'ssms',
+        resource_type: 'image',
+        ...options,
+      };
 
-    // Support both file path and buffer
-    let uploadSource;
-    if (Buffer.isBuffer(filePath)) {
-      // If it's a buffer, use stream upload
-      uploadSource = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(defaultOptions, (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
+      // If it's a buffer (from multer), use upload_stream
+      if (Buffer.isBuffer(filePathOrBuffer)) {
+        console.log('Uploading buffer to Cloudinary...');
+        const uploadStream = cloudinary.uploader.upload_stream(
+          defaultOptions,
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary upload stream error:', error);
+              reject(new Error(`Failed to upload image: ${error.message}`));
+            } else {
+              console.log('Buffer uploaded successfully to Cloudinary');
+              resolve({
+                url: result.url,
+                secure_url: result.secure_url,
+                public_id: result.public_id,
+                width: result.width,
+                height: result.height,
+                format: result.format,
+              });
+            }
+          }
+        );
+        uploadStream.end(filePathOrBuffer);
+      } else {
+        // If it's a file path string, use regular upload
+        console.log('Uploading file path to Cloudinary...');
+        cloudinary.uploader.upload(filePathOrBuffer, defaultOptions, (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(new Error(`Failed to upload image: ${error.message}`));
+          } else {
+            console.log('File uploaded successfully to Cloudinary');
+            resolve({
+              url: result.url,
+              secure_url: result.secure_url,
+              public_id: result.public_id,
+              width: result.width,
+              height: result.height,
+              format: result.format,
+            });
+          }
         });
-        uploadStream.end(filePath);
-      });
-      return {
-        url: uploadSource.url,
-        secure_url: uploadSource.secure_url,
-        public_id: uploadSource.public_id,
-        width: uploadSource.width,
-        height: uploadSource.height,
-        format: uploadSource.format,
-      };
-    } else {
-      // If it's a file path or data URI
-      const result = await cloudinary.uploader.upload(filePath, defaultOptions);
-      return {
-        url: result.url,
-        secure_url: result.secure_url,
-        public_id: result.public_id,
-        width: result.width,
-        height: result.height,
-        format: result.format,
-      };
+      }
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      reject(new Error(`Failed to upload image: ${error.message}`));
     }
-  } catch (error) {
-    console.error('Cloudinary upload error:', error);
-    throw new Error(`Failed to upload image: ${error.message}`);
-  }
+  });
 }
 
 async function deleteImage(publicId) {

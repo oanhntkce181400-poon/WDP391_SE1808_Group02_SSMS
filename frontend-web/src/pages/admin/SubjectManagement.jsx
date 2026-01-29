@@ -15,12 +15,12 @@ export default function SubjectManagement() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const majorCodeToName = new Map([
-    ['SE', 'Software Engineering'],
-    ['CA', 'Computer Architecture'], 
-    ['BA', 'Business Administration'],
-    ['CE', 'Computer Engineering'],
-  ]);
+  // const majorCodeToName = new Map([
+  //   ['SE', 'Software Engineering'],
+  //   ['CA', 'Computer Architecture'], 
+  //   ['BA', 'Business Administration'],
+  //   ['CE', 'Computer Engineering'],
+  // ]);
 
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -494,4 +494,3 @@ export default function SubjectManagement() {
     </div>
   );
 }
-
