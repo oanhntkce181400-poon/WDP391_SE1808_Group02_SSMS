@@ -1,13 +1,50 @@
 // Header component for Admin Layout
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import graduateIcon from '../../assets/graduate.png';
 import notificationIcon from '../../assets/notification.png';
 import searchIcon from '../../assets/search.png';
+import authService from '../../services/authService';
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
+  const [user, setUser] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('auth_user');
+      if (stored) {
+        setUser(JSON.parse(stored));
+      }
+    } catch (err) {
+      setUser(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   const navItems = [
     { label: 'Lớp học', href: '#' },
@@ -44,6 +81,29 @@ export default function Header() {
       return true;
     }
     return false;
+  };
+
+  const avatarUrl =
+    user?.avatarUrl || user?.avatar || user?.photoUrl || user?.photoURL || user?.picture;
+  const initials = user?.fullName
+    ? user.fullName
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'AD';
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (err) {
+      // ignore and still clear local session
+    } finally {
+      localStorage.removeItem('auth_user');
+      window.location.href = '/login';
+    }
   };
 
   return (
@@ -89,18 +149,72 @@ export default function Header() {
           <img src={notificationIcon} alt="Thông báo" className="w-5 lg:w-6 h-5 lg:h-6" />
           <span className="absolute top-0.5 right-0.5 size-2 bg-red-500 rounded-full border-2 border-[#1A237E]"></span>
         </button>
-        <div className="flex items-center gap-2 lg:gap-3 pl-3 lg:pl-4 border-l border-white/20">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold">Admin User</p>
-            <p className="text-[10px] text-slate-300 uppercase tracking-wider">Quản trị viên</p>
-          </div>
-          <div className="size-8 lg:size-9 rounded-full bg-slate-200 border-2 border-white/20 bg-cover bg-center overflow-hidden">
-            <img
-              alt="Avatar"
-              className="w-full h-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRfV6f8CVepX3IO9uGQA2Of8U9tQi1mPcN4AJnF0AG_5N4pf6Zl64eYi1s6ogzij3BrsQnj0zlRoeeozzp6Vbykqqy5TpFw0ICSroLq29vFVbGLCtlrRA_WTpz-gETj0mpD3fbxwQyJE_PpQ7aNklZ61Txl03xl4FFObbR0-TbpYEQ52Uxax0eoOB8kX4EqGn17YU2u6RcmxTJbZ4-mRdW0XIB1QMu8otb7tzBy3mbzNpuYhmH90PG__w9bOAFqIIlhsOSaO3KEPM"
-            />
-          </div>
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            className="flex items-center gap-2 lg:gap-3 pl-3 lg:pl-4 border-l border-white/20 cursor-pointer hover:text-white"
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+          >
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold">{user?.fullName || 'Admin User'}</p>
+              <p className="text-[10px] text-slate-300 uppercase tracking-wider">
+                {user?.role || 'Admin'}
+              </p>
+            </div>
+            <div className="size-8 lg:size-9 rounded-full bg-slate-200 border-2 border-white/20 bg-cover bg-center overflow-hidden flex items-center justify-center text-xs font-bold text-slate-700">
+              {avatarUrl && !avatarError ? (
+                <img
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  src={avatarUrl}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <span>{initials}</span>
+              )}
+            </div>
+          </button>
+
+          {isMenuOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-56 rounded-xl bg-white py-2 text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/5 z-50"
+            >
+              <div className="px-4 pb-2 pt-1">
+                <p className="text-xs font-semibold text-slate-500">Signed in as</p>
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {user?.fullName || 'Admin User'}
+                </p>
+              </div>
+              <div className="border-t border-slate-100" />
+              <Link
+                to="/dashboard"
+                role="menuitem"
+                className="block px-4 py-2 text-slate-700 hover:bg-slate-50"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Profile
+              </Link>
+              <Link
+                to="/actors"
+                role="menuitem"
+                className="block px-4 py-2 text-slate-700 hover:bg-slate-50"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Manage roles
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-50"
+              >
+                Logout
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>

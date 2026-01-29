@@ -1,44 +1,51 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import LoginPage from './pages/auth/LoginPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import DashboardPage from './pages/DashboardPage';
-import SocketTestPage from './pages/SocketTestPage';
-import AdminLayout from './components/layout/AdminLayout';
-import StudentLayout from './components/layout/StudentLayout';
-import Dashboard from './pages/admin/Dashboard';
-import SubjectManagement from './pages/admin/SubjectManagement';
-import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
-import CurriculumManagement from './pages/admin/CurriculumManagement';
-import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
-import RoomManagement from './pages/admin/RoomManagement';
-import TimeslotManagement from './pages/admin/TimeslotManagement';
-import MajorManagement from './pages/admin/MajorManagement';
-import StudentHome from './pages/student/StudentHome';
-import authService from './services/authService';
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import LoginPage from "./pages/auth/LoginPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import DashboardPage from "./pages/DashboardPage";
+import SocketTestPage from "./pages/SocketTestPage";
+import AdminLayout from "./components/layout/AdminLayout";
+import StudentLayout from "./components/layout/StudentLayout";
+import Dashboard from "./pages/admin/Dashboard";
+import SubjectManagement from "./pages/admin/SubjectManagement";
+import SubjectPrerequisites from "./pages/admin/SubjectPrerequisites";
+import CurriculumManagement from "./pages/admin/CurriculumManagement";
+import TuitionFeeManagement from "./pages/admin/TuitionFeeManagement";
+import RoomManagement from "./pages/admin/RoomManagement";
+import TimeslotManagement from "./pages/admin/TimeslotManagement";
+import MajorManagement from "./pages/admin/MajorManagement";
+import StudentHome from "./pages/student/StudentHome";
+import ActorsManagementPage from "./pages/admin/ActorsManagementPage";
+import authService from "./services/authService";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      
+
       {/* Admin routes with layout */}
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={["admin", "staff"]}>
             <AdminLayout />
           </ProtectedRoute>
         }
       >
         <Route index element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
-        <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+        <Route
+          path="prerequisites/:subjectId"
+          element={<SubjectPrerequisites />}
+        />
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum" element={<CurriculumManagement />} />
-        <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
+        <Route
+          path="curriculum/:curriculumId/setup"
+          element={<CurriculumManagement />}
+        />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
         <Route path="majors" element={<MajorManagement />} />
       </Route>
@@ -47,7 +54,7 @@ export default function App() {
       <Route
         path="/student"
         element={
-          <ProtectedRoute allowedRoles={['student']}>
+          <ProtectedRoute allowedRoles={["student"]}>
             <StudentLayout />
           </ProtectedRoute>
         }
@@ -64,7 +71,15 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      
+      <Route
+        path="/actors"
+        element={
+          <ProtectedRoute>
+            <ActorsManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
@@ -73,7 +88,7 @@ export default function App() {
 
 function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
-  const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState("checking");
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -83,11 +98,11 @@ function ProtectedRoute({ children, allowedRoles }) {
       .then((response) => {
         if (isMounted) {
           setUser(response.data.user);
-          setStatus('authenticated');
+          setStatus("authenticated");
         }
       })
       .catch(() => {
-        if (isMounted) setStatus('unauthenticated');
+        if (isMounted) setStatus("unauthenticated");
       });
 
     return () => {
@@ -95,7 +110,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     };
   }, [location.pathname]);
 
-  if (status === 'checking') {
+  if (status === "checking") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="rounded-2xl bg-white px-6 py-4 text-sm font-medium text-slate-700 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5">
@@ -105,14 +120,14 @@ function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (status === 'unauthenticated') {
+  if (status === "unauthenticated") {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   // Check role-based access
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     // Redirect based on user's role
-    if (user.role === 'student') {
+    if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
     return <Navigate to="/admin" replace />;
