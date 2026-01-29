@@ -20,16 +20,16 @@ export default function StudentLayout() {
 
   const handleLogout = async () => {
     try {
+      // Try to logout on server
       await authService.logout();
     } catch (error) {
       console.error('Logout error:', error);
+      // Continue anyway to clear client-side data
     } finally {
-      // Clear all auth data from localStorage
-      localStorage.removeItem('auth_user');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      // Always clear all auth data from localStorage
+      localStorage.clear();
       // Redirect to login
-      navigate('/login', { replace: true });
+      window.location.href = '/login';
     }
   };
 

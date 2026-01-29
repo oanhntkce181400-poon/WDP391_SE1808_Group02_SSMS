@@ -196,7 +196,7 @@ export default function ErrorLogsPage() {
                 <span className="text-yellow-600 text-xl">⚡</span>
               </div>
               <div>
-                <p className="text-xs text-slate-600 uppercase">Lỗi 400 (CLIENT)</p>
+                <p className="text-xs text-slate-600 uppercase">Lỗi 4xx (CLIENT)</p>
                 <p className="text-2xl font-bold text-yellow-600">{stats.errorsByStatus.client}</p>
               </div>
             </div>

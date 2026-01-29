@@ -14,6 +14,8 @@ import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
 import MajorManagement from './pages/admin/MajorManagement';
+import ErrorLogsPage from './pages/admin/ErrorLogsPage';
+import CurriculumList from './components/features/CurriculumList';
 import StudentHome from './pages/student/StudentHome';
 import authService from './services/authService';
 
@@ -37,10 +39,11 @@ export default function App() {
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
-        <Route path="curriculum" element={<CurriculumManagement />} />
+        <Route path="curriculum" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
         <Route path="majors" element={<MajorManagement />} />
+        <Route path="error-logs" element={<ErrorLogsPage />} />
       </Route>
 
       {/* Student routes with layout */}

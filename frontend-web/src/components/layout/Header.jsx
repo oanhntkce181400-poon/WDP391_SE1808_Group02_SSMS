@@ -19,7 +19,7 @@ export default function Header() {
     { label: 'Giờ học', href: '/admin/timeslots' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
     { label: 'Học phí', href: '/admin/tuition-fees' },
-    { label: 'Cấu hình', href: '#' },
+    { label: 'Cấu hình', href: '/admin/error-logs' },
   ];
 
   // Determine active item based on current path
@@ -41,6 +41,9 @@ export default function Header() {
       return true;
     }
     if (href === '/admin/majors' && location.pathname === '/admin/majors') {
+      return true;
+    }
+    if (href === '/admin/error-logs' && location.pathname === '/admin/error-logs') {
       return true;
     }
     return false;
