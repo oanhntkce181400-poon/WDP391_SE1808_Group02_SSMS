@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
 
 function formatDateTime(value) {
@@ -41,6 +41,8 @@ export default function DashboardPage() {
   const [actionState, setActionState] = useState({ type: '', familyId: '' });
 
   const currentSession = useMemo(() => sessions.find((s) => s.isCurrent), [sessions]);
+  const canManageRoles =
+    typeof user?.role === 'string' && user.role.toLowerCase() === 'admin';
 
   const loadProfile = useCallback(async () => {
     setIsProfileLoading(true);
@@ -149,6 +151,14 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canManageRoles ? (
+              <Link
+                to="/actors"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+              >
+                Manage roles
+              </Link>
+            ) : null}
             <button
               type="button"
               onClick={loadAll}
