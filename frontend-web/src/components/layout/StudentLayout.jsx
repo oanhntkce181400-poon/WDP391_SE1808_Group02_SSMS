@@ -11,6 +11,7 @@ export default function StudentLayout() {
 
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
+    { name: 'Hồ sơ sinh viên', path: '/student/profile', icon: '👤' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📝' },
     { name: 'Thời khóa biểu', path: '/student/schedule', icon: '📅' },
     { name: 'Kết quả học tập', path: '/student/grades', icon: '📊' },

@@ -105,7 +105,7 @@ export default function StudentHome() {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [searchQuery, procedures, lookupItems, reportItems, regulationItems]);
+  }, [searchQuery]);
 
   const setItemRef = (id, element) => {
     if (element) {

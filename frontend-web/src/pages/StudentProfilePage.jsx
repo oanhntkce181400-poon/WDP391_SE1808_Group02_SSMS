@@ -46,11 +46,12 @@ const StudentProfilePage = () => {
     try {
       setLoading(true);
       const response = await userService.getProfile();
-      if (response.success) {
-        setStudent(response.data);
+      const studentData = response.data || response;
+      if (studentData) {
+        setStudent(studentData);
         setEditFormData({
-          fullName: response.data.fullName,
-          email: response.data.email,
+          fullName: studentData.fullName,
+          email: studentData.email,
         });
       }
     } catch (err) {
@@ -78,8 +79,9 @@ const StudentProfilePage = () => {
   const handleSaveProfile = async () => {
     try {
       const response = await userService.updateProfile(editFormData);
-      if (response.success) {
-        setStudent(response.data);
+      const studentData = response.data || response;
+      if (studentData) {
+        setStudent(studentData);
         setIsEditing(false);
         setSuccessMessage('Profile updated successfully!');
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -123,7 +125,7 @@ const StudentProfilePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-white">
       {/* Success Message */}
       {successMessage && (
         <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
@@ -132,7 +134,7 @@ const StudentProfilePage = () => {
       )}
 
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 py-12 px-4">
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 py-8 px-4">
         <div className="max-w-4xl mx-auto">
           {/* Avatar and Basic Info */}
           <div className="flex flex-col items-center text-center mb-8">
@@ -239,7 +241,7 @@ const StudentProfilePage = () => {
       </div>
 
       {/* Enrolled Courses Section */}
-      <div className="max-w-4xl mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Học phần hiện tại</h2>
           <a href="#" className="text-blue-500 hover:text-blue-600 font-medium">
@@ -288,7 +290,7 @@ const StudentProfilePage = () => {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-gray-200 py-8 text-center text-gray-500 text-sm">
+      <div className="border-t border-gray-200 py-4 text-center text-gray-500 text-sm">
         <p>© 2024 EduAdmin Management System. All rights reserved.</p>
       </div>
     </div>

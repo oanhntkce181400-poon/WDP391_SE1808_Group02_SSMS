@@ -7,6 +7,18 @@ const axiosClient = axios.create({
   withCredentials: true,
 });
 
+// Add request interceptor to include access token from localStorage
+axiosClient.interceptors.request.use(
+  (config) => {
+    const accessToken = localStorage.getItem('access_token');
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
 let isRefreshing = false;
 let pendingQueue = [];
 

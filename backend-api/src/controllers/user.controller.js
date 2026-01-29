@@ -51,7 +51,8 @@ exports.listUsers = async (req, res) => {
 // Get user profile
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.auth.id).select('-password');
+    const userId = req.auth.id || req.auth.sub;
+    const user = await User.findById(userId).select('-password');
 
     if (!user) {
       return res.status(404).json({
@@ -83,7 +84,8 @@ exports.updateAvatar = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.auth.id);
+    const userId = req.auth.id || req.auth.sub;
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -137,7 +139,8 @@ exports.updateAvatar = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { fullName, email } = req.body;
-    const user = await User.findById(req.auth.id);
+    const userId = req.auth.id || req.auth.sub;
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -160,7 +163,7 @@ exports.updateProfile = async (req, res) => {
       user.email = email;
     }
 
-    user.updatedBy = req.auth.id;
+    user.updatedBy = req.auth.id || req.auth.sub;
     await user.save();
 
     res.json({
@@ -366,7 +369,7 @@ exports.importUsers = async (req, res) => {
           status: rowData.status,
           authProvider: 'local',
           isActive: true,
-          createdBy: req.auth.id,
+          createdBy: req.auth.id || req.auth.sub,
           importSource: 'excel_import',
         });
 

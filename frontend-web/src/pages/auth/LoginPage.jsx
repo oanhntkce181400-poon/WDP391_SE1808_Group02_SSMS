@@ -24,7 +24,7 @@ export default function LoginPage() {
   const isSubmitting = isLocalSubmitting || isGoogleSubmitting;
 
   const handlePostLogin = useCallback(
-    async ({ user, meta }) => {
+    async ({ user, meta, tokens }) => {
       let nextUser = user || null;
       try {
         const meResponse = await authService.me();
@@ -37,6 +37,14 @@ export default function LoginPage() {
         localStorage.setItem('auth_user', JSON.stringify(nextUser));
       }
 
+      // Save tokens to localStorage
+      if (tokens?.accessToken) {
+        localStorage.setItem('access_token', tokens.accessToken);
+      }
+      if (tokens?.refreshToken) {
+        localStorage.setItem('refresh_token', tokens.refreshToken);
+      }
+
       const mustChangePassword = Boolean(meta?.mustChangePassword || nextUser?.mustChangePassword);
       if (mustChangePassword && nextUser?.email) {
         const query = new URLSearchParams({ email: nextUser.email }).toString();
@@ -44,7 +52,12 @@ export default function LoginPage() {
         return;
       }
 
-      navigate('/admin', { replace: true });
+      // Redirect based on user role
+      if (nextUser?.role === 'student') {
+        navigate('/student', { replace: true });
+      } else {
+        navigate('/admin', { replace: true });
+      }
     },
     [navigate],
   );
@@ -77,6 +90,7 @@ export default function LoginPage() {
           await handlePostLogin({
             user: loginResponse?.data?.user,
             meta: loginResponse?.data?.meta,
+            tokens: loginResponse?.data?.tokens,
           });
         } catch (err) {
           const message =
@@ -108,6 +122,7 @@ export default function LoginPage() {
       await handlePostLogin({
         user: loginResponse?.data?.user,
         meta: loginResponse?.data?.meta,
+        tokens: loginResponse?.data?.tokens,
       });
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || 'Login failed.';

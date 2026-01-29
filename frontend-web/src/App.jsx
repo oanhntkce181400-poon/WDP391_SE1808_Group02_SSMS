@@ -39,7 +39,7 @@ export default function App() {
         <Route path="majors" element={<MajorManagement />} />
       </Route>
 
-      {/* Student routes with layout */}
+       {/* Student routes with layout */}
       <Route
         path="/student"
         element={
@@ -49,6 +49,7 @@ export default function App() {
         }
       >
         <Route index element={<StudentHome />} />
+        <Route path="profile" element={<StudentProfilePage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
