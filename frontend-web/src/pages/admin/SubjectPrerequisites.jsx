@@ -1,6 +1,6 @@
 // Subject Prerequisites Page - Configure prerequisites for subjects (Tasks #XX)
 // Based on the provided HTML design
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import nextIcon from '../../assets/next.png';
 import chevronLeftIcon from '../../assets/left-chevron.png';
@@ -10,10 +10,16 @@ import addIcon from '../../assets/circle.png';
 import deleteIcon from '../../assets/delete.png';
 import menuIcon from '../../assets/menu.png';
 import subjectService from '../../services/subjectService';
+import Header from '../../components/layout/Header';
 
 export default function SubjectPrerequisites() {
   const { subjectId } = useParams();
   const navigate = useNavigate();
+
+  const prerequisitesGraphRef = useRef(new Map());
+  const reversePrereqGraphRef = useRef(new Map());
+
+  const normalizeCode = (code) => String(code || '').trim();
 
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [availableSubjects, setAvailableSubjects] = useState([]);
@@ -23,6 +29,52 @@ export default function SubjectPrerequisites() {
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedPrerequisites, setSelectedPrerequisites] = useState([]);
+
+  const isReachable = (graph, startCode, targetCode) => {
+    const start = normalizeCode(startCode);
+    const target = normalizeCode(targetCode);
+    if (!start || !target) return false;
+    if (start === target) return true;
+
+    const visited = new Set();
+    const stack = [start];
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current || visited.has(current)) continue;
+      if (current === target) return true;
+      visited.add(current);
+
+      const nextNodes = graph.get(current) || [];
+      for (const nextRaw of nextNodes) {
+        const next = normalizeCode(nextRaw);
+        if (!next) continue;
+        if (!visited.has(next)) stack.push(next);
+      }
+    }
+
+    return false;
+  };
+
+  const hasSharedDependent = (reverseGraph, codeA, codeB) => {
+    const a = normalizeCode(codeA);
+    const b = normalizeCode(codeB);
+    if (!a || !b) return false;
+    if (a === b) return false;
+
+    const dependentsA = reverseGraph.get(a) || [];
+    const dependentsB = reverseGraph.get(b) || [];
+
+    if (dependentsA.length === 0 || dependentsB.length === 0) return false;
+
+    const setA = new Set(dependentsA.map((d) => normalizeCode(d)).filter(Boolean));
+    for (const depRaw of dependentsB) {
+      const dep = normalizeCode(depRaw);
+      if (!dep) continue;
+      if (setA.has(dep)) return true;
+    }
+    return false;
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,9 +91,62 @@ export default function SubjectPrerequisites() {
       try {
         setLoading(true);
 
+        const fetchAllSubjects = async () => {
+          const limit = 200;
+          let page = 1;
+          let totalPages = 1;
+          const all = [];
+
+          while (page <= totalPages) {
+            const resp = await subjectService.getSubjects({ page, limit });
+            const { data, totalPages: apiTotalPages } = resp.data || {};
+            all.push(...(data || []));
+            totalPages = Number(apiTotalPages || 1);
+            page += 1;
+          }
+
+          return all;
+        };
+
         // Fetch all subjects for available list
-        const subjectsResponse = await subjectService.getSubjects({ limit: 100 });
-        const { data: subjectsData } = subjectsResponse.data;
+        const subjectsData = await fetchAllSubjects();
+
+        const buildGraph = (subjects) => {
+          const graph = new Map();
+          (subjects || []).forEach((s) => {
+            const code = normalizeCode(s.subjectCode || s.code);
+            if (!code) return;
+            const prereqs = Array.isArray(s.prerequisites)
+              ? s.prerequisites
+                  .map((p) => normalizeCode(p.code || p.subjectCode))
+                  .filter(Boolean)
+              : [];
+            graph.set(code, prereqs);
+          });
+          return graph;
+        };
+
+        const buildReverseGraph = (subjects) => {
+          const reverse = new Map();
+          (subjects || []).forEach((s) => {
+            const subjectCode = normalizeCode(s.subjectCode || s.code);
+            const prereqs = Array.isArray(s.prerequisites)
+              ? s.prerequisites
+                  .map((p) => normalizeCode(p.code || p.subjectCode))
+                  .filter(Boolean)
+              : [];
+            prereqs.forEach((pr) => {
+              const prereqCode = normalizeCode(pr);
+              if (!prereqCode) return;
+              if (!reverse.has(prereqCode)) reverse.set(prereqCode, []);
+              reverse.get(prereqCode).push(subjectCode);
+            });
+          });
+          return reverse;
+        };
+
+        prerequisitesGraphRef.current = buildGraph(subjectsData);
+        reversePrereqGraphRef.current = buildReverseGraph(subjectsData);
 
         // Fetch selected subject details to get prerequisites
         let foundSubject = null;
@@ -64,6 +169,8 @@ export default function SubjectPrerequisites() {
             ? prerequisitesData
             : [];
 
+          const selectedSubjectCode = normalizeCode(foundSubject?.subjectCode || foundSubject?.code);
+
           setSelectedSubject({
             _id: foundSubject._id || foundSubject.id,
             id: foundSubject._id || foundSubject.id,
@@ -76,12 +183,28 @@ export default function SubjectPrerequisites() {
 
           // Set selected prerequisites from database - ensure we get code and name
           if (prerequisitesArray.length > 0) {
-            setSelectedPrerequisites(
-              prerequisitesArray.map((prereq) => ({
+            const mapped = prerequisitesArray
+              .map((prereq) => ({
                 code: prereq.code || prereq.subjectCode || '',
                 name: prereq.name || prereq.subjectName || '',
               }))
-            );
+              .filter((p) => p.code);
+
+            const valid = mapped.filter((p) => {
+              if (isReachable(prerequisitesGraphRef.current, p.code, selectedSubjectCode)) return false;
+              if (hasSharedDependent(reversePrereqGraphRef.current, p.code, selectedSubjectCode)) return false;
+              return true;
+            });
+
+            if (valid.length !== mapped.length) {
+              setToast({
+                show: true,
+                message: 'Một số môn tiên quyết đã bị loại bỏ vì vi phạm ràng buộc vòng lặp / đồng tiên quyết.',
+                type: 'warning',
+              });
+            }
+
+            setSelectedPrerequisites(valid);
           } else {
             setSelectedPrerequisites([]);
           }
@@ -91,7 +214,7 @@ export default function SubjectPrerequisites() {
         const selectedSubjectCode = foundSubject?.subjectCode || foundSubject?.code;
         // Get existing prerequisites codes of the selected subject
         const existingPrerequisitesCodes = (foundSubject?.prerequisites || [])
-          .map((prereq) => prereq.code || prereq.subjectCode)
+          .map((prereq) => normalizeCode(prereq.code || prereq.subjectCode))
           .filter(Boolean);
 
         // Transform and filter available subjects (exclude current subject)
@@ -104,19 +227,22 @@ export default function SubjectPrerequisites() {
         const transformedSubjects = subjectsData
           .filter((item) => {
             const itemId = item._id || item.id;
-            const itemCode = item.subjectCode || item.code;
+            const itemCode = normalizeCode(item.subjectCode || item.code);
+            const isCommon = Boolean(item.isCommon);
 
             // Exclude current subject
             if (itemId === subjectId) return false;
 
             // Filter by matching departments if selected subject has departments
             if (selectedDeptArray.length > 0) {
-              const itemDept = item.majorCodes || item.majorCode || [];
-              const itemDeptArray = Array.isArray(itemDept) ? itemDept : [itemDept].filter(Boolean);
+              if (!isCommon) {
+                const itemDept = item.majorCodes || item.majorCode || [];
+                const itemDeptArray = Array.isArray(itemDept) ? itemDept : [itemDept].filter(Boolean);
 
-              // Check if at least one department matches
-              const hasMatchingDept = itemDeptArray.some((dept) => selectedDeptArray.includes(dept));
-              if (!hasMatchingDept) return false;
+                // Check if at least one department matches
+                const hasMatchingDept = itemDeptArray.some((dept) => selectedDeptArray.includes(dept));
+                if (!hasMatchingDept) return false;
+              }
             }
 
             // Check if this subject is already a prerequisite of the selected subject
@@ -127,11 +253,12 @@ export default function SubjectPrerequisites() {
 
             // Check for circular dependency: if current subject is already a prerequisite of this item,
             // then this item cannot be selected as a prerequisite (would create a loop)
-            if (item.prerequisites && Array.isArray(item.prerequisites)) {
-              const hasCircularDependency = item.prerequisites.some(
-                (prereq) => prereq.code === selectedSubjectCode
-              );
-              if (hasCircularDependency) return false;
+            if (isReachable(prerequisitesGraphRef.current, itemCode, selectedSubjectCode)) {
+              return false;
+            }
+
+            if (hasSharedDependent(reversePrereqGraphRef.current, itemCode, selectedSubjectCode)) {
+              return false;
             }
 
             return true;
@@ -142,6 +269,7 @@ export default function SubjectPrerequisites() {
             code: item.subjectCode || item.code,
             name: item.subjectName || item.name,
             department: item.majorCodes || item.majorCode || [],
+            isCommon: Boolean(item.isCommon),
           }));
 
         setAvailableSubjects(transformedSubjects);
@@ -159,6 +287,22 @@ export default function SubjectPrerequisites() {
   }, [subjectId]);
 
   const handleAddPrerequisite = (subject) => {
+    if (hasSharedDependent(reversePrereqGraphRef.current, subject?.code, selectedSubject?.code)) {
+      setToast({
+        show: true,
+        message: `Không thể chọn "${subject.code} - ${subject.name}" vì hai môn đang là tiên quyết của cùng một môn khác.`,
+        type: 'warning',
+      });
+      return;
+    }
+    if (isReachable(prerequisitesGraphRef.current, subject?.code, selectedSubject?.code)) {
+      setToast({
+        show: true,
+        message: `Không thể chọn "${subject.code} - ${subject.name}" vì sẽ tạo vòng lặp điều kiện tiên quyết!`,
+        type: 'warning',
+      });
+      return;
+    }
     if (selectedPrerequisites.find((p) => p.code === subject.code)) {
       setToast({
         show: true,
@@ -217,8 +361,8 @@ export default function SubjectPrerequisites() {
   const filteredAvailableSubjects = availableSubjects.filter(
     (s) =>
       !selectedPrerequisites.find((p) => p.code === s.code) &&
-      (s.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        s.name.toLowerCase().includes(searchKeyword.toLowerCase()))
+      (String(s.code || '').toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        String(s.name || '').toLowerCase().includes(searchKeyword.toLowerCase()))
   );
 
   // Calculate pagination

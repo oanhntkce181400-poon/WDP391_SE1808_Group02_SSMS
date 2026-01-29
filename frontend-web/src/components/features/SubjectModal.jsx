@@ -1,17 +1,11 @@
 // Subject Modal Component - Popup form for Create/Edit Subject (Tasks #XX)
 import { useState, useEffect, useRef } from 'react';
 import closeIcon from '../../assets/close.png';
-
-const DEPARTMENTS = [
-  'Khoa Công nghệ thông tin',
-  'Khoa Cơ bản',
-  'Khoa Kinh tế',
-  'Khoa Điện tử',
-  'Khoa Cơ khí',
-  'Khoa Xây dựng',
-];
+import majorService from '../../services/majorService';
 
 export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loading }) {
+  const [majors, setMajors] = useState([]);
+  const [loadingMajors, setLoadingMajors] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -24,6 +18,28 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
   const [errors, setErrors] = useState({});
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const fetchMajors = async () => {
+      if (!isOpen) return;
+      try {
+        setLoadingMajors(true);
+        const res = await majorService.getMajors({ isActive: true });
+        setMajors(res.data?.data || []);
+      } catch (e) {
+        console.error('Error fetching majors:', e);
+        setMajors([]);
+      } finally {
+        setLoadingMajors(false);
+      }
+    };
+
+    fetchMajors();
+  }, [isOpen]);
+
+  const majorCodeToName = new Map(
+    (majors || []).map((m) => [String(m.majorCode || '').trim(), String(m.majorName || '').trim()])
+  );
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -215,7 +231,10 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
               >
                 <span className="truncate">
                   {formData.department && formData.department.length > 0
-                    ? formData.department.join(', ')
+                    ? formData.department
+                        .map((code) => majorCodeToName.get(String(code).trim()) || String(code).trim())
+                        .filter(Boolean)
+                        .join(', ')
                     : 'Chọn khoa...'}
                 </span>
                 <svg
@@ -231,20 +250,31 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
               {/* Dropdown Options */}
               {isDropdownOpen && (
                 <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {DEPARTMENTS.map((dept) => (
+                  {loadingMajors ? (
+                    <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-300">Đang tải danh sách khoa...</div>
+                  ) : majors.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-slate-500 dark:text-slate-300">Không có dữ liệu khoa</div>
+                  ) : (
+                    majors.map((m) => {
+                      const code = String(m.majorCode || '').trim();
+                      const name = String(m.majorName || '').trim();
+                      if (!code) return null;
+                      return (
                     <label
-                      key={dept}
+                      key={code}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                     >
                       <input
                         type="checkbox"
-                        checked={formData.department?.includes(dept) || false}
-                        onChange={() => handleDepartmentToggle(dept)}
+                        checked={formData.department?.includes(code) || false}
+                        onChange={() => handleDepartmentToggle(code)}
                         className="w-4 h-4 text-[#1A237E] border-slate-300 rounded focus:ring-[#1A237E]"
                       />
-                      <span className="text-sm text-slate-700 dark:text-slate-200">{dept}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-200">{name || code}</span>
                     </label>
-                  ))}
+                      );
+                    })
+                  )}
                 </div>
               )}
               {errors.department && <p className="text-xs text-red-500">{errors.department}</p>}

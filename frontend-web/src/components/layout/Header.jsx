@@ -15,9 +15,16 @@ export default function Header() {
     { label: 'Chuyên ngành', href: '/admin/majors' },
     { label: 'Giảng viên', href: '#' },
     { label: 'Môn học', href: '/admin/subjects' },
+    { label: 'Phòng học', href: '/admin/rooms' },
+    { label: 'Giờ học', href: '/admin/timeslots' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
+<<<<<<< HEAD
     { label: 'Quản lý người dùng', href: '/admin/users' }, // NEW: User management nav
     { label: 'Cấu hình', href: '/admin/settings' },
+=======
+    { label: 'Học phí', href: '/admin/tuition-fees' },
+    { label: 'Cấu hình', href: '#' },
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
   ];
 
   // Determine active item based on current path
@@ -26,15 +33,27 @@ export default function Header() {
     if (href === '/admin/subjects' && (location.pathname === '/admin/subjects' || location.pathname.startsWith('/admin/prerequisites/'))) {
       return true;
     }
+    if (href === '/admin/rooms' && location.pathname === '/admin/rooms') {
+      return true;
+    }
+    if (href === '/admin/timeslots' && location.pathname === '/admin/timeslots') {
+      return true;
+    }
     if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
       return true;
     }
+<<<<<<< HEAD
 
     if (href === '/admin/settings' && location.pathname === '/admin/settings') {
       return true;
     }
     return location.pathname === href;
 
+=======
+    if (href === '/admin/tuition-fees' && location.pathname === '/admin/tuition-fees') {
+      return true;
+    }
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
     if (href === '/admin/majors' && location.pathname === '/admin/majors') {
       return true;
     }

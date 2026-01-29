@@ -1,151 +1,167 @@
 const majorService = require('../services/major.service');
 
-class MajorController {
-  /**
-   * GET /api/majors
-   * Lấy danh sách chuyên ngành
-   */
-  async getMajors(req, res) {
-    try {
-      const { keyword, faculty, isActive, page, limit } = req.query;
+exports.getMajors = async (req, res) => {
+  try {
+    const { keyword = '', isActive, page = 1, limit = 10 } = req.query;
 
-      const result = await majorService.getMajors({
-        keyword,
-        faculty,
-        isActive,
-        page,
-        limit,
-      });
+    let parsedIsActive;
+    if (typeof isActive !== 'undefined') {
+      if (String(isActive).toLowerCase() === 'true') parsedIsActive = true;
+      else if (String(isActive).toLowerCase() === 'false') parsedIsActive = false;
+    }
 
-      res.json({
-        success: true,
-        data: result.majors,
-        pagination: result.pagination,
-      });
-    } catch (error) {
-      console.error('Error in getMajors:', error);
-      res.status(500).json({
+    const majors = await majorService.getMajors({
+      keyword,
+      isActive: parsedIsActive,
+    });
+
+    // Simple pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = startIndex + limitNum;
+    const paginatedMajors = majors.slice(startIndex, endIndex);
+
+    res.json({
+      success: true,
+      data: paginatedMajors,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: majors.length,
+        totalPages: Math.ceil(majors.length / limitNum),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.createMajor = async (req, res) => {
+  try {
+    const { majorCode, majorName, majorNameEn, isActive } = req.body;
+
+    if (!majorCode || !majorName) {
+      return res.status(400).json({
         success: false,
-        message: error.message || 'Failed to fetch majors',
+        message: 'Mã ngành và tên ngành là bắt buộc',
       });
     }
-  }
 
-  /**
-   * GET /api/majors/:id
-   * Lấy chi tiết chuyên ngành
-   */
-  async getMajorById(req, res) {
-    try {
-      const { id } = req.params;
-      const major = await majorService.getMajorById(id);
+    const newMajor = await majorService.createMajor({
+      majorCode,
+      majorName,
+      majorNameEn,
+      isActive: isActive !== undefined ? isActive : true,
+    });
 
-      res.json({
-        success: true,
-        data: major,
-      });
-    } catch (error) {
-      console.error('Error in getMajorById:', error);
-      res.status(error.message === 'Major not found' ? 404 : 500).json({
+    res.status(201).json({
+      success: true,
+      data: newMajor,
+      message: 'Thêm ngành đào tạo thành công',
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
         success: false,
-        message: error.message || 'Failed to fetch major',
+        message: 'Mã ngành đã tồn tại',
       });
     }
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
+};
 
-  /**
-   * POST /api/majors
-   * Tạo chuyên ngành mới
-   */
-  async createMajor(req, res) {
-    try {
-      const major = await majorService.createMajor(req.body);
+exports.updateMajor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { majorCode, majorName, majorNameEn, isActive } = req.body;
 
-      res.status(201).json({
-        success: true,
-        data: major,
-        message: 'Major created successfully',
-      });
-    } catch (error) {
-      console.error('Error in createMajor:', error);
-      res.status(error.message === 'Major code already exists' ? 400 : 500).json({
+    const updatedMajor = await majorService.updateMajor(id, {
+      majorCode,
+      majorName,
+      majorNameEn,
+      isActive,
+    });
+
+    if (!updatedMajor) {
+      return res.status(404).json({
         success: false,
-        message: error.message || 'Failed to create major',
+        message: 'Không tìm thấy ngành đào tạo',
       });
     }
+
+    res.json({
+      success: true,
+      data: updatedMajor,
+      message: 'Cập nhật ngành đào tạo thành công',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
+};
 
-  /**
-   * PUT /api/majors/:id
-   * Cập nhật chuyên ngành
-   */
-  async updateMajor(req, res) {
-    try {
-      const { id } = req.params;
-      const major = await majorService.updateMajor(id, req.body);
+exports.deleteMajor = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-      res.json({
-        success: true,
-        data: major,
-        message: 'Major updated successfully',
-      });
-    } catch (error) {
-      console.error('Error in updateMajor:', error);
-      const statusCode =
-        error.message === 'Major not found'
-          ? 404
-          : error.message === 'Major code already exists'
-          ? 400
-          : 500;
-      res.status(statusCode).json({
+    const deleted = await majorService.deleteMajor(id);
+
+    if (!deleted) {
+      return res.status(404).json({
         success: false,
-        message: error.message || 'Failed to update major',
+        message: 'Không tìm thấy ngành đào tạo',
       });
     }
+
+    res.json({
+      success: true,
+      message: 'Xóa ngành đào tạo thành công',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
+};
 
-  /**
-   * DELETE /api/majors/:id
-   * Xóa chuyên ngành (soft delete)
-   */
-  async deleteMajor(req, res) {
-    try {
-      const { id } = req.params;
-      const major = await majorService.deleteMajor(id);
+exports.exportMajors = async (req, res) => {
+  try {
+    const { keyword = '', isActive } = req.query;
 
-      res.json({
-        success: true,
-        data: major,
-        message: 'Major deleted successfully',
-      });
-    } catch (error) {
-      console.error('Error in deleteMajor:', error);
-      res.status(error.message === 'Major not found' ? 404 : 500).json({
-        success: false,
-        message: error.message || 'Failed to delete major',
-      });
+    let parsedIsActive;
+    if (typeof isActive !== 'undefined') {
+      if (String(isActive).toLowerCase() === 'true') parsedIsActive = true;
+      else if (String(isActive).toLowerCase() === 'false') parsedIsActive = false;
     }
-  }
 
-  /**
-   * GET /api/majors/export
-   * Export danh sách chuyên ngành
-   */
-  async exportMajors(req, res) {
-    try {
-      // TODO: Implement export logic (Excel/CSV)
-      res.json({
-        success: false,
-        message: 'Export feature not implemented yet',
-      });
-    } catch (error) {
-      console.error('Error in exportMajors:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message || 'Failed to export majors',
-      });
-    }
-  }
-}
+    const majors = await majorService.getMajors({
+      keyword,
+      isActive: parsedIsActive,
+    });
 
-module.exports = new MajorController();
+    // Simple CSV export
+    let csv = 'Mã ngành,Tên ngành,Tên tiếng Anh,Số lượng SV,Trạng thái\n';
+    majors.forEach((major) => {
+      csv += `${major.majorCode},${major.majorName},${major.majorNameEn || ''},${major.studentCount || 0},${major.isActive ? 'Đang đào tạo' : 'Ngừng tuyển sinh'}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=majors.csv');
+    res.send('\uFEFF' + csv); // Add BOM for Excel UTF-8 support
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

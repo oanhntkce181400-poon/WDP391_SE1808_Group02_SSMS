@@ -3,17 +3,29 @@ import { useEffect, useState } from 'react';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+<<<<<<< HEAD
 import StudentProfilePage from './pages/StudentProfilePage';
+=======
+import SocketTestPage from './pages/SocketTestPage';
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
 import AdminLayout from './components/layout/AdminLayout';
 import StudentLayout from './components/layout/StudentLayout';
 import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+<<<<<<< HEAD
 import UserListPage from './pages/UserListPage';
 import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
 import MajorManagement from './pages/admin/MajorManagement';
 import StudentHome from './pages/student/StudentHome';
+=======
+import RoomManagement from './pages/admin/RoomManagement';
+import TimeslotManagement from './pages/admin/TimeslotManagement';
+import MajorManagement from './pages/admin/MajorManagement';
+import CurriculumList from './components/features/CurriculumList';
+import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
 import authService from './services/authService';
 export default function App() {
   return (
@@ -33,6 +45,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
         <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+<<<<<<< HEAD
         <Route path="curriculum" element={<CurriculumManagement />} />
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
@@ -51,6 +64,25 @@ export default function App() {
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
       </Route>
+=======
+        <Route path="rooms" element={<RoomManagement />} />
+        <Route path="timeslots" element={<TimeslotManagement />} />
+        <Route path="curriculum" element={<CurriculumList />} />
+        <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
+        <Route path="tuition-fees" element={<TuitionFeeManagement />} />
+        <Route path="majors" element={<MajorManagement />} />
+      </Route>
+
+      {/* Socket Test Page */}
+      <Route
+        path="/socket-test"
+        element={
+          <ProtectedRoute>
+            <SocketTestPage />
+          </ProtectedRoute>
+        }
+      />
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
 
       {/* Legacy dashboard route - redirect to admin */}
       <Route

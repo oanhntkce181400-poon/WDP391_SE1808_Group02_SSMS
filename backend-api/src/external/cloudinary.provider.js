@@ -1,18 +1,12 @@
 const cloudinary = require('cloudinary').v2;
 
-/**
- * Cấu hình Cloudinary với thông tin từ environment variables
- * Các biến môi trường cần thiết:
- * - CLOUDINARY_CLOUD_NAME: Tên cloud của bạn trên Cloudinary
- * - CLOUDINARY_API_KEY: API key từ Cloudinary dashboard
- * - CLOUDINARY_API_SECRET: API secret từ Cloudinary dashboard
- */
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+<<<<<<< HEAD
 /**
  * Upload ảnh lên Cloudinary
  * @param {string|Buffer} filePath - Đường dẫn file hoặc Buffer hoặc base64 string
@@ -31,6 +25,13 @@ async function uploadImage(filePath, options = {}) {
     const defaultOptions = {
       folder: 'ssms', // Thư mục mặc định
       resource_type: 'auto', // Loại tài nguyên: image, video, raw, auto
+=======
+async function uploadImage(filePath, options = {}) {
+  try {
+    const defaultOptions = {
+      folder: 'ssms',
+      resource_type: 'image',
+>>>>>>> 35bb7140f7e52bf9db54cc63a3716fbf49850ef8
       ...options,
     };
 
@@ -71,14 +72,6 @@ async function uploadImage(filePath, options = {}) {
   }
 }
 
-/**
- * Xóa ảnh từ Cloudinary
- * @param {string} publicId - Public ID của ảnh cần xóa (lấy từ kết quả uploadImage)
- * @returns {Promise<object>} - Kết quả xóa { result: 'ok' hoặc 'not found' }
- * 
- * Ví dụ sử dụng:
- * await deleteImage('ssms/avatar_abc123');
- */
 async function deleteImage(publicId) {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
@@ -94,11 +87,6 @@ async function deleteImage(publicId) {
   }
 }
 
-/**
- * Xóa nhiều ảnh cùng lúc
- * @param {string[]} publicIds - Mảng các public_id cần xóa
- * @returns {Promise<object>} - Kết quả xóa
- */
 async function deleteImages(publicIds) {
   try {
     const result = await cloudinary.api.delete_resources(publicIds);

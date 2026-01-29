@@ -21,7 +21,6 @@ export default function MajorManagement() {
   // State for filters
   const [filters, setFilters] = useState({
     keyword: '',
-    faculty: 'all',
     status: 'all',
   });
 
@@ -35,21 +34,11 @@ export default function MajorManagement() {
   const [formData, setFormData] = useState({
     code: '',
     name: '',
-    nameEn: '',
-    faculty: '',
     status: 'active',
   });
 
   // State for toast notifications
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-
-  // Faculty options
-  const faculties = [
-    { value: 'all', label: 'Tất cả Khoa' },
-    { value: 'Khoa Công nghệ thông tin', label: 'Khoa Công nghệ thông tin' },
-    { value: 'Khoa Kinh tế và Luật', label: 'Khoa Kinh tế và Luật' },
-    { value: 'Khoa Ngôn ngữ anh', label: 'Khoa Ngôn ngữ anh' },
-  ];
 
   // Fetch majors from API
   const fetchMajors = useCallback(async (page = 1) => {
@@ -60,7 +49,6 @@ export default function MajorManagement() {
         page,
         limit: pagination.limit,
         ...(filters.keyword && { keyword: filters.keyword }),
-        ...(filters.faculty !== 'all' && { faculty: filters.faculty }),
         ...(filters.status !== 'all' && { isActive: filters.status === 'active' }),
       };
 
@@ -102,8 +90,6 @@ export default function MajorManagement() {
       setFormData({
         code: major.majorCode || '',
         name: major.majorName || '',
-        nameEn: major.majorNameEn || '',
-        faculty: major.faculty || '',
         status: major.isActive ? 'active' : 'inactive',
       });
     } else {
@@ -111,8 +97,6 @@ export default function MajorManagement() {
       setFormData({
         code: '',
         name: '',
-        nameEn: '',
-        faculty: '',
         status: 'active',
       });
     }
@@ -125,8 +109,6 @@ export default function MajorManagement() {
     setFormData({
       code: '',
       name: '',
-      nameEn: '',
-      faculty: '',
       status: 'active',
     });
   };
@@ -140,8 +122,6 @@ export default function MajorManagement() {
       const payload = {
         majorCode: formData.code,
         majorName: formData.name,
-        majorNameEn: formData.nameEn,
-        faculty: formData.faculty,
         isActive: formData.status === 'active',
       };
 
@@ -273,7 +253,7 @@ export default function MajorManagement() {
       {/* Filters Section */}
       <div className="container mx-auto px-6 py-6">
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">TÌM KIẾM</label>
               <input
@@ -283,19 +263,6 @@ export default function MajorManagement() {
                 onChange={(e) => handleFilterChange('keyword', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">KHOA QUẢN LÝ</label>
-              <select
-                value={filters.faculty}
-                onChange={(e) => handleFilterChange('faculty', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">Tất cả Khoa</option>
-                {faculties.map(faculty => (
-                  <option key={faculty.value} value={faculty.value}>{faculty.label}</option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">TRẠNG THÁI</label>
@@ -338,7 +305,6 @@ export default function MajorManagement() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Mã Ngành</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tên Ngành Đào Tạo</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Khoa Quản Lý</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Số Lượng SV</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Trạng Thái</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Thao Tác</th>
@@ -347,7 +313,7 @@ export default function MajorManagement() {
                 <tbody className="divide-y divide-slate-200">
                   {majors.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                         Không có dữ liệu
                       </td>
                     </tr>
@@ -361,12 +327,8 @@ export default function MajorManagement() {
                           <span className="font-mono font-semibold text-slate-700">{major.majorCode}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <div>
-                            <div className="font-medium text-slate-900">{major.majorName}</div>
-                            <div className="text-xs text-slate-500">{major.majorNameEn}</div>
-                          </div>
+                          <div className="font-medium text-slate-900">{major.majorName}</div>
                         </td>
-                        <td className="px-6 py-4 text-slate-700">{major.faculty}</td>
                         <td className="px-6 py-4 text-slate-700">{major.studentCount || 0}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
@@ -465,7 +427,7 @@ export default function MajorManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Tên ngành (Tiếng Việt) <span className="text-red-500">*</span>
+                  Tên ngành <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -475,35 +437,6 @@ export default function MajorManagement() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Kỹ thuật phần mềm"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Tên ngành (Tiếng Anh) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nameEn}
-                  onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Software Engineering"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Khoa quản lý <span className="text-red-500">*</span>
-                </label>
-                <select
-                  required
-                  value={formData.faculty}
-                  onChange={(e) => setFormData({ ...formData, faculty: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Chọn khoa</option>
-                  {faculties.filter(f => f.value !== 'all').map(faculty => (
-                    <option key={faculty.value} value={faculty.value}>{faculty.label}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Trạng thái</label>
