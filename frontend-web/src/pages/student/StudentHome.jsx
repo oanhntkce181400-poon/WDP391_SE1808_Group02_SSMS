@@ -6,6 +6,63 @@ export default function StudentHome() {
   const [highlightedItems, setHighlightedItems] = useState(new Set());
   const itemRefs = useRef({});
 
+  // Data arrays
+  const newsItems = [
+    {
+      type: 'THÔNG BÁO QUAN TRỌNG',
+      title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
+      description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
+      date: '28/01/2026',
+    },
+    {
+      type: 'HỌC VỤ',
+      title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
+      description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
+      date: '25/01/2026',
+    },
+    {
+      type: 'SỰ KIỆN',
+      title: 'Ngày hội việc làm IT Job Fair 2024',
+      description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
+      date: '20/01/2026',
+    },
+    {
+      type: 'THI CỬ',
+      title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
+      description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
+      date: '15/01/2026',
+    },
+  ];
+
+  const procedures = [
+    { label: 'Tạm hoãn học tập' },
+    { label: 'Đăng ký chuyển lớp' },
+    { label: 'Đăng ký thi cải thiện' },
+    { label: 'Xác nhận sinh viên' },
+    { label: 'Xem tất cả đơn từ...', isLink: true },
+  ];
+
+  const lookupItems = [
+    { label: 'Tra cứu học phí', badge: null },
+    { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
+    { label: 'Đề cương môn học', badge: null },
+    { label: 'Danh sách wishlist môn học', badge: null },
+  ];
+
+  const reportItems = [
+    { label: 'Điểm danh (Attendance)' },
+    { label: 'Bảng điểm học tập' },
+    { label: 'Báo cáo Mark Report' },
+    { label: 'Lịch sự giao dịch' },
+  ];
+
+  const regulationItems = [
+    { label: 'Nội quy đào tạo' },
+    { label: 'Nội quy ký túc xá' },
+    { label: 'Quy định xét học bổng' },
+    { label: 'Quy trình thi cử' },
+  ];
+
   useEffect(() => {
     const authUser = localStorage.getItem('auth_user');
     if (authUser) {
@@ -25,14 +82,14 @@ export default function StudentHome() {
 
     // Collect all items
     const allItems = [
-      ...procedures.map((item, idx) => ({ id: `proc-${idx}`, label: item.label, type: 'procedure' })),
-      ...lookupItems.map((item, idx) => ({ id: `lookup-${idx}`, label: item.label, type: 'lookup' })),
-      ...reportItems.map((item, idx) => ({ id: `report-${idx}`, label: item.label, type: 'report' })),
-      ...regulationItems.map((item, idx) => ({ id: `reg-${idx}`, label: item.label, type: 'regulation' })),
+      ...procedures.map((item, idx) => ({ id: `proc-${idx}`, label: item.label })),
+      ...lookupItems.map((item, idx) => ({ id: `lookup-${idx}`, label: item.label })),
+      ...reportItems.map((item, idx) => ({ id: `report-${idx}`, label: item.label })),
+      ...regulationItems.map((item, idx) => ({ id: `reg-${idx}`, label: item.label })),
     ];
 
     // Find matches
-    allItems.forEach(item => {
+    allItems.forEach((item) => {
       if (item.label.toLowerCase().includes(query)) {
         matches.add(item.id);
       }
@@ -48,7 +105,7 @@ export default function StudentHome() {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [searchQuery]);
+  }, [searchQuery, procedures, lookupItems, reportItems, regulationItems]);
 
   const setItemRef = (id, element) => {
     if (element) {
@@ -58,86 +115,28 @@ export default function StudentHome() {
 
   const isHighlighted = (id) => highlightedItems.has(id);
 
-  const newsItems = [
-    {
-      type: 'THÔNG BÁO QUAN TRỌNG',
-      badge: 'badge-warning',
-      title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
-      description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
-      date: '28/01/2026',
-    },
-    {
-      type: 'HỌC VỤ',
-      badge: 'badge-info',
-      title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
-      description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
-      date: '25/01/2026',
-    },
-    {
-      type: 'SỰ KIỆN',
-      badge: 'badge-success',
-      title: 'Ngày hội việc làm IT Job Fair 2024',
-      description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
-      date: '20/01/2026',
-    },
-    {
-      type: 'THI CỬ',
-      badge: 'badge-purple',
-      title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
-      description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
-      date: '15/01/2026',
-    },
-  ];
-
-  const procedures = [
-    { label: 'Tạm hoãn học tập', count: null },
-    { label: 'Đăng ký chuyên lớp', count: null },
-    { label: 'Đăng ký thi cải thiện', count: null },
-    { label: 'Xác nhận sinh viên', count: null },
-    { label: 'Xem tất cả đơn từ...', isLink: true },
-  ];
-
-  const lookupItems = [
-    { label: 'Tra cứu học phí', badge: null },
-    { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
-    { label: 'Đề cương môn học', badge: null },
-    { label: 'Danh sách wishlist môn học', badge: null },
-  ];
-
-  const reportItems = [
-    { label: 'Điểm danh (Attendance)' },
-    { label: 'Bảng điểm học tập' },
-    { label: 'Báo cáo Mark Report' },
-    { label: 'Lịch sự giáo dịch' },
-  ];
-
-  const regulationItems = [
-    { label: 'Nội quy đào tạo' },
-    { label: 'Nội quy ký túc xá' },
-    { label: 'Quy định xét học bổng' },
-    { label: 'Quy trình thi cử' },
-  ];
-
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Page Header with Search */}
         <div className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Trang chủ</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Chào mừng bạn đến với Academic Portal - FPTU
+              <h1 className="text-3xl font-bold text-slate-900">
+                Xin chào, {user?.fullName || 'Sinh viên'}! 👋
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Chào mừng bạn đến với Cổng thông tin Sinh viên - FPT University
               </p>
             </div>
             {/* Search Box */}
-            <div className="relative w-80">
+            <div className="relative w-full md:w-96">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm thủ tục, tra cứu, báo cáo..."
-                className="w-full rounded-lg border border-slate-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                placeholder="🔍 Tìm kiếm thủ tục, tra cứu, báo cáo..."
+                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-10 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
               <svg
                 className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
@@ -171,10 +170,12 @@ export default function StudentHome() {
           </div>
           {/* Search results count */}
           {searchQuery && (
-            <div className="mt-2 text-sm text-slate-600">
-              Tìm thấy{' '}
-              <span className="font-semibold text-blue-600">{highlightedItems.size}</span>{' '}
-              kết quả phù hợp
+            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">
+              <span className="font-medium">
+                🎯 Tìm thấy{' '}
+                <span className="font-bold text-blue-600">{highlightedItems.size}</span> kết quả
+                cho "{searchQuery}"
+              </span>
             </div>
           )}
         </div>
@@ -184,25 +185,45 @@ export default function StudentHome() {
           {/* Left column: news + procedures */}
           <div className="space-y-6 lg:col-span-2">
             {/* News */}
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-base font-semibold text-slate-900">Thông báo & tin tức</h2>
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">📢</span>
+                <h2 className="text-lg font-bold text-slate-900">Thông báo & Tin tức</h2>
+              </div>
               <div className="space-y-3">
                 {newsItems.map((item, index) => (
                   <div
                     key={index}
-                    className="flex items-start justify-between rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+                    className="group cursor-pointer rounded-lg border border-slate-200 bg-gradient-to-r from-white to-slate-50 px-4 py-3 transition hover:border-blue-300 hover:shadow-md"
                   >
                     <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="rounded-md bg-slate-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                           {item.type}
                         </span>
-                        <span className="inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700">
+                          <svg
+                            className="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
                           {item.date}
                         </span>
                       </div>
-                      <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{item.description}</p>
+                      <p className="text-sm font-semibold text-slate-900 transition group-hover:text-blue-700">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                        {item.description}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -210,9 +231,12 @@ export default function StudentHome() {
             </div>
 
             {/* Procedures */}
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-4 text-base font-semibold text-slate-900">Đơn từ & Thủ tục</h3>
-              <div className="space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">📝</span>
+                <h3 className="text-lg font-bold text-slate-900">Đơn từ & Thủ tục</h3>
+              </div>
+              <div className="space-y-2">
                 {procedures.map((item, index) => {
                   const itemId = `proc-${index}`;
                   const highlighted = isHighlighted(itemId);
@@ -220,16 +244,21 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                      className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
-                          ? 'bg-yellow-100 ring-2 ring-yellow-400'
+                          ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
                           : item.isLink
-                          ? 'font-medium text-blue-600 hover:bg-blue-50'
-                          : 'text-slate-700 hover:bg-slate-50'
+                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
                       }`}
                     >
-                      <span>{item.label}</span>
-                      {!item.isLink && <span className="text-slate-400">→</span>}
+                      <span className="flex items-center gap-2">
+                        {!item.isLink && <span className="text-lg">📄</span>}
+                        {item.label}
+                      </span>
+                      <span className={`${item.isLink ? 'text-blue-600' : 'text-slate-400'}`}>
+                        {item.isLink ? '»' : '→'}
+                      </span>
                     </button>
                   );
                 })}
@@ -240,9 +269,12 @@ export default function StudentHome() {
           {/* Right column: lookup, reports, regulations, Coursera */}
           <div className="space-y-6">
             {/* Lookup */}
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-4 text-base font-semibold text-slate-900">Tra cứu thông tin</h3>
-              <div className="space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">🔎</span>
+                <h3 className="text-lg font-bold text-slate-900">Tra cứu thông tin</h3>
+              </div>
+              <div className="space-y-2">
                 {lookupItems.map((item, index) => {
                   const itemId = `lookup-${index}`;
                   const highlighted = isHighlighted(itemId);
@@ -250,16 +282,19 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                      className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
-                          ? 'bg-yellow-100 ring-2 ring-yellow-400'
-                          : 'text-slate-700 hover:bg-slate-50'
+                          ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-lg">🔍</span>
+                        {item.label}
+                      </span>
                       <div className="flex items-center gap-2">
                         {item.badge && (
-                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                          <span className="animate-pulse rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                             {item.badge}
                           </span>
                         )}
@@ -272,9 +307,12 @@ export default function StudentHome() {
             </div>
 
             {/* Reports */}
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-4 text-base font-semibold text-slate-900">Báo cáo học tập</h3>
-              <div className="space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">📊</span>
+                <h3 className="text-lg font-bold text-slate-900">Báo cáo học tập</h3>
+              </div>
+              <div className="space-y-2">
                 {reportItems.map((item, index) => {
                   const itemId = `report-${index}`;
                   const highlighted = isHighlighted(itemId);
@@ -282,13 +320,16 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                      className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
-                          ? 'bg-yellow-100 ring-2 ring-yellow-400'
-                          : 'text-slate-700 hover:bg-slate-50'
+                          ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-lg">📈</span>
+                        {item.label}
+                      </span>
                       <span className="text-slate-400">→</span>
                     </button>
                   );
@@ -297,9 +338,12 @@ export default function StudentHome() {
             </div>
 
             {/* Regulations */}
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-4 text-base font-semibold text-slate-900">Quy định & Nội quy</h3>
-              <div className="space-y-1">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">📋</span>
+                <h3 className="text-lg font-bold text-slate-900">Quy định & Nội quy</h3>
+              </div>
+              <div className="space-y-2">
                 {regulationItems.map((item, index) => {
                   const itemId = `reg-${index}`;
                   const highlighted = isHighlighted(itemId);
@@ -307,13 +351,16 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                      className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
-                          ? 'bg-yellow-100 ring-2 ring-yellow-400'
-                          : 'text-slate-700 hover:bg-slate-50'
+                          ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-lg">📜</span>
+                        {item.label}
+                      </span>
                       <span className="text-slate-400">→</span>
                     </button>
                   );
@@ -322,21 +369,28 @@ export default function StudentHome() {
             </div>
 
             {/* FPTU-Coursera Integration */}
-            <div className="rounded-lg border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white shadow-sm">
-              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white">
-                <span className="text-xl font-bold text-slate-900">C</span>
+            <div className="group overflow-hidden rounded-xl border-2 border-blue-500 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-6 text-white shadow-xl transition-all hover:shadow-2xl">
+              <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-lg transition-transform group-hover:scale-110">
+                <span className="text-2xl font-extrabold text-blue-600">C</span>
               </div>
-              <h3 className="mb-2 text-lg font-bold">FPTU-Coursera</h3>
-              <p className="mb-4 text-sm text-slate-300">
-                Nâng cao kỹ năng với hàng ngàn khóa học quốc tế.
+              <h3 className="mb-2 text-xl font-extrabold">FPTU × Coursera</h3>
+              <p className="mb-5 text-sm leading-relaxed text-blue-100">
+                🎓 Nâng cao kỹ năng với hàng ngàn khóa học quốc tế từ các trường đại học hàng đầu
+                thế giới!
               </p>
-              <div className="flex gap-2">
-                <button className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium transition hover:bg-blue-700">
-                  Vào học ngay
+              <div className="flex gap-3">
+                <button className="flex-1 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-md transition hover:bg-blue-50 hover:shadow-lg">
+                  Vào học ngay →
                 </button>
-                <button className="rounded-md border border-slate-600 px-3 py-2 text-sm font-medium transition hover:bg-slate-800">
+                <button className="rounded-lg border-2 border-white/50 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm transition hover:border-white hover:bg-white/10">
                   Hướng dẫn
                 </button>
+              </div>
+              <div className="mt-4 flex items-center gap-2 text-xs text-blue-200">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" />
+                </svg>
+                <span>Miễn phí 100% cho sinh viên FPT</span>
               </div>
             </div>
           </div>
