@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     mustChangePassword: { type: Boolean, default: false },
     googleId: { type: String, unique: true, sparse: true, trim: true },
     avatarUrl: { type: String, trim: true },
+    avatarCloudinaryId: { type: String, trim: true },
     role: { type: String, enum: ['admin', 'staff', 'student'], default: 'admin' },
     isActive: { type: Boolean, default: true },
     status: {

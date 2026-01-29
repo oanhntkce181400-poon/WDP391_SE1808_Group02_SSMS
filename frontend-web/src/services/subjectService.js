@@ -4,32 +4,32 @@ import axiosClient from './axiosClient';
 const subjectService = {
   // Get all subjects with optional pagination and filters
   getSubjects(params) {
-    return axiosClient.get('/api/subjects', { params });
+    return axiosClient.get('/subjects', { params });
   },
 
   // Get single subject by ID
   getSubject(id) {
-    return axiosClient.get(`/api/subjects/${id}`);
+    return axiosClient.get(`/subjects/${id}`);
   },
 
   // Create new subject
   createSubject(data) {
-    return axiosClient.post('/api/subjects', data);
+    return axiosClient.post('/subjects', data);
   },
 
   // Update existing subject
   updateSubject(id, data) {
-    return axiosClient.put(`/api/subjects/${id}`, data);
+    return axiosClient.put(`/subjects/${id}`, data);
   },
 
   // Delete subject
   deleteSubject(id) {
-    return axiosClient.delete(`/api/subjects/${id}`);
+    return axiosClient.delete(`/subjects/${id}`);
   },
 
   // Search subjects by code or name
   searchSubjects(keyword) {
-    return axiosClient.get('/api/subjects/search', { params: { keyword } });
+    return axiosClient.get('/subjects/search', { params: { keyword } });
   },
 
   // Export subjects to Excel

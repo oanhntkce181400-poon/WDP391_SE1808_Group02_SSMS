@@ -22,9 +22,11 @@ module.exports = function authMiddleware(req, res, next) {
     }
 
     const payload = verifyAccessToken(token);
+    console.log('Auth payload:', payload); // Debug log
     req.auth = payload;
     return next();
   } catch (err) {
+    console.error('Auth error:', err.message); // Debug log
     return res.status(401).json({ message: err.message || 'Invalid access token.' });
   }
 };

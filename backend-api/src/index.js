@@ -35,19 +35,26 @@ app.use(express.json());
 // Routes
 app.use('/api/subjects', require('./routes/subject.routes'));
 app.use('/api/curriculums', require('./routes/curriculum.routes'));
+app.use('/api/users', require('./routes/user.routes'));
+app.use('/api/settings', require('./routes/settings.routes'));
+app.use('/api/auth', authRoutes);
+app.use('/api/actors', actorsRoutes);
 app.use('/api/rooms', require('./routes/room.routes'));
 app.use('/api/timeslots', require('./routes/timeslot.routes'));
 app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
 app.use('/api/majors', require('./routes/major.routes'));
 app.use('/api/error-logs', require('./routes/errorLog.routes'));
 
-// Health check đơn giản
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use('/auth', authRoutes);
-app.use('/actors', actorsRoutes);
+// 404 handler - must be after all routes
+app.use(notFoundHandler);
+
+// Global error handler - must be last
+app.use(errorHandler);
 
 // 404 handler - must be after all routes
 app.use(notFoundHandler);
@@ -58,20 +65,51 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
-  await connectDB();
+  try {
+    console.log('Connecting to database...');
+    await connectDB();
+    console.log('Database connected, starting HTTP server...');
 
-  // Khởi tạo Socket.IO với JWT authentication
-  const io = initializeSocketIO(httpServer);
-  
-  // Lưu io instance vào app để dùng ở các routes khác (nếu cần)
-  app.set('io', io);
+    return new Promise((resolve, reject) => {
+      const server = httpServer.listen(PORT, () => {
+        console.log(`🚀 Server is running on http://localhost:${PORT}`);
+        console.log('✅ Server startup complete');
+        resolve();
+      });
 
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 Server is running on http://localhost:${PORT}`);
-    console.log(`🔌 Socket.IO is ready for connections`);
-  });
+      server.on('error', (err) => {
+        console.error('❌ Server error:', err);
+        reject(err);
+      });
+
+      // Timeout after 5 seconds if something hangs
+      setTimeout(() => {
+        console.log('⏱️ Server listening confirmed at port', PORT);
+      }, 100);
+    });
+  } catch (err) {
+    console.error('❌ Failed to start server:', err);
+    process.exit(1);
+  }
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
+// Start server
+startServer()
+  .then(() => {
+    console.log('✨ Server is ready for requests');
+  })
+  .catch((err) => {
+    console.error('❌ Server startup failed:', err);
+    process.exit(1);
+  });
+
+// Global error handlers
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled rejection:', reason);
+  process.exit(1);
 });

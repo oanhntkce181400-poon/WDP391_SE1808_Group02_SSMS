@@ -17,6 +17,7 @@ export default function SubjectManagement() {
 
   // const majorCodeToName = new Map([
   //   ['SE', 'Software Engineering'],
+  //   ['CA', 'Computer Architecture'], 
   //   ['CA', 'Computer Architecture'],
   //   ['BA', 'Business Administration'],
   //   ['CE', 'Computer Engineering'],

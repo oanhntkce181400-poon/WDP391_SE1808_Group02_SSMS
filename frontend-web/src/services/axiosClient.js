@@ -3,9 +3,21 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const axiosClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
 });
+
+// Add request interceptor to include access token from localStorage
+axiosClient.interceptors.request.use(
+  (config) => {
+    const accessToken = localStorage.getItem('access_token');
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 let isRefreshing = false;
 let pendingQueue = [];

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import LoginPage from './pages/auth/LoginPage';
 import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import StudentProfilePage from './pages/StudentProfilePage';
 import SocketTestPage from './pages/SocketTestPage';
 import AdminLayout from './components/layout/AdminLayout';
 import StudentLayout from './components/layout/StudentLayout';
@@ -10,6 +11,12 @@ import Dashboard from './pages/admin/Dashboard';
 import SubjectManagement from './pages/admin/SubjectManagement';
 import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
 import CurriculumManagement from './pages/admin/CurriculumManagement';
+import UserListPage from './pages/UserListPage';
+import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
+import MajorManagement from './pages/admin/MajorManagement';
+import StudentHome from './pages/student/StudentHome';
+import RoomManagement from './pages/admin/RoomManagement';
+import TimeslotManagement from './pages/admin/TimeslotManagement';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
@@ -19,7 +26,6 @@ import CurriculumList from './components/features/CurriculumList';
 import StudentHome from './pages/student/StudentHome';
 import ActorsManagementPage from './pages/admin/ActorsManagementPage';
 import authService from './services/authService';
-
 export default function App() {
   return (
     <Routes>
@@ -30,6 +36,7 @@ export default function App() {
       <Route
         path="/admin"
         element={
+          <ProtectedRoute allowedRoles={['admin', 'staff']}>
           <ProtectedRoute allowedRoles={["admin", "staff"]}>
             <AdminLayout />
           </ProtectedRoute>
@@ -37,6 +44,11 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
+        <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+        <Route path="curriculum" element={<CurriculumManagement />} />
+        <Route path="users" element={<UserListPage />} />
+        <Route path="settings" element={<GeneralSettingsPage />} />
+        <Route path="majors" element={<MajorManagement />} />
         <Route
           path="prerequisites/:subjectId"
           element={<SubjectPrerequisites />}
@@ -46,6 +58,19 @@ export default function App() {
         <Route path="curriculum" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
+      </Route>
+
+       {/* Student routes with layout */}
+      <Route
+        path="/student"
+        element={
+          <ProtectedRoute allowedRoles={['student']}>
+            <StudentLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<StudentHome />} />
+        <Route path="profile" element={<StudentProfilePage />} />
         <Route path="majors" element={<MajorManagement />} />
         <Route path="error-logs" element={<ErrorLogsPage />} />
         <Route path="actors" element={<ActorsManagementPage />} />
@@ -72,6 +97,17 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
+      {/* Student profile route */}
+      <Route
+        path="/student/profile"
+        element={
+          <ProtectedRoute>
+            <StudentProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      
       <Route
         path="/actors"
         element={
@@ -89,6 +125,7 @@ export default function App() {
 
 function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
+  const [status, setStatus] = useState('checking');
   const [status, setStatus] = useState("checking");
   const [user, setUser] = useState(null);
 
@@ -99,6 +136,7 @@ function ProtectedRoute({ children, allowedRoles }) {
       .then((response) => {
         if (isMounted) {
           setUser(response.data.user);
+          setStatus('authenticated');
           setStatus("authenticated");
         }
       })
@@ -128,6 +166,7 @@ function ProtectedRoute({ children, allowedRoles }) {
   // Check role-based access
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     // Redirect based on user's role
+    if (user.role === 'student') {
     if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
