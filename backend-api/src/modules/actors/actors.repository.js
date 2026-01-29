@@ -31,7 +31,7 @@ async function createRole(data) {
 async function updateRole(roleId, updates) {
   const _id = toObjectId(roleId);
   if (!_id) return null;
-  return Role.findByIdAndUpdate(_id, updates, { new: true });
+  return Role.findByIdAndUpdate(_id, updates, { new: true, runValidators: true });
 }
 
 async function createPermission(data) {
@@ -41,7 +41,7 @@ async function createPermission(data) {
 async function updatePermission(permissionId, updates) {
   const _id = toObjectId(permissionId);
   if (!_id) return null;
-  return Permission.findByIdAndUpdate(_id, updates, { new: true });
+  return Permission.findByIdAndUpdate(_id, updates, { new: true, runValidators: true });
 }
 
 async function findPermissionsByIds(ids = []) {
@@ -63,15 +63,13 @@ async function listRolePermissions(roleIds = []) {
   if (objectIds.length === 0) return [];
 
   return RolePermission.find({ role: { $in: objectIds } })
-    .populate('permission')
+    .populate({ path: 'permission', match: { isActive: true } })
     .lean();
 }
 
 async function replaceRolePermissions(roleId, permissionIds = [], actorUserId) {
   const roleObjectId = toObjectId(roleId);
   if (!roleObjectId) return { created: 0 };
-
-  await RolePermission.deleteMany({ role: roleObjectId });
 
   const dedupedPermissionIds = Array.from(
     new Set(permissionIds.map((id) => String(id)).filter(Boolean)),
@@ -80,21 +78,35 @@ async function replaceRolePermissions(roleId, permissionIds = [], actorUserId) {
     .filter(Boolean);
 
   if (!dedupedPermissionIds.length) {
+    await RolePermission.deleteMany({ role: roleObjectId });
     return { created: 0 };
   }
 
-  const docs = dedupedPermissionIds.map((permId) => ({
-    role: roleObjectId,
-    permission: permId,
-    createdBy: toObjectId(actorUserId),
-  }));
-
   try {
-    await RolePermission.insertMany(docs, { ordered: false });
-    return { created: docs.length };
+    const ops = dedupedPermissionIds.map((permId) => ({
+      updateOne: {
+        filter: { role: roleObjectId, permission: permId },
+        update: {
+          $setOnInsert: {
+            role: roleObjectId,
+            permission: permId,
+            createdBy: toObjectId(actorUserId),
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    const result = await RolePermission.bulkWrite(ops, { ordered: false });
+    await RolePermission.deleteMany({
+      role: roleObjectId,
+      permission: { $nin: dedupedPermissionIds },
+    });
+
+    const created = result?.upsertedCount ?? result?.nUpserted ?? 0;
+    return { created };
   } catch (err) {
-    // Duplicate key errors can occur in races; treat as partial success.
-    return { created: docs.length, warning: err.message };
+    return { created: err?.result?.nUpserted ?? 0, warning: err.message };
   }
 }
 

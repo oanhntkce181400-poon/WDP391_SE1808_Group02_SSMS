@@ -56,6 +56,12 @@ app.use(notFoundHandler);
 // Global error handler - must be last
 app.use(errorHandler);
 
+// 404 handler - must be after all routes
+app.use(notFoundHandler);
+
+// Global error handler - must be last
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {

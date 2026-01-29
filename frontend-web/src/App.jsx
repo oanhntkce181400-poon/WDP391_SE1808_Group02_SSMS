@@ -17,20 +17,27 @@ import MajorManagement from './pages/admin/MajorManagement';
 import StudentHome from './pages/student/StudentHome';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
-import CurriculumList from './components/features/CurriculumList';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
+import RoomManagement from './pages/admin/RoomManagement';
+import TimeslotManagement from './pages/admin/TimeslotManagement';
+import MajorManagement from './pages/admin/MajorManagement';
+import ErrorLogsPage from './pages/admin/ErrorLogsPage';
+import CurriculumList from './components/features/CurriculumList';
+import StudentHome from './pages/student/StudentHome';
+import ActorsManagementPage from './pages/admin/ActorsManagementPage';
 import authService from './services/authService';
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      
+
       {/* Admin routes with layout */}
       <Route
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={["admin", "staff"]}>
             <AdminLayout />
           </ProtectedRoute>
         }
@@ -42,6 +49,10 @@ export default function App() {
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
         <Route path="majors" element={<MajorManagement />} />
+        <Route
+          path="prerequisites/:subjectId"
+          element={<SubjectPrerequisites />}
+        />
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum" element={<CurriculumList />} />
@@ -60,17 +71,22 @@ export default function App() {
       >
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
+        <Route path="majors" element={<MajorManagement />} />
+        <Route path="error-logs" element={<ErrorLogsPage />} />
+        <Route path="actors" element={<ActorsManagementPage />} />
       </Route>
 
-      {/* Socket Test Page */}
+      {/* Student routes with layout */}
       <Route
-        path="/socket-test"
+        path="/student"
         element={
-          <ProtectedRoute>
-            <SocketTestPage />
+          <ProtectedRoute allowedRoles={["student"]}>
+            <StudentLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<StudentHome />} />
+      </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
       <Route
@@ -92,6 +108,15 @@ export default function App() {
         }
       />
       
+      <Route
+        path="/actors"
+        element={
+          <ProtectedRoute>
+            <ActorsManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="/" element={<Navigate to="/admin" replace />} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
@@ -101,6 +126,7 @@ export default function App() {
 function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
   const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState("checking");
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -111,10 +137,11 @@ function ProtectedRoute({ children, allowedRoles }) {
         if (isMounted) {
           setUser(response.data.user);
           setStatus('authenticated');
+          setStatus("authenticated");
         }
       })
       .catch(() => {
-        if (isMounted) setStatus('unauthenticated');
+        if (isMounted) setStatus("unauthenticated");
       });
 
     return () => {
@@ -122,7 +149,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     };
   }, [location.pathname]);
 
-  if (status === 'checking') {
+  if (status === "checking") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="rounded-2xl bg-white px-6 py-4 text-sm font-medium text-slate-700 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5">
@@ -132,7 +159,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (status === 'unauthenticated') {
+  if (status === "unauthenticated") {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
@@ -140,6 +167,7 @@ function ProtectedRoute({ children, allowedRoles }) {
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     // Redirect based on user's role
     if (user.role === 'student') {
+    if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
     return <Navigate to="/admin" replace />;
