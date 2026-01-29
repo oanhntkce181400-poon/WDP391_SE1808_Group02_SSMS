@@ -114,7 +114,11 @@ async function updatePermission(permissionId, payload) {
   const updates = {};
 
   if (payload.permName !== undefined) {
-    updates.permName = normalizeString(payload.permName);
+    const permName = normalizeString(payload.permName);
+    if (!permName) {
+      throw new Error('permName is required.');
+    }
+    updates.permName = permName;
   }
   if (payload.description !== undefined) {
     updates.description = normalizeString(payload.description);
@@ -124,10 +128,18 @@ async function updatePermission(permissionId, payload) {
   }
 
   if (payload.module !== undefined) {
-    updates.module = normalizeString(payload.module);
+    const module = normalizeString(payload.module);
+    if (!module) {
+      throw new Error('module is required.');
+    }
+    updates.module = module;
   }
   if (payload.action !== undefined) {
-    updates.action = normalizeString(payload.action);
+    const action = normalizeString(payload.action);
+    if (!action) {
+      throw new Error('action is required.');
+    }
+    updates.action = action;
   }
 
   const updated = await repo.updatePermission(permissionId, updates);
@@ -176,7 +188,11 @@ async function updateRole(actorUserId, roleId, payload) {
   const updates = {};
 
   if (payload.roleName !== undefined) {
-    updates.roleName = normalizeString(payload.roleName);
+    const roleName = normalizeString(payload.roleName);
+    if (!roleName) {
+      throw new Error('roleName is required.');
+    }
+    updates.roleName = roleName;
   }
   if (payload.description !== undefined) {
     updates.description = normalizeString(payload.description);
@@ -188,7 +204,11 @@ async function updateRole(actorUserId, roleId, payload) {
   // Protect system roles from structural changes.
   if (!role.isSystemRole) {
     if (payload.roleCode !== undefined) {
-      updates.roleCode = normalizeString(payload.roleCode);
+      const roleCode = normalizeString(payload.roleCode);
+      if (!roleCode) {
+        throw new Error('roleCode is required.');
+      }
+      updates.roleCode = roleCode;
     }
     if (payload.isSystemRole !== undefined) {
       updates.isSystemRole = Boolean(payload.isSystemRole);

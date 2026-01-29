@@ -1,67 +1,67 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Data arrays
+const newsItems = [
+  {
+    type: 'THÔNG BÁO QUAN TRỌNG',
+    title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
+    description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
+    date: '28/01/2026',
+  },
+  {
+    type: 'HỌC VỤ',
+    title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
+    description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
+    date: '25/01/2026',
+  },
+  {
+    type: 'SỰ KIỆN',
+    title: 'Ngày hội việc làm IT Job Fair 2024',
+    description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
+    date: '20/01/2026',
+  },
+  {
+    type: 'THI CỬ',
+    title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
+    description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
+    date: '15/01/2026',
+  },
+];
+
+const procedures = [
+  { label: 'Tạm hoãn học tập' },
+  { label: 'Đăng ký chuyển lớp' },
+  { label: 'Đăng ký thi cải thiện' },
+  { label: 'Xác nhận sinh viên' },
+  { label: 'Xem tất cả đơn từ...', isLink: true },
+];
+
+const lookupItems = [
+  { label: 'Tra cứu học phí', badge: null },
+  { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
+  { label: 'Đề cương môn học', badge: null },
+  { label: 'Danh sách wishlist môn học', badge: null },
+];
+
+const reportItems = [
+  { label: 'Điểm danh (Attendance)' },
+  { label: 'Bảng điểm học tập' },
+  { label: 'Báo cáo Mark Report' },
+  { label: 'Lịch sự giao dịch' },
+];
+
+const regulationItems = [
+  { label: 'Nội quy đào tạo' },
+  { label: 'Nội quy ký túc xá' },
+  { label: 'Quy định xét học bổng' },
+  { label: 'Quy trình thi cử' },
+];
+
 export default function StudentHome() {
   const [user, setUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedItems, setHighlightedItems] = useState(new Set());
   const itemRefs = useRef({});
-
-  // Data arrays
-  const newsItems = [
-    {
-      type: 'THÔNG BÁO QUAN TRỌNG',
-      title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
-      description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
-      date: '28/01/2026',
-    },
-    {
-      type: 'HỌC VỤ',
-      title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
-      description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
-      date: '25/01/2026',
-    },
-    {
-      type: 'SỰ KIỆN',
-      title: 'Ngày hội việc làm IT Job Fair 2024',
-      description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
-      date: '20/01/2026',
-    },
-    {
-      type: 'THI CỬ',
-      title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
-      description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
-      date: '15/01/2026',
-    },
-  ];
-
-  const procedures = [
-    { label: 'Tạm hoãn học tập' },
-    { label: 'Đăng ký chuyển lớp' },
-    { label: 'Đăng ký thi cải thiện' },
-    { label: 'Xác nhận sinh viên' },
-    { label: 'Xem tất cả đơn từ...', isLink: true },
-  ];
-
-  const lookupItems = [
-    { label: 'Tra cứu học phí', badge: null },
-    { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
-    { label: 'Đề cương môn học', badge: null },
-    { label: 'Danh sách wishlist môn học', badge: null },
-  ];
-
-  const reportItems = [
-    { label: 'Điểm danh (Attendance)' },
-    { label: 'Bảng điểm học tập' },
-    { label: 'Báo cáo Mark Report' },
-    { label: 'Lịch sự giao dịch' },
-  ];
-
-  const regulationItems = [
-    { label: 'Nội quy đào tạo' },
-    { label: 'Nội quy ký túc xá' },
-    { label: 'Quy định xét học bổng' },
-    { label: 'Quy trình thi cử' },
-  ];
 
   useEffect(() => {
     const authUser = localStorage.getItem('auth_user');
