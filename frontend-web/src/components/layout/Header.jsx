@@ -86,6 +86,8 @@ export default function Header() {
       return true;
     }
     if (href === '/admin/users' && location.pathname === '/admin/users') {
+      return true;
+    }
     if (href === '/admin/error-logs' && location.pathname === '/admin/error-logs') {
       return true;
     }
@@ -229,4 +231,3 @@ export default function Header() {
     </header>
   );
 }
-

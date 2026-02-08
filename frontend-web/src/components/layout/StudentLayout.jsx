@@ -11,6 +11,7 @@ export default function StudentLayout() {
 
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
+    { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📝' },
     { name: 'Thời khóa biểu', path: '/student/schedule', icon: '📅' },
     { name: 'Kết quả học tập', path: '/student/grades', icon: '📊' },
@@ -154,17 +155,31 @@ export default function StudentLayout() {
               </button>
 
               {/* User Menu */}
-              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-1.5">
+              <div className="relative group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-1.5">
                 <div className="text-right">
                   <p className="text-sm font-medium text-slate-900">{user.fullName || 'Student'}</p>
                   <p className="text-xs text-slate-500">{user.email}</p>
                 </div>
                 <button
-                  onClick={handleLogout}
-                  className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  className="rounded-md bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
                 >
-                  Đăng xuất
+                  ▼
                 </button>
+                {/* Dropdown Menu */}
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <Link
+                    to="/student/profile"
+                    className="block px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition rounded-t-lg border-b border-slate-100"
+                  >
+                    👤 Xem hồ sơ cá nhân
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition rounded-b-lg"
+                  >
+                    🚪 Đăng xuất
+                  </button>
+                </div>
               </div>
             </div>
           </div>

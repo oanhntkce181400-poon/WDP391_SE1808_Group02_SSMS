@@ -49,6 +49,8 @@ const StudentProfilePage = () => {
       const studentData = response.data || response;
       if (studentData) {
         setStudent(studentData);
+        // Update localStorage with latest user data
+        localStorage.setItem('auth_user', JSON.stringify(studentData));
         setEditFormData({
           fullName: studentData.fullName,
           email: studentData.email,
@@ -82,6 +84,8 @@ const StudentProfilePage = () => {
       const studentData = response.data || response;
       if (studentData) {
         setStudent(studentData);
+        // Update localStorage with new user data
+        localStorage.setItem('auth_user', JSON.stringify(studentData));
         setIsEditing(false);
         setSuccessMessage('Profile updated successfully!');
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -178,8 +182,9 @@ const StudentProfilePage = () => {
                     <input
                       type="text"
                       name="fullName"
-                      value={editFormData.fullName}
+                      value={editFormData.fullName || ''}
                       onChange={handleEditChange}
+                      placeholder="Enter full name"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -190,8 +195,9 @@ const StudentProfilePage = () => {
                     <input
                       type="email"
                       name="email"
-                      value={editFormData.email}
+                      value={editFormData.email || ''}
                       onChange={handleEditChange}
+                      placeholder="Enter email"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>

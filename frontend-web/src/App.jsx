@@ -18,12 +18,8 @@ import StudentHome from './pages/student/StudentHome';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
-import RoomManagement from './pages/admin/RoomManagement';
-import TimeslotManagement from './pages/admin/TimeslotManagement';
-import MajorManagement from './pages/admin/MajorManagement';
 import ErrorLogsPage from './pages/admin/ErrorLogsPage';
 import CurriculumList from './components/features/CurriculumList';
-import StudentHome from './pages/student/StudentHome';
 import ActorsManagementPage from './pages/admin/ActorsManagementPage';
 import authService from './services/authService';
 export default function App() {
@@ -37,7 +33,6 @@ export default function App() {
         path="/admin"
         element={
           <ProtectedRoute allowedRoles={['admin', 'staff']}>
-          <ProtectedRoute allowedRoles={["admin", "staff"]}>
             <AdminLayout />
           </ProtectedRoute>
         }
@@ -49,18 +44,16 @@ export default function App() {
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
         <Route path="majors" element={<MajorManagement />} />
-        <Route
-          path="prerequisites/:subjectId"
-          element={<SubjectPrerequisites />}
-        />
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
-        <Route path="curriculum" element={<CurriculumList />} />
+        <Route path="curriculum-list" element={<CurriculumList />} />
         <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
+        <Route path="error-logs" element={<ErrorLogsPage />} />
+        <Route path="actors" element={<ActorsManagementPage />} />
       </Route>
 
-       {/* Student routes with layout */}
+      {/* Student routes with layout */}
       <Route
         path="/student"
         element={
@@ -71,21 +64,6 @@ export default function App() {
       >
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
-        <Route path="majors" element={<MajorManagement />} />
-        <Route path="error-logs" element={<ErrorLogsPage />} />
-        <Route path="actors" element={<ActorsManagementPage />} />
-      </Route>
-
-      {/* Student routes with layout */}
-      <Route
-        path="/student"
-        element={
-          <ProtectedRoute allowedRoles={["student"]}>
-            <StudentLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<StudentHome />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -98,16 +76,6 @@ export default function App() {
         }
       />
 
-      {/* Student profile route */}
-      <Route
-        path="/student/profile"
-        element={
-          <ProtectedRoute>
-            <StudentProfilePage />
-          </ProtectedRoute>
-        }
-      />
-      
       <Route
         path="/actors"
         element={
@@ -126,7 +94,6 @@ export default function App() {
 function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
   const [status, setStatus] = useState('checking');
-  const [status, setStatus] = useState("checking");
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -137,7 +104,6 @@ function ProtectedRoute({ children, allowedRoles }) {
         if (isMounted) {
           setUser(response.data.user);
           setStatus('authenticated');
-          setStatus("authenticated");
         }
       })
       .catch(() => {
@@ -167,7 +133,6 @@ function ProtectedRoute({ children, allowedRoles }) {
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     // Redirect based on user's role
     if (user.role === 'student') {
-    if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
     return <Navigate to="/admin" replace />;

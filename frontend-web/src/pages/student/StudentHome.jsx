@@ -63,63 +63,6 @@ export default function StudentHome() {
   const [highlightedItems, setHighlightedItems] = useState(new Set());
   const itemRefs = useRef({});
 
-  // Data arrays
-  const newsItems = [
-    {
-      type: 'THÔNG BÁO QUAN TRỌNG',
-      title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
-      description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
-      date: '28/01/2026',
-    },
-    {
-      type: 'HỌC VỤ',
-      title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
-      description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
-      date: '25/01/2026',
-    },
-    {
-      type: 'SỰ KIỆN',
-      title: 'Ngày hội việc làm IT Job Fair 2024',
-      description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
-      date: '20/01/2026',
-    },
-    {
-      type: 'THI CỬ',
-      title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
-      description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
-      date: '15/01/2026',
-    },
-  ];
-
-  const procedures = [
-    { label: 'Tạm hoãn học tập' },
-    { label: 'Đăng ký chuyển lớp' },
-    { label: 'Đăng ký thi cải thiện' },
-    { label: 'Xác nhận sinh viên' },
-    { label: 'Xem tất cả đơn từ...', isLink: true },
-  ];
-
-  const lookupItems = [
-    { label: 'Tra cứu học phí', badge: null },
-    { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
-    { label: 'Đề cương môn học', badge: null },
-    { label: 'Danh sách wishlist môn học', badge: null },
-  ];
-
-  const reportItems = [
-    { label: 'Điểm danh (Attendance)' },
-    { label: 'Bảng điểm học tập' },
-    { label: 'Báo cáo Mark Report' },
-    { label: 'Lịch sự giao dịch' },
-  ];
-
-  const regulationItems = [
-    { label: 'Nội quy đào tạo' },
-    { label: 'Nội quy ký túc xá' },
-    { label: 'Quy định xét học bổng' },
-    { label: 'Quy trình thi cử' },
-  ];
-
   useEffect(() => {
     const authUser = localStorage.getItem('auth_user');
     if (authUser) {
@@ -162,7 +105,6 @@ export default function StudentHome() {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [searchQuery]);
   }, [searchQuery, procedures, lookupItems, reportItems, regulationItems]);
 
   const setItemRef = (id, element) => {
@@ -185,11 +127,6 @@ export default function StudentHome() {
               </h1>
               <p className="mt-1 text-sm text-slate-600">
                 Chào mừng bạn đến với Cổng thông tin Sinh viên - FPT University
-              <h1 className="text-2xl font-bold text-slate-900">
-                Xin chào, {user?.fullName || 'Sinh viên'}!
-              </h1>
-              <p className="mt-1 text-sm text-slate-600">
-                Trang chủ sinh viên
               </p>
             </div>
             {/* Search Box */}
@@ -200,8 +137,6 @@ export default function StudentHome() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="🔍 Tìm kiếm thủ tục, tra cứu, báo cáo..."
                 className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-10 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                placeholder="Tìm kiếm..."
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <svg
                 className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
@@ -241,8 +176,6 @@ export default function StudentHome() {
                 <span className="font-bold text-blue-600">{highlightedItems.size}</span> kết quả
                 cho "{searchQuery}"
               </span>
-            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
-              Tìm thấy <strong>{highlightedItems.size}</strong> kết quả cho "{searchQuery}"
             </div>
           )}
         </div>
@@ -256,10 +189,6 @@ export default function StudentHome() {
               <div className="mb-5 flex items-center gap-2">
                 <span className="text-2xl">📢</span>
                 <h2 className="text-lg font-bold text-slate-900">Thông báo & Tin tức</h2>
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xl">📢</span>
-                <h2 className="text-lg font-semibold text-slate-900">Thông báo & Tin tức</h2>
               </div>
               <div className="space-y-3">
                 {newsItems.map((item, index) => (
@@ -293,19 +222,6 @@ export default function StudentHome() {
                         {item.title}
                       </p>
                       <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                    className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-400 hover:bg-blue-50"
-                  >
-                    <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                          {item.type}
-                        </span>
-                        <span className="text-xs text-slate-500">{item.date}</span>
-                      </div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-600">
                         {item.description}
                       </p>
                     </div>
@@ -319,10 +235,6 @@ export default function StudentHome() {
               <div className="mb-5 flex items-center gap-2">
                 <span className="text-2xl">📝</span>
                 <h3 className="text-lg font-bold text-slate-900">Đơn từ & Thủ tục</h3>
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xl">📝</span>
-                <h3 className="text-lg font-semibold text-slate-900">Đơn từ & Thủ tục</h3>
               </div>
               <div className="space-y-2">
                 {procedures.map((item, index) => {
@@ -333,7 +245,6 @@ export default function StudentHome() {
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
-                      className={`flex w-full items-center justify-between rounded-lg px-4 py-2.5 text-left text-sm transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
                           : item.isLink
@@ -348,12 +259,6 @@ export default function StudentHome() {
                       <span className={`${item.isLink ? 'text-blue-600' : 'text-slate-400'}`}>
                         {item.isLink ? '»' : '→'}
                       </span>
-                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      <span className="text-slate-400">→</span>
                     </button>
                   );
                 })}
@@ -368,10 +273,6 @@ export default function StudentHome() {
               <div className="mb-5 flex items-center gap-2">
                 <span className="text-2xl">🔎</span>
                 <h3 className="text-lg font-bold text-slate-900">Tra cứu thông tin</h3>
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xl">🔎</span>
-                <h3 className="text-lg font-semibold text-slate-900">Tra cứu thông tin</h3>
               </div>
               <div className="space-y-2">
                 {lookupItems.map((item, index) => {
@@ -385,10 +286,6 @@ export default function StudentHome() {
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
                           : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
-                      className={`flex w-full items-center justify-between rounded-lg px-4 py-2.5 text-left text-sm transition ${
-                        highlighted
-                          ? 'bg-yellow-100 ring-2 ring-yellow-400'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -398,7 +295,6 @@ export default function StudentHome() {
                       <div className="flex items-center gap-2">
                         {item.badge && (
                           <span className="animate-pulse rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                             {item.badge}
                           </span>
                         )}
@@ -415,10 +311,6 @@ export default function StudentHome() {
               <div className="mb-5 flex items-center gap-2">
                 <span className="text-2xl">📊</span>
                 <h3 className="text-lg font-bold text-slate-900">Báo cáo học tập</h3>
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xl">📊</span>
-                <h3 className="text-lg font-semibold text-slate-900">Báo cáo học tập</h3>
               </div>
               <div className="space-y-2">
                 {reportItems.map((item, index) => {
@@ -450,10 +342,6 @@ export default function StudentHome() {
               <div className="mb-5 flex items-center gap-2">
                 <span className="text-2xl">📋</span>
                 <h3 className="text-lg font-bold text-slate-900">Quy định & Nội quy</h3>
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xl">📋</span>
-                <h3 className="text-lg font-semibold text-slate-900">Quy định & Nội quy</h3>
               </div>
               <div className="space-y-2">
                 {regulationItems.map((item, index) => {

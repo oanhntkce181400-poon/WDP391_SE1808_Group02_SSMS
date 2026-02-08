@@ -123,9 +123,7 @@ exports.updateAvatar = async (req, res) => {
     res.json({
       success: true,
       message: 'Avatar updated successfully',
-      data: {
-        avatarUrl: user.avatarUrl,
-      },
+      data: user,
     });
   } catch (error) {
     res.status(500).json({

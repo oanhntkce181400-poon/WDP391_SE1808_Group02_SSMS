@@ -66,11 +66,6 @@ class ErrorLogService {
    * Lấy thống kê errors
    */
   async getErrorStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [totalToday, errorsByType, errorsByStatus] = await Promise.all([
-      ErrorLog.countDocuments({ createdAt: { $gte: today } }),
     // Tính từ 24h trước (không phải từ 00:00 hôm nay)
     const last24Hours = new Date();
     last24Hours.setHours(last24Hours.getHours() - 24);
