@@ -266,18 +266,9 @@ exports.importUsers = async (req, res) => {
       });
     }
 
-    // Try to start transaction (will fail on standalone MongoDB)
-    try {
-      session = await User.startSession();
-      session.startTransaction();
-      transactionStarted = true;
-      console.log('Transaction started');
-    } catch (txnErr) {
-      console.warn('Transaction not available, proceeding without transaction:', txnErr.message);
-      // Continue without transaction
-    }
-
-    console.log('Importing users from Excel...');
+    // Simple fallback: skip transactions entirely for standalone MongoDB
+    // Transactions only work with replica sets
+    console.log('Importing users from Excel... (without transaction support for standalone MongoDB)');
 
     // Parse Excel file from buffer
     const workbook = new ExcelJS.Workbook();
@@ -285,7 +276,9 @@ exports.importUsers = async (req, res) => {
     const worksheet = workbook.getWorksheet(1);
 
     if (!worksheet) {
-      await session.abortTransaction();
+      if (transactionStarted) {
+        await session.abortTransaction();
+      }
       return res.status(400).json({
         success: false,
         message: 'Invalid Excel file: No worksheet found',
@@ -373,7 +366,8 @@ exports.importUsers = async (req, res) => {
           importSource: 'excel_import',
         });
 
-        const savedUser = await newUser.save(transactionStarted ? { session } : {});
+        // Save without transaction (MongoDB standalone doesn't support transactions)
+        const savedUser = await newUser.save();
 
         // Create default wallet for user
         const wallet = new Wallet({
@@ -385,7 +379,7 @@ exports.importUsers = async (req, res) => {
           status: 'active',
         });
 
-        await wallet.save(transactionStarted ? { session } : {});
+        await wallet.save();
 
         importedUsers.push({
           rowIndex: rowData.rowIndex,
@@ -404,11 +398,7 @@ exports.importUsers = async (req, res) => {
       }
     }
 
-    // Commit transaction if started
-    if (transactionStarted) {
-      await session.commitTransaction();
-      console.log('Transaction committed');
-    }
+    // No transaction to commit (skipped for standalone MongoDB)
     console.log(`Successfully imported ${importedUsers.length} users`);
 
     res.json({
