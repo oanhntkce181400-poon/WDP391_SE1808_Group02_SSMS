@@ -15,6 +15,7 @@ import UserListPage from './pages/UserListPage';
 import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
 import MajorManagement from './pages/admin/MajorManagement';
 import StudentHome from './pages/student/StudentHome';
+import StudentExamSchedule from './pages/student/StudentExamSchedule';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
 import CurriculumList from './components/features/CurriculumList';
@@ -60,6 +61,7 @@ export default function App() {
       >
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
+        <Route path="exam-schedule" element={<StudentExamSchedule />} />
       </Route>
 
       {/* Socket Test Page */}
