@@ -44,6 +44,8 @@ app.use('/api/timeslots', require('./routes/timeslot.routes'));
 app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
 app.use('/api/majors', require('./routes/major.routes'));
 app.use('/api/error-logs', require('./routes/errorLog.routes'));
+app.use('/api/classes', require('./routes/classSection.routes'));
+app.use('/api/exams', require('./routes/exam.routes'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {

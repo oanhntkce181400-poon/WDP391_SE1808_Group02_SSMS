@@ -1,0 +1,72 @@
+const mongoose = require('mongoose');
+
+const classSectionSchema = new mongoose.Schema(
+  {
+    classCode: { 
+      type: String, 
+      required: true, 
+      unique: true, 
+      trim: true 
+    },
+    className: { 
+      type: String, 
+      required: true, 
+      trim: true 
+    },
+    subject: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Subject', 
+      required: true 
+    },
+    teacher: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Teacher', 
+      required: true 
+    },
+    room: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Room', 
+      required: true 
+    },
+    timeslot: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Timeslot', 
+      required: true 
+    },
+    semester: { 
+      type: Number, 
+      required: true 
+    },
+    academicYear: { 
+      type: String, 
+      required: true 
+    },
+    maxCapacity: { 
+      type: Number, 
+      required: true,
+      min: 1 
+    },
+    currentEnrollment: { 
+      type: Number, 
+      default: 0,
+      min: 0 
+    },
+    status: { 
+      type: String, 
+      enum: ['active', 'cancelled', 'completed'], 
+      default: 'active' 
+    },
+  },
+  { timestamps: true }
+);
+
+// Indexes
+classSectionSchema.index({ classCode: 1 });
+classSectionSchema.index({ subject: 1 });
+classSectionSchema.index({ teacher: 1 });
+classSectionSchema.index({ academicYear: 1, semester: 1 });
+classSectionSchema.index({ status: 1 });
+
+const ClassSection = mongoose.model('ClassSection', classSectionSchema);
+
+module.exports = ClassSection;

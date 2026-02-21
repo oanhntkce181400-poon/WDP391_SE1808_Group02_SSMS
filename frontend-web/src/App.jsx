@@ -15,6 +15,7 @@ import UserListPage from './pages/UserListPage';
 import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
 import MajorManagement from './pages/admin/MajorManagement';
 import StudentHome from './pages/student/StudentHome';
+import ExamSchedulePage from './pages/student/ExamSchedulePage';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
@@ -64,6 +65,7 @@ export default function App() {
       >
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
+        <Route path="exams" element={<ExamSchedulePage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}

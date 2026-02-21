@@ -12,8 +12,9 @@ export default function StudentLayout() {
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
     { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
+    { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📝' },
-    { name: 'Thời khóa biểu', path: '/student/schedule', icon: '📅' },
+    { name: 'Thời khóa biểu', path: '/student/schedule', icon: '📋' },
     { name: 'Kết quả học tập', path: '/student/grades', icon: '📊' },
     { name: 'Tài chính', path: '/student/finance', icon: '💰' },
     { name: 'Giáo trình & Tài liệu', path: '/student/materials', icon: '📚' },

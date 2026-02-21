@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ExamScheduleSummary from '../../components/features/ExamScheduleSummary';
 
 // Data arrays
 const newsItems = [
@@ -38,7 +40,7 @@ const procedures = [
 
 const lookupItems = [
   { label: 'Tra cứu học phí', badge: null },
-  { label: 'Lịch thi & Địa điểm', badge: 'MỚI' },
+  { label: 'Lịch thi & Địa điểm', badge: 'MỚI', isLink: true },
   { label: 'Đề cương môn học', badge: null },
   { label: 'Danh sách wishlist môn học', badge: null },
 ];
@@ -62,6 +64,7 @@ export default function StudentHome() {
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedItems, setHighlightedItems] = useState(new Set());
   const itemRefs = useRef({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     const authUser = localStorage.getItem('auth_user');
@@ -282,9 +285,16 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
+                      onClick={() => {
+                        if (item.isLink && item.label === 'Lịch thi & Địa điểm') {
+                          navigate('/student/exams');
+                        }
+                      }}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
+                          : item.isLink
+                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md cursor-pointer'
                           : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
                       }`}
                     >
@@ -298,13 +308,18 @@ export default function StudentHome() {
                             {item.badge}
                           </span>
                         )}
-                        <span className="text-slate-400">→</span>
+                        <span className={`${item.isLink ? 'text-blue-600' : 'text-slate-400'}`}>
+                          {item.isLink ? '»' : '→'}
+                        </span>
                       </div>
                     </button>
                   );
                 })}
               </div>
             </div>
+
+            {/* Exam Schedule Summary */}
+            <ExamScheduleSummary />
 
             {/* Reports */}
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
