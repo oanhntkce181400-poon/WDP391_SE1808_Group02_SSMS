@@ -1,62 +1,170 @@
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import axiosClient from '../../services/axiosClient';
 
-export default function Dashboard() {
+const Dashboard = () => {
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalClasses: 0,
+    totalSubjects: 0,
+    totalStudents: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadDashboardStats();
+  }, []);
+
+  const loadDashboardStats = async () => {
+    try {
+      setLoading(true);
+      // Try to load basic statistics
+      const [users, classes, subjects] = await Promise.all([
+        axiosClient.get('/users?limit=1').catch(() => ({ data: { total: 0 } })),
+        axiosClient.get('/classes?limit=1').catch(() => ({ data: { total: 0 } })),
+        axiosClient.get('/subjects?limit=1').catch(() => ({ data: { total: 0 } }))
+      ]);
+
+      setStats({
+        totalUsers: users?.data?.total || 0,
+        totalClasses: classes?.data?.total || 0,
+        totalSubjects: subjects?.data?.total || 0,
+        totalStudents: 0
+      });
+    } catch (err) {
+      console.error('Error loading dashboard stats:', err);
+      setError('Lỗi tải thống kê');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const dashboardCards = [
+    {
+      title: 'Người dùng',
+      value: stats.totalUsers,
+      icon: '👥',
+      color: 'blue'
+    },
+    {
+      title: 'Lớp học',
+      value: stats.totalClasses,
+      icon: '🏫',
+      color: 'green'
+    },
+    {
+      title: 'Môn học',
+      value: stats.totalSubjects,
+      icon: '📚',
+      color: 'purple'
+    },
+    {
+      title: 'Sinh viên',
+      value: stats.totalStudents,
+      icon: '🎓',
+      color: 'orange'
+    }
+  ];
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">Dashboard Admin</h1>
-        <p className="text-slate-600">Chào mừng đến với hệ thống quản lý SSMS</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">📊 Admin Dashboard</h1>
+        <p className="text-gray-600 mt-2">Chào mừng quay trở lại. Đây là tổng quan của hệ thống.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Quản lý môn học */}
-        <Link
-          to="/admin/subjects"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">📚</span>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-slate-800">Quản lý Môn học</h3>
-              <p className="text-sm text-slate-600">Quản lý thông tin môn học</p>
-            </div>
-          </div>
-        </Link>
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          ⚠️ {error}
+        </div>
+      )}
 
-        {/* Quản lý khung chương trình */}
-        <Link
-          to="/admin/curriculum"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">📋</span>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-slate-800">Khung chương trình</h3>
-              <p className="text-sm text-slate-600">Quản lý khung chương trình</p>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {dashboardCards.map((card, idx) => (
+          <div
+            key={idx}
+            className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition`}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">{card.title}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {loading ? '...' : card.value}
+                </p>
+              </div>
+              <span className="text-4xl">{card.icon}</span>
             </div>
           </div>
-        </Link>
+        ))}
+      </div>
 
-        {/* Quản lý người dùng */}
-        <Link
-          to="/admin/users"
-          className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">👥</span>
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-slate-800">Quản lý Người dùng</h3>
-              <p className="text-sm text-slate-600">Quản lý tài khoản người dùng</p>
-            </div>
-          </div>
-        </Link>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">🚀 Hành động nhanh</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <a
+            href="/admin/subjects"
+            className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition"
+          >
+            <p className="font-semibold text-gray-900">📚 Quản lý Môn học</p>
+            <p className="text-sm text-gray-600 mt-1">Thêm, sửa, xóa môn học</p>
+          </a>
+          <a
+            href="/admin/users"
+            className="p-4 border border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition"
+          >
+            <p className="font-semibold text-gray-900">👥 Quản lý Người dùng</p>
+            <p className="text-sm text-gray-600 mt-1">Quản lý tài khoản người dùng</p>
+          </a>
+          <a
+            href="/admin/classes"
+            className="p-4 border border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition"
+          >
+            <p className="font-semibold text-gray-900">🏫 Quản lý Lớp học</p>
+            <p className="text-sm text-gray-600 mt-1">Quản lý danh sách lớp học</p>
+          </a>
+          <a
+            href="/admin/rooms"
+            className="p-4 border border-gray-200 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition"
+          >
+            <p className="font-semibold text-gray-900">🚪 Quản lý Phòng học</p>
+            <p className="text-sm text-gray-600 mt-1">Cấu hình phòng học</p>
+          </a>
+          <a
+            href="/admin/timeslots"
+            className="p-4 border border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition"
+          >
+            <p className="font-semibold text-gray-900">⏰ Quản lý Giờ học</p>
+            <p className="text-sm text-gray-600 mt-1">Cấu hình giờ học</p>
+          </a>
+          <a
+            href="/admin/feedback-management"
+            className="p-4 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition"
+          >
+            <p className="font-semibold text-gray-900">📝 Quản lý Đánh giá</p>
+            <p className="text-sm text-gray-600 mt-1">Template và form đánh giá</p>
+          </a>
+        </div>
+      </div>
+
+      {/* Welcome Message */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">👋 Chào mừng Admin!</h3>
+        <p className="text-gray-700 mb-4">
+          Hệ thống quản lý học tập của bạn đã sẵn sàng. Bạn có thể bắt đầu bằng cách:
+        </p>
+        <ul className="space-y-2 text-gray-700">
+          <li>✓ Tạo mới môn học hoặc cập nhật thông tin hiện có</li>
+          <li>✓ Quản lý danh sách người dùng và quyền hạn</li>
+          <li>✓ Cấu hình lớp học, phòng học và giờ học</li>
+          <li>✓ Tạo các template đánh giá cho sinh viên</li>
+        </ul>
       </div>
     </div>
   );
-}
+};
+
+export default Dashboard;

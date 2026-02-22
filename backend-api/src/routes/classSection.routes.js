@@ -12,6 +12,9 @@ const router = express.Router();
 // GET /api/classes - Get all class sections
 router.get('/', authMiddleware, classController.getAllClassSections);
 
+// GET /api/classes/my-classes - Get current student's enrolled classes (must be before /:classId)
+router.get('/my-classes', authMiddleware, classController.getMyClasses);
+
 // GET /api/classes/:classId - Get class section details
 router.get('/:classId', authMiddleware, classController.getClassSectionById);
 

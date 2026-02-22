@@ -430,6 +430,57 @@ const dropCourse = async (req, res) => {
   }
 };
 
+/**
+ * Get current student's enrolled classes
+ * GET /api/classes/my-classes
+ */
+const getMyClasses = async (req, res) => {
+  try {
+    const studentId = req.auth?.sub;
+    if (!studentId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const enrollments = await ClassEnrollment.find({ 
+      student: studentId,
+      status: { $in: ['active', 'completed'] }
+    })
+      .populate({
+        path: 'classSection',
+        populate: [
+          { path: 'subject', select: 'subjectCode subjectName credits' },
+          { path: 'teacher', select: 'teacherCode fullName' },
+          { path: 'room', select: 'roomCode roomName roomNumber' },
+          { path: 'timeslot', select: 'groupName startTime endTime dayOfWeek' },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    // Extract class sections from enrollments
+    const classes = enrollments.map(e => ({
+      ...e.classSection.toObject(),
+      enrollmentId: e._id,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: classes,
+      total: classes.length,
+    });
+  } catch (error) {
+    console.error('Error getting my classes:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get my classes',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createClassSection,
   getAllClassSections,
@@ -440,4 +491,5 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  getMyClasses,
 };
