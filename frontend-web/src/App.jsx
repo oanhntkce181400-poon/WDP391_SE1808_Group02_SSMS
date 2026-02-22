@@ -23,6 +23,9 @@ import ErrorLogsPage from './pages/admin/ErrorLogsPage';
 import CurriculumList from './components/features/CurriculumList';
 import ActorsManagementPage from './pages/admin/ActorsManagementPage';
 import authService from './services/authService';
+import FeedbackManagementPage from './pages/admin/FeedbackManagementPage';
+import FeedbackStatisticsPage from './pages/admin/FeedbackStatisticsPage';
+
 export default function App() {
   return (
     <Routes>
@@ -52,6 +55,8 @@ export default function App() {
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
         <Route path="error-logs" element={<ErrorLogsPage />} />
         <Route path="actors" element={<ActorsManagementPage />} />
+        <Route path="feedback-management" element={<FeedbackManagementPage />} />
+        <Route path="feedback-statistics" element={<FeedbackStatisticsPage />} />
       </Route>
 
       {/* Student routes with layout */}
@@ -142,3 +147,11 @@ function ProtectedRoute({ children, allowedRoles }) {
 
   return children;
 }
+const routes = [
+  {
+    path: '/admin/feedback-management',
+    element: <FeedbackManagementPage />,
+    requiresAuth: true,
+    roles: ['admin', 'staff', 'academicAdmin']
+  }
+];

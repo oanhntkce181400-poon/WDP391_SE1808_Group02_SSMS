@@ -55,10 +55,12 @@ export default function Header() {
     { label: 'Phòng học', href: '/admin/rooms' },
     { label: 'Giờ học', href: '/admin/timeslots' },
     { label: 'Khung chương trình', href: '/admin/curriculum' },
- { label: 'Quản lý người dùng', href: '/admin/users' },
+    { label: 'Quản lý người dùng', href: '/admin/users' },
     { label: 'Học phí', href: '/admin/tuition-fees' },
+    { label: 'Đánh giá', href: '/admin/feedback-management' },
+    { label: 'Thống kê Đánh giá', href: '/admin/feedback-statistics' },
     { label: 'Cấu hình', href: '/admin/settings' },
-    { label: 'Cấu hình', href: '/admin/error-logs' },
+    { label: 'Nhật ký lỗi', href: '/admin/error-logs' },
   ];
 
   // Determine active item based on current path
@@ -89,6 +91,9 @@ export default function Header() {
       return true;
     }
     if (href === '/admin/error-logs' && location.pathname === '/admin/error-logs') {
+      return true;
+    }
+    if (href === '/admin/feedback-management' && location.pathname === '/admin/feedback-management') {
       return true;
     }
     return false;

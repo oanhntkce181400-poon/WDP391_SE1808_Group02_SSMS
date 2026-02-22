@@ -46,6 +46,9 @@ app.use('/api/majors', require('./routes/major.routes'));
 app.use('/api/error-logs', require('./routes/errorLog.routes'));
 app.use('/api/classes', require('./routes/classSection.routes'));
 app.use('/api/exams', require('./routes/exam.routes'));
+app.use('/api/feedback-templates', require('./routes/feedbackTemplate.routes'));
+app.use('/api/feedback-submissions', require('./routes/feedbackSubmission.routes'));
+app.use('/api/feedback-statistics', require('./routes/feedbackStatistics.routes'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
