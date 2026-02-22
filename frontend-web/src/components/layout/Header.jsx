@@ -12,7 +12,9 @@ export default function Header() {
   const [user, setUser] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false); // Dropdown "Thêm ▾"
   const menuRef = useRef(null);
+  const moreRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -30,11 +32,15 @@ export default function Header() {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsMenuOpen(false);
       }
+      if (moreRef.current && !moreRef.current.contains(event.target)) {
+        setIsMoreOpen(false);
+      }
     };
 
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setIsMenuOpen(false);
+        setIsMoreOpen(false);
       }
     };
 
@@ -46,57 +52,35 @@ export default function Header() {
     };
   }, []);
 
-  const navItems = [
-    { label: 'Lớp học', href: '#' },
-    { label: 'Xếp lịch', href: '#' },
-    { label: 'Chuyên ngành', href: '/admin/majors' },
-    { label: 'Giảng viên', href: '#' },
-    { label: 'Môn học', href: '/admin/subjects' },
-    { label: 'Phòng học', href: '/admin/rooms' },
-    { label: 'Giờ học', href: '/admin/timeslots' },
-    { label: 'Khung chương trình', href: '/admin/curriculum' },
-    { label: 'Quản lý người dùng', href: '/admin/users' },
-    { label: 'Học phí', href: '/admin/tuition-fees' },
-    { label: 'Đánh giá', href: '/admin/feedback-management' },
-    { label: 'Thống kê Đánh giá', href: '/admin/feedback-statistics' },
-    { label: 'Cấu hình', href: '/admin/settings' },
-    { label: 'Nhật ký lỗi', href: '/admin/error-logs' },
+  const primaryNav = [
+    { label: 'Lớp học',             href: '#' },
+    { label: 'Môn học',             href: '/admin/subjects' },
+    { label: 'Phòng học',           href: '/admin/rooms' },
+    { label: 'Khung chương trình',  href: '/admin/curriculum' },
+    { label: 'Người dùng',          href: '/admin/users' },
+    { label: 'Đơn từ',             href: '/admin/requests' },
+    { label: 'Điểm danh',           href: '/admin/attendance' },
+    { label: 'Đánh giá',            href: '/admin/feedback-management' },
+    { label: 'Thống kê Đánh giá',   href: '/admin/feedback-statistics' },
   ];
 
-  // Determine active item based on current path
+  // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
+  const moreNav = [
+    { label: 'Xếp lịch',      href: '#' },
+    { label: 'Chuyên ngành',  href: '/admin/majors' },
+    { label: 'Giảng viên',    href: '#' },
+    { label: 'Giờ học',       href: '/admin/timeslots' },
+    { label: 'Học phí',       href: '/admin/tuition-fees' },
+    { label: '─────────────', href: null }, // Đường kẻ phân cách
+    { label: 'Cài đặt',       href: '/admin/settings' },
+    { label: 'Nhật ký lỗi',   href: '/admin/error-logs' },
+    { label: 'Nhân sự',       href: '/admin/actors' },
+  ];
+
+  // Kiểm tra link có đang active không
   const getActiveItem = (href) => {
-    if (href === '#') return false;
-    if (href === '/admin/subjects' && (location.pathname === '/admin/subjects' || location.pathname.startsWith('/admin/prerequisites/'))) {
-      return true;
-    }
-    if (href === '/admin/rooms' && location.pathname === '/admin/rooms') {
-      return true;
-    }
-    if (href === '/admin/timeslots' && location.pathname === '/admin/timeslots') {
-      return true;
-    }
-    if (href === '/admin/curriculum' && (location.pathname === '/admin/curriculum' || location.pathname.startsWith('/admin/curriculum/') && location.pathname.endsWith('/setup'))) {
-      return true;
-    }
-    if (href === '/admin/settings' && location.pathname === '/admin/settings') {
-      return true;
-    }
-    if (href === '/admin/tuition-fees' && location.pathname === '/admin/tuition-fees') {
-      return true;
-    }
-    if (href === '/admin/majors' && location.pathname === '/admin/majors') {
-      return true;
-    }
-    if (href === '/admin/users' && location.pathname === '/admin/users') {
-      return true;
-    }
-    if (href === '/admin/error-logs' && location.pathname === '/admin/error-logs') {
-      return true;
-    }
-    if (href === '/admin/feedback-management' && location.pathname === '/admin/feedback-management') {
-      return true;
-    }
-    return false;
+    if (!href || href === '#') return false;
+    return location.pathname === href || location.pathname.startsWith(href + '/');
   };
 
   const avatarUrl =
@@ -135,10 +119,11 @@ export default function Header() {
           </div>
         </div>
         <nav className="hidden lg:flex items-center gap-0.5">
-          {navItems.map((item, index) => (
+          {/* Các mục chính luôn hiện */}
+          {primaryNav.map((item, index) => (
             <Link
               key={index}
-              className={`px-3 lg:px-4 py-1.5 lg:py-2 text-xs lg:text-sm font-medium transition-colors rounded-md ${
+              className={`px-2.5 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-colors rounded-md whitespace-nowrap ${
                 getActiveItem(item.href)
                   ? 'text-white bg-white/10'
                   : 'text-slate-300 hover:text-white'
@@ -148,6 +133,47 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
+
+          {/* Dropdown "Thêm ▾" cho các mục còn lại */}
+          <div ref={moreRef} className="relative">
+            <button
+              onClick={() => setIsMoreOpen((p) => !p)}
+              className={`flex items-center gap-1 px-2.5 lg:px-3 py-1.5 text-xs lg:text-sm font-medium rounded-md transition-colors ${
+                isMoreOpen ? 'text-white bg-white/20' : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Thêm
+              <span className={`text-[10px] transition-transform ${
+                isMoreOpen ? 'scale-y-[-1]' : ''
+              }`}>▾</span>
+            </button>
+
+            {/* Menu thả xuống */}
+            {isMoreOpen && (
+              <div className="absolute left-0 top-full mt-1.5 w-48 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-slate-900/10 z-50">
+                {moreNav.map((item, index) => {
+                  // Đường kẻ phân cách
+                  if (!item.href) {
+                    return <div key={index} className="my-1 border-t border-slate-100" />;
+                  }
+                  return (
+                    <Link
+                      key={index}
+                      to={item.href}
+                      onClick={() => setIsMoreOpen(false)}
+                      className={`block px-4 py-2 text-sm transition-colors ${
+                        getActiveItem(item.href)
+                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
       </div>
       <div className="flex items-center gap-3 lg:gap-6">

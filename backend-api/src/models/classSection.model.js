@@ -56,6 +56,12 @@ const classSectionSchema = new mongoose.Schema(
       enum: ['active', 'cancelled', 'completed'], 
       default: 'active' 
     },
+    // Ngày học trong tuần: 1=Thứ 2, 2=Thứ 3, ..., 6=Thứ 7, 7=Chủ nhật
+    dayOfWeek: {
+      type: Number,
+      min: 1,
+      max: 7,
+    },
   },
   { timestamps: true }
 );

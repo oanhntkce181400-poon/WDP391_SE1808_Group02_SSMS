@@ -31,25 +31,25 @@ const newsItems = [
 ];
 
 const procedures = [
-  { label: 'Tạm hoãn học tập' },
-  { label: 'Đăng ký chuyển lớp' },
-  { label: 'Đăng ký thi cải thiện' },
-  { label: 'Xác nhận sinh viên' },
-  { label: 'Xem tất cả đơn từ...', isLink: true },
+  { label: 'Tạm hoãn học tập',         path: '/student/applications' },
+  { label: 'Đăng ký chuyển lớp',        path: '/student/applications' },
+  { label: 'Đăng ký thi cải thiện',     path: '/student/applications' },
+  { label: 'Xác nhận sinh viên',         path: '/student/applications' },
+  { label: 'Xem tất cả đơn từ...', isLink: true, path: '/student/applications' },
 ];
 
 const lookupItems = [
-  { label: 'Tra cứu học phí', badge: null },
-  { label: 'Lịch thi & Địa điểm', badge: 'MỚI', isLink: true },
-  { label: 'Đề cương môn học', badge: null },
-  { label: 'Danh sách wishlist môn học', badge: null },
+  { label: 'Tra cứu học phí',            badge: null, path: '/student/finance' },
+  { label: 'Lịch thi & Địa điểm',        badge: 'MỚI', isLink: true, path: '/student/exams' },
+  { label: 'Đề cương môn học',           badge: null, path: null },
+  { label: 'Danh sách wishlist môn học', badge: null, path: null },
 ];
 
 const reportItems = [
-  { label: 'Điểm danh (Attendance)' },
-  { label: 'Bảng điểm học tập' },
-  { label: 'Báo cáo Mark Report' },
-  { label: 'Lịch sự giao dịch' },
+  { label: 'Điểm danh (Attendance)',  path: '/student/schedule' },
+  { label: 'Bảng điểm học tập',       path: null },
+  { label: 'Báo cáo Mark Report',     path: null },
+  { label: 'Lịch sử giao dịch',       path: '/student/finance' },
 ];
 
 const regulationItems = [
@@ -247,12 +247,13 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
+                      onClick={() => item.path && navigate(item.path)}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
                           : item.isLink
-                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
+                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md cursor-pointer'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm cursor-pointer'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -285,17 +286,13 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      onClick={() => {
-                        if (item.isLink && item.label === 'Lịch thi & Địa điểm') {
-                          navigate('/student/exams');
-                        }
-                      }}
+                      onClick={() => item.path && navigate(item.path)}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
-                          : item.isLink
+                          : item.path
                           ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md cursor-pointer'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm cursor-default'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -335,17 +332,20 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
+                      onClick={() => item.path && navigate(item.path)}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'
-                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm'
+                          : item.path
+                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:shadow-md cursor-pointer'
+                          : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:shadow-sm cursor-default'
                       }`}
                     >
                       <span className="flex items-center gap-2">
                         <span className="text-lg">📈</span>
                         {item.label}
                       </span>
-                      <span className="text-slate-400">→</span>
+                      <span className={item.path ? 'text-blue-600' : 'text-slate-400'}>→</span>
                     </button>
                   );
                 })}

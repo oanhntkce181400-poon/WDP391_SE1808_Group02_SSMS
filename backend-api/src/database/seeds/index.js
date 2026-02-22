@@ -21,13 +21,13 @@ const faker = fakerVI;
 faker.seed(20250127);
 
 const MAJORS = [
-  { code: 'CE', name: 'Cﾃｴng ngh盻・thﾃｴng tin' },
-  { code: 'BA', name: 'Kinh t蘯ｿ' },
-  { code: 'CA', name: 'Thi蘯ｿt k蘯ｿ ﾄ黛ｻ・h盻溝' },
-  { code: 'SE', name: 'K盻ｹ thu蘯ｭt ph蘯ｧn m盻［' },
+  { code: 'CE', name: 'Công nghệ thông tin' },
+  { code: 'BA', name: 'Kinh tế' },
+  { code: 'CA', name: 'Thiết kế đồ họa' },
+  { code: 'SE', name: 'Kỹ thuật phần mềm' },
 ];
 
-// D盻・m盻・r盻冢g cho cﾃ｡c khﾃｳa sau nﾃy
+// Danh sach khoa (cohort) duoc seed
 const COHORTS = [16, 17, 18, 19, 20];
 
 const DOMAIN = 'fpt.edu.vn';

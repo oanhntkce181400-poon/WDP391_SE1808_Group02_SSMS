@@ -16,12 +16,17 @@ import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
 import MajorManagement from './pages/admin/MajorManagement';
 import StudentHome from './pages/student/StudentHome';
 import ExamSchedulePage from './pages/student/ExamSchedulePage';
+import SchedulePage from './pages/student/SchedulePage';
+import StudentRequestsPage from './pages/student/StudentRequestsPage';
 import RoomManagement from './pages/admin/RoomManagement';
 import TimeslotManagement from './pages/admin/TimeslotManagement';
 import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
 import ErrorLogsPage from './pages/admin/ErrorLogsPage';
 import CurriculumList from './components/features/CurriculumList';
 import ActorsManagementPage from './pages/admin/ActorsManagementPage';
+import AdminRequestsPage from './pages/admin/AdminRequestsPage';
+import AttendancePage from './pages/admin/AttendancePage';
+import TuitionPage from './pages/student/TuitionPage';
 import authService from './services/authService';
 import FeedbackManagementPage from './pages/admin/FeedbackManagementPage';
 import FeedbackStatisticsPage from './pages/admin/FeedbackStatisticsPage';
@@ -57,6 +62,8 @@ export default function App() {
         <Route path="actors" element={<ActorsManagementPage />} />
         <Route path="feedback-management" element={<FeedbackManagementPage />} />
         <Route path="feedback-statistics" element={<FeedbackStatisticsPage />} />
+        <Route path="requests" element={<AdminRequestsPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
       </Route>
 
       {/* Student routes with layout */}
@@ -71,6 +78,9 @@ export default function App() {
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
         <Route path="exams" element={<ExamSchedulePage />} />
+        <Route path="schedule" element={<SchedulePage />} />
+        <Route path="applications" element={<StudentRequestsPage />} />
+        <Route path="finance" element={<TuitionPage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
