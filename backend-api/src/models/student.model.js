@@ -13,7 +13,6 @@ const studentSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     majorCode: { type: String, required: true, trim: true, index: true },
     cohort: { type: Number, required: true, index: true }, // K18, K19, K20...
-    curriculum: { type: mongoose.Schema.Types.ObjectId, ref: 'Curriculum', required: true },
     
     // Thông tin cá nhân
     identityNumber: { type: String, unique: true, sparse: true, trim: true, index: true }, // CCCD/CMND
