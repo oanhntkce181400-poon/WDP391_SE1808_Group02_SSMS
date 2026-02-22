@@ -1,30 +1,30 @@
-import axiosClient from './axiosClient';
+import axiosClient from "./axiosClient";
 
 const roomService = {
   getRooms(params) {
-    return axiosClient.get('/api/rooms', { params });
+    return axiosClient.get("/rooms", { params });
   },
   getRoom(id) {
-    return axiosClient.get(`/api/rooms/${id}`);
+    return axiosClient.get(`/rooms/${id}`);
   },
   createRoom(data) {
-    return axiosClient.post('/api/rooms', data);
+    return axiosClient.post("/rooms", data);
   },
   updateRoom(id, data) {
-    return axiosClient.put(`/api/rooms/${id}`, data);
+    return axiosClient.put(`/rooms/${id}`, data);
   },
   deleteRoom(id) {
-    return axiosClient.delete(`/api/rooms/${id}`);
+    return axiosClient.delete(`/rooms/${id}`);
   },
   searchRooms(keyword) {
-    return axiosClient.get('/api/rooms/search', { params: { keyword } });
+    return axiosClient.get("/rooms/search", { params: { keyword } });
   },
   exportRooms() {
-    return axiosClient.get('/api/rooms/export', { responseType: 'blob' });
+    return axiosClient.get("/rooms/export", { responseType: "blob" });
   },
   importRooms(formData) {
-    return axiosClient.post('/api/rooms/import', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    return axiosClient.post("/rooms/import", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
   },
 };

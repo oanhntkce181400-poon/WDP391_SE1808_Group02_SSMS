@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const timeslotSchema = new mongoose.Schema(
   {
@@ -38,29 +38,28 @@ const timeslotSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'completed'],
-      default: 'active',
+      enum: ["active", "inactive", "completed"],
+      default: "active",
     },
   },
   {
     timestamps: true,
-    collection: 'timeslots',
-  }
+    collection: "timeslots",
+  },
 );
 
 // Pre-save validation
-timeslotSchema.pre('save', function (next) {
+timeslotSchema.pre("save", function (next) {
   if (this.endDate < this.startDate) {
-    return next(new Error('End date must be after start date'));
+    return next(new Error("End date must be after start date"));
   }
   next();
 });
 
 // Indexes
-timeslotSchema.index({ groupName: 1 });
 timeslotSchema.index({ startDate: 1, endDate: 1 });
 timeslotSchema.index({ status: 1 });
 
-const Timeslot = mongoose.model('Timeslot', timeslotSchema);
+const Timeslot = mongoose.model("Timeslot", timeslotSchema);
 
 module.exports = Timeslot;

@@ -1,26 +1,26 @@
-import axiosClient from './axiosClient';
+import axiosClient from "./axiosClient";
 
 const majorService = {
   getMajors(params) {
-    return axiosClient.get('/api/majors', { params });
+    return axiosClient.get("/majors", { params });
   },
 
   createMajor(data) {
-    return axiosClient.post('/api/majors', data);
+    return axiosClient.post("/majors", data);
   },
 
   updateMajor(id, data) {
-    return axiosClient.put(`/api/majors/${id}`, data);
+    return axiosClient.put(`/majors/${id}`, data);
   },
 
   deleteMajor(id) {
-    return axiosClient.delete(`/api/majors/${id}`);
+    return axiosClient.delete(`/majors/${id}`);
   },
 
   exportMajors(params) {
-    return axiosClient.get('/api/majors/export', {
+    return axiosClient.get("/majors/export", {
       params,
-      responseType: 'blob',
+      responseType: "blob",
     });
   },
 };

@@ -98,3 +98,4 @@ module.exports = function rbacMiddleware(requiredPermissions = []) {
     }
   };
 };
+ 
