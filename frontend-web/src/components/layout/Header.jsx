@@ -1,13 +1,13 @@
 // Header component for Admin Layout
-import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import graduateIcon from '../../assets/graduate.png';
-import notificationIcon from '../../assets/notification.png';
-import searchIcon from '../../assets/search.png';
-import authService from '../../services/authService';
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import graduateIcon from "../../assets/graduate.png";
+import notificationIcon from "../../assets/notification.png";
+import searchIcon from "../../assets/search.png";
+import authService from "../../services/authService";
 
 export default function Header() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
   const [user, setUser] = useState(null);
   const [avatarError, setAvatarError] = useState(false);
@@ -18,7 +18,7 @@ export default function Header() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('auth_user');
+      const stored = localStorage.getItem("auth_user");
       if (stored) {
         setUser(JSON.parse(stored));
       }
@@ -38,62 +38,68 @@ export default function Header() {
     };
 
     const handleEscape = (event) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setIsMenuOpen(false);
         setIsMoreOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
   const primaryNav = [
-    { label: 'Lớp học',             href: '#' },
-    { label: 'Môn học',             href: '/admin/subjects' },
-    { label: 'Phòng học',           href: '/admin/rooms' },
-    { label: 'Khung chương trình',  href: '/admin/curriculum' },
-    { label: 'Người dùng',          href: '/admin/users' },
-    { label: 'Đơn từ',             href: '/admin/requests' },
-    { label: 'Điểm danh',           href: '/admin/attendance' },
-    { label: 'Đánh giá',            href: '/admin/feedback-management' },
-    { label: 'Thống kê Đánh giá',   href: '/admin/feedback-statistics' },
+    { label: "Lớp học", href: "/admin/classes" },
+    { label: "Môn học", href: "/admin/subjects" },
+    { label: "Phòng học", href: "/admin/rooms" },
+    { label: "Khung chương trình", href: "/admin/curriculum" },
+    { label: "Người dùng", href: "/admin/users" },
+    { label: "Đơn từ", href: "/admin/requests" },
+    { label: "Điểm danh", href: "/admin/attendance" },
+    { label: "Đánh giá", href: "/admin/feedback-management" },
+    { label: "Thống kê Đánh giá", href: "/admin/feedback-statistics" },
   ];
 
   // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
   const moreNav = [
-    { label: 'Xếp lịch',      href: '#' },
-    { label: 'Chuyên ngành',  href: '/admin/majors' },
-    { label: 'Giảng viên',    href: '#' },
-    { label: 'Giờ học',       href: '/admin/timeslots' },
-    { label: 'Học phí',       href: '/admin/tuition-fees' },
-    { label: '─────────────', href: null }, // Đường kẻ phân cách
-    { label: 'Cài đặt',       href: '/admin/settings' },
-    { label: 'Nhật ký lỗi',   href: '/admin/error-logs' },
-    { label: 'Nhân sự',       href: '/admin/actors' },
+    { label: "Xếp lịch", href: "#" },
+    { label: "Chuyên ngành", href: "/admin/majors" },
+    { label: "Giảng viên", href: "/admin/lecturers" },
+    { label: "Giờ học", href: "/admin/timeslots" },
+    { label: "Học phí", href: "/admin/tuition-fees" },
+    { label: "─────────────", href: null }, // Đường kẻ phân cách
+    { label: "Cài đặt", href: "/admin/settings" },
+    { label: "Nhật ký lỗi", href: "/admin/error-logs" },
+    { label: "Nhân sự", href: "/admin/actors" },
   ];
 
   // Kiểm tra link có đang active không
   const getActiveItem = (href) => {
-    if (!href || href === '#') return false;
-    return location.pathname === href || location.pathname.startsWith(href + '/');
+    if (!href || href === "#") return false;
+    return (
+      location.pathname === href || location.pathname.startsWith(href + "/")
+    );
   };
 
   const avatarUrl =
-    user?.avatarUrl || user?.avatar || user?.photoUrl || user?.photoURL || user?.picture;
+    user?.avatarUrl ||
+    user?.avatar ||
+    user?.photoUrl ||
+    user?.photoURL ||
+    user?.picture;
   const initials = user?.fullName
     ? user.fullName
-        .split(' ')
+        .split(" ")
         .filter(Boolean)
         .map((part) => part[0])
         .slice(0, 2)
-        .join('')
+        .join("")
         .toUpperCase()
-    : 'AD';
+    : "AD";
 
   const handleLogout = async () => {
     try {
@@ -101,23 +107,34 @@ export default function Header() {
     } catch (err) {
       // ignore and still clear local session
     } finally {
-      localStorage.removeItem('auth_user');
-      window.location.href = '/login';
+      localStorage.removeItem("auth_user");
+      window.location.href = "/login";
     }
   };
 
   return (
     <header className="flex items-center justify-between whitespace-nowrap bg-[#1A237E] text-white px-4 lg:px-6 py-2.5 sticky top-0 z-50 shadow-md">
       <div className="flex items-center gap-4 lg:gap-6">
-        <div className="flex items-center gap-2 lg:gap-3">
+        <Link
+          to="/admin/dashboard"
+          className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity"
+        >
           <div className="size-8 lg:size-9 flex items-center justify-center bg-white rounded-lg">
-            <img src={graduateIcon} alt="Logo" className="w-6 lg:w-7 h-6 lg:h-7" />
+            <img
+              src={graduateIcon}
+              alt="Logo"
+              className="w-6 lg:w-7 h-6 lg:h-7"
+            />
           </div>
           <div className="hidden md:block leading-tight">
-            <h2 className="text-white text-sm lg:text-base font-bold tracking-tight uppercase">SSMS</h2>
-            <p className="text-[8px] lg:text-[10px] text-slate-300 font-medium tracking-widest">QUẢN TRỊ</p>
+            <h2 className="text-white text-sm lg:text-base font-bold tracking-tight uppercase">
+              SSMS
+            </h2>
+            <p className="text-[8px] lg:text-[10px] text-slate-300 font-medium tracking-widest">
+              QUẢN TRỊ
+            </p>
           </div>
-        </div>
+        </Link>
         <nav className="hidden lg:flex items-center gap-0.5">
           {/* Các mục chính luôn hiện */}
           {primaryNav.map((item, index) => (
@@ -125,8 +142,8 @@ export default function Header() {
               key={index}
               className={`px-2.5 lg:px-3 py-1.5 text-xs lg:text-sm font-medium transition-colors rounded-md whitespace-nowrap ${
                 getActiveItem(item.href)
-                  ? 'text-white bg-white/10'
-                  : 'text-slate-300 hover:text-white'
+                  ? "text-white bg-white/10"
+                  : "text-slate-300 hover:text-white"
               }`}
               to={item.href}
             >
@@ -139,13 +156,19 @@ export default function Header() {
             <button
               onClick={() => setIsMoreOpen((p) => !p)}
               className={`flex items-center gap-1 px-2.5 lg:px-3 py-1.5 text-xs lg:text-sm font-medium rounded-md transition-colors ${
-                isMoreOpen ? 'text-white bg-white/20' : 'text-slate-300 hover:text-white'
+                isMoreOpen
+                  ? "text-white bg-white/20"
+                  : "text-slate-300 hover:text-white"
               }`}
             >
               Thêm
-              <span className={`text-[10px] transition-transform ${
-                isMoreOpen ? 'scale-y-[-1]' : ''
-              }`}>▾</span>
+              <span
+                className={`text-[10px] transition-transform ${
+                  isMoreOpen ? "scale-y-[-1]" : ""
+                }`}
+              >
+                ▾
+              </span>
             </button>
 
             {/* Menu thả xuống */}
@@ -154,7 +177,12 @@ export default function Header() {
                 {moreNav.map((item, index) => {
                   // Đường kẻ phân cách
                   if (!item.href) {
-                    return <div key={index} className="my-1 border-t border-slate-100" />;
+                    return (
+                      <div
+                        key={index}
+                        className="my-1 border-t border-slate-100"
+                      />
+                    );
                   }
                   return (
                     <Link
@@ -163,8 +191,8 @@ export default function Header() {
                       onClick={() => setIsMoreOpen(false)}
                       className={`block px-4 py-2 text-sm transition-colors ${
                         getActiveItem(item.href)
-                          ? 'bg-indigo-50 text-indigo-700 font-medium'
-                          : 'text-slate-700 hover:bg-slate-50'
+                          ? "bg-indigo-50 text-indigo-700 font-medium"
+                          : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       {item.label}
@@ -178,7 +206,11 @@ export default function Header() {
       </div>
       <div className="flex items-center gap-3 lg:gap-6">
         <div className="relative hidden xl:block">
-          <img src={searchIcon} alt="Tìm kiếm" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 lg:w-5 h-4 lg:h-5 text-slate-400" />
+          <img
+            src={searchIcon}
+            alt="Tìm kiếm"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 lg:w-5 h-4 lg:h-5 text-slate-400"
+          />
           <input
             className="bg-white/10 border-none rounded-full py-1.5 pl-9 pr-4 text-xs lg:text-sm w-48 lg:w-64 focus:ring-2 focus:ring-white/20 placeholder:text-slate-400 text-white"
             placeholder="Tìm kiếm..."
@@ -188,7 +220,11 @@ export default function Header() {
           />
         </div>
         <button className="relative text-slate-300 hover:text-white transition-colors p-1">
-          <img src={notificationIcon} alt="Thông báo" className="w-5 lg:w-6 h-5 lg:h-6" />
+          <img
+            src={notificationIcon}
+            alt="Thông báo"
+            className="w-5 lg:w-6 h-5 lg:h-6"
+          />
           <span className="absolute top-0.5 right-0.5 size-2 bg-red-500 rounded-full border-2 border-[#1A237E]"></span>
         </button>
         <div ref={menuRef} className="relative">
@@ -200,9 +236,11 @@ export default function Header() {
             aria-expanded={isMenuOpen}
           >
             <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold">{user?.fullName || 'Admin User'}</p>
+              <p className="text-xs font-bold">
+                {user?.fullName || "Admin User"}
+              </p>
               <p className="text-[10px] text-slate-300 uppercase tracking-wider">
-                {user?.role || 'Admin'}
+                {user?.role || "Admin"}
               </p>
             </div>
             <div className="size-8 lg:size-9 rounded-full bg-slate-200 border-2 border-white/20 bg-cover bg-center overflow-hidden flex items-center justify-center text-xs font-bold text-slate-700">
@@ -225,9 +263,11 @@ export default function Header() {
               className="absolute right-0 mt-2 w-56 rounded-xl bg-white py-2 text-sm text-slate-700 shadow-lg ring-1 ring-slate-900/5 z-50"
             >
               <div className="px-4 pb-2 pt-1">
-                <p className="text-xs font-semibold text-slate-500">Signed in as</p>
+                <p className="text-xs font-semibold text-slate-500">
+                  Signed in as
+                </p>
                 <p className="truncate text-sm font-semibold text-slate-900">
-                  {user?.fullName || 'Admin User'}
+                  {user?.fullName || "Admin User"}
                 </p>
               </div>
               <div className="border-t border-slate-100" />

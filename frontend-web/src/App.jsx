@@ -1,35 +1,37 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import LoginPage from './pages/auth/LoginPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import DashboardPage from './pages/DashboardPage';
-import StudentProfilePage from './pages/StudentProfilePage';
-import SocketTestPage from './pages/SocketTestPage';
-import AdminLayout from './components/layout/AdminLayout';
-import StudentLayout from './components/layout/StudentLayout';
-import Dashboard from './pages/admin/Dashboard';
-import SubjectManagement from './pages/admin/SubjectManagement';
-import SubjectPrerequisites from './pages/admin/SubjectPrerequisites';
-import CurriculumManagement from './pages/admin/CurriculumManagement';
-import UserListPage from './pages/UserListPage';
-import GeneralSettingsPage from './pages/admin/GeneralSettingsPage';
-import MajorManagement from './pages/admin/MajorManagement';
-import StudentHome from './pages/student/StudentHome';
-import ExamSchedulePage from './pages/student/ExamSchedulePage';
-import SchedulePage from './pages/student/SchedulePage';
-import StudentRequestsPage from './pages/student/StudentRequestsPage';
-import RoomManagement from './pages/admin/RoomManagement';
-import TimeslotManagement from './pages/admin/TimeslotManagement';
-import TuitionFeeManagement from './pages/admin/TuitionFeeManagement';
-import ErrorLogsPage from './pages/admin/ErrorLogsPage';
-import CurriculumList from './components/features/CurriculumList';
-import ActorsManagementPage from './pages/admin/ActorsManagementPage';
-import AdminRequestsPage from './pages/admin/AdminRequestsPage';
-import AttendancePage from './pages/admin/AttendancePage';
-import TuitionPage from './pages/student/TuitionPage';
-import authService from './services/authService';
-import FeedbackManagementPage from './pages/admin/FeedbackManagementPage';
-import FeedbackStatisticsPage from './pages/admin/FeedbackStatisticsPage';
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import LoginPage from "./pages/auth/LoginPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import DashboardPage from "./pages/DashboardPage";
+import StudentProfilePage from "./pages/StudentProfilePage";
+import SocketTestPage from "./pages/SocketTestPage";
+import AdminLayout from "./components/layout/AdminLayout";
+import StudentLayout from "./components/layout/StudentLayout";
+import Dashboard from "./pages/admin/Dashboard";
+import SubjectManagement from "./pages/admin/SubjectManagement";
+import SubjectPrerequisites from "./pages/admin/SubjectPrerequisites";
+import CurriculumManagement from "./pages/admin/CurriculumManagement";
+import UserListPage from "./pages/UserListPage";
+import GeneralSettingsPage from "./pages/admin/GeneralSettingsPage";
+import MajorManagement from "./pages/admin/MajorManagement";
+import StudentHome from "./pages/student/StudentHome";
+import ExamSchedulePage from "./pages/student/ExamSchedulePage";
+import SchedulePage from "./pages/student/SchedulePage";
+import StudentRequestsPage from "./pages/student/StudentRequestsPage";
+import RoomManagement from "./pages/admin/RoomManagement";
+import TimeslotManagement from "./pages/admin/TimeslotManagement";
+import TuitionFeeManagement from "./pages/admin/TuitionFeeManagement";
+import ErrorLogsPage from "./pages/admin/ErrorLogsPage";
+import CurriculumList from "./components/features/CurriculumList";
+import ActorsManagementPage from "./pages/admin/ActorsManagementPage";
+import AdminRequestsPage from "./pages/admin/AdminRequestsPage";
+import AttendancePage from "./pages/admin/AttendancePage";
+import TuitionPage from "./pages/student/TuitionPage";
+import authService from "./services/authService";
+import FeedbackManagementPage from "./pages/admin/FeedbackManagementPage";
+import FeedbackStatisticsPage from "./pages/admin/FeedbackStatisticsPage";
+import ClassManagement from "./pages/admin/ClassManagement";
+import LecturerManagement from "./pages/admin/LecturerManagement";
 
 export default function App() {
   return (
@@ -41,14 +43,17 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={['admin', 'staff']}>
+          <ProtectedRoute allowedRoles={["admin", "staff"]}>
             <AdminLayout />
           </ProtectedRoute>
         }
       >
         <Route index element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
-        <Route path="prerequisites/:subjectId" element={<SubjectPrerequisites />} />
+        <Route
+          path="prerequisites/:subjectId"
+          element={<SubjectPrerequisites />}
+        />
         <Route path="curriculum" element={<CurriculumManagement />} />
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
@@ -56,21 +61,32 @@ export default function App() {
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum-list" element={<CurriculumList />} />
-        <Route path="curriculum/:curriculumId/setup" element={<CurriculumManagement />} />
+        <Route
+          path="curriculum/:curriculumId/setup"
+          element={<CurriculumManagement />}
+        />
         <Route path="tuition-fees" element={<TuitionFeeManagement />} />
         <Route path="error-logs" element={<ErrorLogsPage />} />
         <Route path="actors" element={<ActorsManagementPage />} />
-        <Route path="feedback-management" element={<FeedbackManagementPage />} />
-        <Route path="feedback-statistics" element={<FeedbackStatisticsPage />} />
+        <Route
+          path="feedback-management"
+          element={<FeedbackManagementPage />}
+        />
+        <Route
+          path="feedback-statistics"
+          element={<FeedbackStatisticsPage />}
+        />
         <Route path="requests" element={<AdminRequestsPage />} />
         <Route path="attendance" element={<AttendancePage />} />
+        <Route path="classes" element={<ClassManagement />} />
+        <Route path="lecturers" element={<LecturerManagement />} />
       </Route>
 
       {/* Student routes with layout */}
       <Route
         path="/student"
         element={
-          <ProtectedRoute allowedRoles={['student']}>
+          <ProtectedRoute allowedRoles={["student"]}>
             <StudentLayout />
           </ProtectedRoute>
         }
@@ -110,7 +126,7 @@ export default function App() {
 
 function ProtectedRoute({ children, allowedRoles }) {
   const location = useLocation();
-  const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState("checking");
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -120,7 +136,7 @@ function ProtectedRoute({ children, allowedRoles }) {
       .then((response) => {
         if (isMounted) {
           setUser(response.data.user);
-          setStatus('authenticated');
+          setStatus("authenticated");
         }
       })
       .catch(() => {
@@ -149,7 +165,7 @@ function ProtectedRoute({ children, allowedRoles }) {
   // Check role-based access
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     // Redirect based on user's role
-    if (user.role === 'student') {
+    if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
     return <Navigate to="/admin" replace />;
@@ -159,9 +175,9 @@ function ProtectedRoute({ children, allowedRoles }) {
 }
 const routes = [
   {
-    path: '/admin/feedback-management',
+    path: "/admin/feedback-management",
     element: <FeedbackManagementPage />,
     requiresAuth: true,
-    roles: ['admin', 'staff', 'academicAdmin']
-  }
+    roles: ["admin", "staff", "academicAdmin"],
+  },
 ];
