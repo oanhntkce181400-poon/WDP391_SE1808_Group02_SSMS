@@ -95,7 +95,6 @@ async function createStudent(payload, createdById) {
     email,
     majorCode,
     cohort,
-    curriculumId,
     identityNumber,
     dateOfBirth,
     phoneNumber,
@@ -112,17 +111,29 @@ async function createStudent(payload, createdById) {
     throw error;
   }
 
-  // Check email đã tồn tại chưa
-  const existingEmail = await Student.findOne({ email });
-  if (existingEmail) {
+  // Check email đã tồn tại trong User hoặc Student chưa
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
     const error = new Error('Email đã được sử dụng');
     error.statusCode = 400;
     throw error;
   }
 
+  const existingStudent = await Student.findOne({ email });
+  if (existingStudent) {
+    const error = new Error('Email đã được sử dụng');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Sanitize: chuyển empty string thành null
+  const sanitizedIdentityNumber = identityNumber && identityNumber.trim() !== '' 
+    ? identityNumber.trim() 
+    : undefined; // Dùng undefined thay vì null để MongoDB sparse index bỏ qua
+
   // Check CCCD đã tồn tại chưa (nếu có)
-  if (identityNumber) {
-    const existingId = await Student.findOne({ identityNumber });
+  if (sanitizedIdentityNumber) {
+    const existingId = await Student.findOne({ identityNumber: sanitizedIdentityNumber });
     if (existingId) {
       const error = new Error('Số CCCD/CMND đã được sử dụng');
       error.statusCode = 400;
@@ -137,7 +148,7 @@ async function createStudent(payload, createdById) {
   const classSection = await suggestClassSection(majorCode, cohort);
 
   // 1. Tạo User Account
-  const defaultPassword = identityNumber || '123456'; // Mật khẩu mặc định = CCCD hoặc 123456
+  const defaultPassword = sanitizedIdentityNumber || '123456'; // Mật khẩu mặc định = CCCD hoặc 123456
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
   const newUser = await User.create({
@@ -151,15 +162,13 @@ async function createStudent(payload, createdById) {
     createdBy: createdById,
   });
 
-  // 2. Tạo Student
-  const newStudent = await Student.create({
+  // 2. Tạo Student - chỉ thêm identityNumber nếu có giá trị
+  const studentData = {
     studentCode,
     fullName,
     email,
     majorCode,
     cohort,
-    curriculum: curriculumId,
-    identityNumber,
     dateOfBirth,
     phoneNumber,
     address,
@@ -170,7 +179,14 @@ async function createStudent(payload, createdById) {
     userId: newUser._id,
     isActive: true,
     createdBy: createdById,
-  });
+  };
+
+  // Chỉ thêm identityNumber nếu có giá trị
+  if (sanitizedIdentityNumber) {
+    studentData.identityNumber = sanitizedIdentityNumber;
+  }
+
+  const newStudent = await Student.create(studentData);
 
   // 3. Tạo Wallet với số dư 0 VND
   await Wallet.create({
@@ -182,9 +198,6 @@ async function createStudent(payload, createdById) {
 
   // TODO: Gửi email thông báo cho sinh viên
   // await sendWelcomeEmail(email, fullName, studentCode, defaultPassword);
-
-  // Populate thông tin để trả về
-  await newStudent.populate('curriculum', 'curriculumCode curriculumName');
   
   return {
     ...newStudent.toObject(),
@@ -246,7 +259,6 @@ async function getStudents(filters = {}) {
   // Execute query
   const [students, total] = await Promise.all([
     Student.find(query)
-      .populate('curriculum', 'curriculumCode curriculumName')
       .sort(sort)
       .skip(skip)
       .limit(limit)
@@ -270,7 +282,6 @@ async function getStudents(filters = {}) {
 // ─────────────────────────────────────────────────────────────
 async function getStudentById(studentId) {
   const student = await Student.findById(studentId)
-    .populate('curriculum', 'curriculumCode curriculumName')
     .populate('userId', 'email status lastLoginAt')
     .populate('createdBy', 'fullName email')
     .populate('updatedBy', 'fullName email')
@@ -343,9 +354,13 @@ async function updateStudent(studentId, payload, updatedById) {
   }
 
   // Kiểm tra CCCD trùng (nếu thay đổi)
-  if (payload.identityNumber && payload.identityNumber !== student.identityNumber) {
+  const sanitizedIdentityNumber = payload.identityNumber && payload.identityNumber.trim() !== '' 
+    ? payload.identityNumber.trim() 
+    : undefined; // Dùng undefined thay vì null
+    
+  if (sanitizedIdentityNumber && sanitizedIdentityNumber !== student.identityNumber) {
     const existingId = await Student.findOne({ 
-      identityNumber: payload.identityNumber,
+      identityNumber: sanitizedIdentityNumber,
       _id: { $ne: studentId }
     });
     if (existingId) {
@@ -353,11 +368,15 @@ async function updateStudent(studentId, payload, updatedById) {
       error.statusCode = 400;
       throw error;
     }
+    student.identityNumber = sanitizedIdentityNumber;
+  } else if (payload.identityNumber === '' || payload.identityNumber === null) {
+    // Nếu xóa CCCD (set thành empty), unset field này
+    student.identityNumber = undefined;
   }
 
   // Cập nhật các field
   allowedUpdates.forEach(field => {
-    if (payload[field] !== undefined) {
+    if (payload[field] !== undefined && field !== 'identityNumber') {
       student[field] = payload[field];
     }
   });
@@ -369,8 +388,6 @@ async function updateStudent(studentId, payload, updatedById) {
   if (payload.fullName && student.userId) {
     await User.findByIdAndUpdate(student.userId, { fullName: payload.fullName });
   }
-
-  await student.populate('curriculum', 'curriculumCode curriculumName');
   
   return student;
 }

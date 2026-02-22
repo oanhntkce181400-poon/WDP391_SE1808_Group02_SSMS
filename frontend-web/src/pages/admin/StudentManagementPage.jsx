@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from 'react';
 import studentService from '../../services/studentService';
-import curriculumService from '../../services/curriculumService';
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -51,7 +50,6 @@ export default function StudentManagementPage() {
   // Filter options
   const [majors, setMajors] = useState([]);
   const [cohorts, setCohorts] = useState([]);
-  const [curriculums, setCurriculums] = useState([]);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +73,6 @@ export default function StudentManagementPage() {
     email: '',
     majorCode: '',
     cohort: '',
-    curriculumId: '',
     identityNumber: '',
     dateOfBirth: '',
     phoneNumber: '',
@@ -95,15 +92,13 @@ export default function StudentManagementPage() {
 
   async function loadFilterOptions() {
     try {
-      const [majorsRes, cohortsRes, curriculumsRes] = await Promise.all([
+      const [majorsRes, cohortsRes] = await Promise.all([
         studentService.getMajors(),
         studentService.getCohorts(),
-        curriculumService.getCurriculums(),
       ]);
 
       setMajors(majorsRes.data.data || []);
       setCohorts(cohortsRes.data.data || []);
-      setCurriculums(curriculumsRes.data.data || []);
     } catch (err) {
       console.error('Lỗi tải options:', err);
     }
@@ -164,7 +159,6 @@ export default function StudentManagementPage() {
       email: '',
       majorCode: '',
       cohort: '',
-      curriculumId: '',
       identityNumber: '',
       dateOfBirth: '',
       phoneNumber: '',
@@ -211,6 +205,16 @@ export default function StudentManagementPage() {
     }
   }
 
+  async function handleStatusChange(studentId, newStatus) {
+    try {
+      await studentService.updateStudent(studentId, { academicStatus: newStatus });
+      showSuccess('Cập nhật trạng thái thành công!');
+      loadStudents();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Lỗi cập nhật trạng thái');
+    }
+  }
+
   async function handleViewDetail(id) {
     try {
       const res = await studentService.getStudentById(id);
@@ -228,7 +232,6 @@ export default function StudentManagementPage() {
       email: student.email,
       majorCode: student.majorCode,
       cohort: student.cohort,
-      curriculumId: student.curriculum?._id || '',
       identityNumber: student.identityNumber || '',
       dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split('T')[0] : '',
       phoneNumber: student.phoneNumber || '',
@@ -393,6 +396,9 @@ export default function StudentManagementPage() {
                         Email
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                        Số điện thoại
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                         Ngành
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
@@ -415,11 +421,20 @@ export default function StudentManagementPage() {
                         <td className="px-4 py-3 text-sm font-medium text-slate-900">
                           {student.studentCode}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {student.fullName}
+                        <td className="px-4 py-3 text-sm">
+                          <button
+                            onClick={() => handleViewDetail(student._id)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                            title="Click để xem chi tiết"
+                          >
+                            {student.fullName}
+                          </button>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">
                           {student.email}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {student.phoneNumber || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">
                           {student.majorCode}
@@ -431,23 +446,21 @@ export default function StudentManagementPage() {
                           {student.classSection || '-'}
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded ${
+                          <select
+                            value={student.academicStatus}
+                            onChange={(e) => handleStatusChange(student._id, e.target.value)}
+                            className={`px-2 py-1 text-xs font-medium rounded border-0 cursor-pointer ${
                               ACADEMIC_STATUS_STYLES[student.academicStatus]
                             }`}
                           >
-                            {ACADEMIC_STATUS_LABELS[student.academicStatus]}
-                          </span>
+                            <option value="enrolled">Đang học</option>
+                            <option value="on-leave">Bảo lưu</option>
+                            <option value="dropped">Thôi học</option>
+                            <option value="graduated">Tốt nghiệp</option>
+                          </select>
                         </td>
                         <td className="px-4 py-3 text-sm">
                           <div className="flex gap-2">
-                            <button
-                              onClick={() => handleViewDetail(student._id)}
-                              className="text-blue-600 hover:text-blue-800"
-                              title="Xem chi tiết"
-                            >
-                              👁️
-                            </button>
                             <button
                               onClick={() => handleEdit(student)}
                               className="text-green-600 hover:text-green-800"
@@ -472,24 +485,60 @@ export default function StudentManagementPage() {
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                  <div className="text-sm text-slate-600">
-                    Trang {currentPage} / {totalPages}
+                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex justify-center items-center">
+                  <div className="text-sm text-slate-600 mr-4">
+                    Hiển thị trang {currentPage} trong {totalPages} dòng
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <button
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="px-4 py-2 bg-white border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                      className="px-3 py-1 bg-white border border-slate-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
                     >
-                      ← Trước
+                      ‹
                     </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-1 rounded border ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <>
+                        <span className="px-2 py-1">...</span>
+                        <button
+                          onClick={() => setCurrentPage(totalPages)}
+                          className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100"
+                        >
+                          {totalPages}
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-4 py-2 bg-white border border-slate-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+                      className="px-3 py-1 bg-white border border-slate-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100"
                     >
-                      Sau →
+                      ›
                     </button>
                   </div>
                 </div>
@@ -511,7 +560,6 @@ export default function StudentManagementPage() {
             resetForm();
           }}
           majors={majors}
-          curriculums={curriculums}
         />
       )}
 
@@ -528,7 +576,6 @@ export default function StudentManagementPage() {
             setSelectedStudent(null);
           }}
           majors={majors}
-          curriculums={curriculums}
           isEdit
         />
       )}
@@ -557,7 +604,6 @@ function StudentFormModal({
   onSubmit,
   onClose,
   majors,
-  curriculums,
   isEdit = false,
 }) {
   return (
@@ -609,7 +655,10 @@ function StudentFormModal({
                 type="text"
                 value={formData.identityNumber}
                 onChange={(e) => setFormData({ ...formData, identityNumber: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
               />
             </div>
 
@@ -621,7 +670,10 @@ function StudentFormModal({
               <select
                 value={formData.majorCode}
                 onChange={(e) => setFormData({ ...formData, majorCode: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
                 required
               >
                 <option value="">Chọn ngành</option>
@@ -643,53 +695,44 @@ function StudentFormModal({
                 value={formData.cohort}
                 onChange={(e) => setFormData({ ...formData, cohort: e.target.value })}
                 placeholder="VD: 18, 19, 20"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
                 required
               />
-            </div>
-
-            {/* Curriculum */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Chương trình học <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.curriculumId}
-                onChange={(e) => setFormData({ ...formData, curriculumId: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Chọn chương trình học</option>
-                {curriculums.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.curriculumName} ({c.curriculumCode})
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Date of Birth */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Ngày sinh
+                Ngày sinh <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
+                required
               />
             </div>
 
             {/* Gender */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Giới tính
+                Giới tính <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.gender}
                 onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
+                required
               >
                 <option value="male">Nam</option>
                 <option value="female">Nữ</option>
@@ -700,27 +743,32 @@ function StudentFormModal({
             {/* Phone */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Số điện thoại
+                Số điện thoại <span className="text-red-500">*</span>
               </label>
               <input
                 type="tel"
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
               />
             </div>
 
             {/* Enrollment Year */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Năm nhập học
+                Năm nhập học <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 value={formData.enrollmentYear}
                 onChange={(e) => setFormData({ ...formData, enrollmentYear: e.target.value })}
                 placeholder="VD: 2020"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
+                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
+                }`}
+                disabled={isEdit}
+                required
               />
             </div>
 
@@ -799,10 +847,6 @@ function StudentDetailModal({ student, onClose }) {
                 <InfoRow label="Ngành học" value={student.majorCode} />
                 <InfoRow label="Khóa" value={`K${student.cohort}`} />
                 <InfoRow label="Lớp sinh hoạt" value={student.classSection || '-'} />
-                <InfoRow
-                  label="Chương trình học"
-                  value={student.curriculum?.curriculumName || '-'}
-                />
                 <InfoRow label="Năm nhập học" value={student.enrollmentYear || '-'} />
                 <InfoRow
                   label="Trạng thái"
