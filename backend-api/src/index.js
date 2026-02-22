@@ -49,6 +49,10 @@ app.use('/api/exams', require('./routes/exam.routes'));
 app.use('/api/feedback-templates', require('./routes/feedbackTemplate.routes'));
 app.use('/api/feedback-submissions', require('./routes/feedbackSubmission.routes'));
 app.use('/api/feedback-statistics', require('./routes/feedbackStatistics.routes'));
+app.use('/api/schedules', require('./routes/schedule.routes'));
+app.use('/api/requests', require('./routes/request.routes'));
+app.use('/api/attendance', require('./routes/attendance.routes'));
+app.use('/api/finance', require('./routes/finance.routes'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {

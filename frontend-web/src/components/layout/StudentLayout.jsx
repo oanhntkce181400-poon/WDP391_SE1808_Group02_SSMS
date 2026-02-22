@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import authService from '../../services/authService';
 
 export default function StudentLayout() {
@@ -7,7 +7,23 @@ export default function StudentLayout() {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const user = JSON.parse(localStorage.getItem('auth_user') || '{}');
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('auth_user') || '{}'); }
+    catch { return {}; }
+  });
+
+  // Refresh user info from server on mount
+  useEffect(() => {
+    authService.me()
+      .then(res => {
+        const fresh = res?.data?.user;
+        if (fresh) {
+          localStorage.setItem('auth_user', JSON.stringify(fresh));
+          setUser(fresh);
+        }
+      })
+      .catch(() => {}); // ignore if token expired / offline
+  }, []);
 
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
