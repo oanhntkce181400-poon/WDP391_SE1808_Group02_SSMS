@@ -81,6 +81,7 @@ app.use('/api/feedback-templates', require('./routes/feedbackTemplate.routes'));
 app.use('/api/feedback-submissions', require('./routes/feedbackSubmission.routes'));
 app.use('/api/feedback-statistics', require('./routes/feedbackStatistics.routes'));
 app.use('/api/feedbacks', require('./routes/feedback.routes'));
+app.use("/api/students", require("./routes/student.routes"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {

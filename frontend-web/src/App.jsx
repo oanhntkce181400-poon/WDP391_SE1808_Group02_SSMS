@@ -34,6 +34,7 @@ import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
 import StudentFeedbackPage from "./pages/student/StudentFeedbackPage";
 import StudentSchedulePage from "./pages/student/SchedulePage";
+import StudentManagementPage from "./pages/admin/StudentManagementPage";
 export default function App() {
   return (
     <Routes>
@@ -81,6 +82,7 @@ export default function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
+        <Route path="students" element={<StudentManagementPage />} />
       </Route>
 
       {/* Student routes with layout */}
