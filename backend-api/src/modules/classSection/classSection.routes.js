@@ -9,6 +9,7 @@ const ADMIN_STAFF = rbacMiddleware(["admin", "staff"]);
 
 // Class Section CRUD
 router.get("/", authMiddleware, ctrl.getAll);
+router.get("/my-classes", authMiddleware, ctrl.getMyClasses); // Must be before /:classId
 router.get("/:classId", authMiddleware, ctrl.getById);
 router.post("/", authMiddleware, ADMIN_STAFF, ctrl.create);
 router.patch("/:classId", authMiddleware, ADMIN_STAFF, ctrl.update);

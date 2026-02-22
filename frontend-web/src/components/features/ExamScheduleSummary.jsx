@@ -12,7 +12,7 @@ export default function ExamScheduleSummary() {
 
   const fetchExamSchedule = async () => {
     try {
-      setLoading(false);
+      setLoading(true);
       const response = await examService.getMyExams();
       const exams = response.data.data || [];
       
@@ -23,9 +23,12 @@ export default function ExamScheduleSummary() {
         .slice(0, 3);
       
       setUpcomingExams(upcoming);
+      setError(null);
     } catch (err) {
       console.error('Failed to fetch exam schedule:', err);
       setError(err.response?.data?.message || 'Failed to load exams');
+    } finally {
+      setLoading(false);
     }
   };
 

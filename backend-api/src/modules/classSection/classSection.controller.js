@@ -126,6 +126,23 @@ async function dropCourse(req, res) {
   }
 }
 
+async function getMyClasses(req, res) {
+  try {
+    const userId = req.auth?.sub;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const data = await service.getMyClasses(userId);
+    return res.json({ success: true, data, total: data.length });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
@@ -136,4 +153,5 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  getMyClasses,
 };

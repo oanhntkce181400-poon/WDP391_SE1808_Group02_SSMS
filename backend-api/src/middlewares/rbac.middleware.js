@@ -68,9 +68,45 @@ module.exports = function rbacMiddleware(requiredPermissions = []) {
         return res.status(401).json({ message: 'Unauthorized.' });
       }
 
+      const userRole = String(req.auth?.role || '').toLowerCase();
+      
+      // Enhanced logging for debugging
+      console.log('🔐 RBAC Check:');
+      console.log('   User ID:', userId);
+      console.log('   User Role:', userRole);
+      console.log('   Auth Payload:', JSON.stringify(req.auth));
+      console.log('   Required Permissions:', required);
+
       // Quick bypass for system admin role stored on the user document.
-      if (String(req.auth?.role || '').toLowerCase() === 'admin') {
+      if (userRole === 'admin') {
+        console.log('   ✅ Result: ADMIN BYPASS');
         return next();
+      }
+
+      // Check if required permissions include a direct role match (e.g., 'student', 'staff')
+      // This allows routes to use rbacMiddleware(['student']) instead of complex permission lookups
+      if (required.length > 0) {
+        const commonRoles = ['admin', 'staff', 'student'];
+        const directRoleMatches = required.filter(perm => commonRoles.includes(perm));
+        
+        // If all required permissions are direct role matches, check them against user role
+        if (directRoleMatches.length > 0 && directRoleMatches.length === required.length) {
+          console.log('   📋 Direct Role Match Check:');
+          console.log('      Direct Matches:', directRoleMatches);
+          console.log('      User Role Match:', directRoleMatches.includes(userRole));
+          
+          if (directRoleMatches.includes(userRole)) {
+            console.log('   ✅ Result: ROLE MATCHED');
+            return next();
+          } else {
+            console.log('   ❌ Result: ROLE NOT MATCHED');
+            return res.status(403).json({
+              message: 'Forbidden. Missing required role.',
+              requiredRoles: directRoleMatches,
+              userRole: userRole
+            });
+          }
+        }
       }
 
       const { roles, permissions } = await resolvePermissionsForUser(userId);
@@ -81,19 +117,27 @@ module.exports = function rbacMiddleware(requiredPermissions = []) {
       };
 
       if (required.length === 0) {
+        console.log('   ✅ Result: NO PERMISSIONS REQUIRED');
         return next();
       }
 
       const missing = required.filter((perm) => !permissions.has(perm));
       if (missing.length > 0) {
+        console.log('   📋 Permission Check:');
+        console.log('      User Roles:', roles);
+        console.log('      User Permissions:', Array.from(permissions));
+        console.log('      Missing Permissions:', missing);
+        console.log('   ❌ Result: MISSING PERMISSIONS');
         return res.status(403).json({
           message: 'Forbidden. Missing required permissions.',
           missingPermissions: missing,
         });
       }
 
+      console.log('   ✅ Result: PERMISSIONS VALIDATED');
       return next();
     } catch (err) {
+      console.log('   ❌ Error:', err.message);
       return res.status(500).json({ message: err.message || 'RBAC check failed.' });
     }
   };
