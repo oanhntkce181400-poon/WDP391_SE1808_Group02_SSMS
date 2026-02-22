@@ -68,6 +68,7 @@ export default function Header() {
   // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
   const moreNav = [
     { label: "Xếp lịch", href: "#" },
+    { label: "Đợt đăng ký", href: "/admin/registration-periods" },
     { label: "Chuyên ngành", href: "/admin/majors" },
     { label: "Giảng viên", href: "/admin/lecturers" },
     { label: "Giờ học", href: "/admin/timeslots" },

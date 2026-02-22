@@ -82,6 +82,7 @@ app.use('/api/feedback-submissions', require('./routes/feedbackSubmission.routes
 app.use('/api/feedback-statistics', require('./routes/feedbackStatistics.routes'));
 app.use('/api/feedbacks', require('./routes/feedback.routes'));
 app.use("/api/students", require("./routes/student.routes"));
+app.use("/api/registration-periods", require("./routes/registrationPeriod.routes"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -101,6 +102,10 @@ async function startServer() {
     console.log("Connecting to database...");
     await connectDB();
     console.log("Database connected, starting HTTP server...");
+
+    // Initialize cron jobs
+    const { initializeCronJobs } = require('./jobs/cron');
+    initializeCronJobs();
 
     return new Promise((resolve, reject) => {
       const server = httpServer.listen(PORT, () => {

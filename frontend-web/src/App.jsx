@@ -35,6 +35,8 @@ import LecturerManagement from "./pages/admin/LecturerManagement";
 import StudentFeedbackPage from "./pages/student/StudentFeedbackPage";
 import StudentSchedulePage from "./pages/student/SchedulePage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
+import RegistrationPeriodPage from "./pages/admin/RegistrationPeriodPage";
+
 export default function App() {
   return (
     <Routes>
@@ -83,6 +85,7 @@ export default function App() {
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
         <Route path="students" element={<StudentManagementPage />} />
+        <Route path="registration-periods" element={<RegistrationPeriodPage />} />
       </Route>
 
       {/* Student routes with layout */}
