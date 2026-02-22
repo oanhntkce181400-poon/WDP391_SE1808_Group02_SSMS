@@ -65,6 +65,25 @@ app.use("/api/schedules", require("./routes/schedule.routes"));
 app.use("/api/requests", require("./routes/request.routes"));
 app.use("/api/attendance", require("./routes/attendance.routes"));
 app.use("/api/finance", require("./routes/finance.routes"));
+app.use('/api/subjects', require('./routes/subject.routes'));
+app.use('/api/curriculums', require('./routes/curriculum.routes'));
+app.use('/api/users', require('./routes/user.routes'));
+app.use('/api/settings', require('./routes/settings.routes'));
+app.use('/api/auth', authRoutes);
+app.use('/api/actors', actorsRoutes);
+app.use('/api/rooms', require('./routes/room.routes'));
+app.use('/api/timeslots', require('./routes/timeslot.routes'));
+app.use('/api/tuition-fees', require('./routes/tuitionFee.routes'));
+app.use('/api/majors', require('./routes/major.routes'));
+app.use('/api/error-logs', require('./routes/errorLog.routes'));
+app.use('/api/classes', require('./routes/classSection.routes'));
+app.use('/api/exams', require('./routes/exam.routes'));
+app.use('/api/feedback-templates', require('./routes/feedbackTemplate.routes'));
+app.use('/api/feedback-submissions', require('./routes/feedbackSubmission.routes'));
+app.use('/api/feedback-statistics', require('./routes/feedbackStatistics.routes'));
+app.use('/api/feedbacks', require('./routes/feedback.routes'));
+app.use("/api/students", require("./routes/student.routes"));
+app.use("/api/registration-periods", require("./routes/registrationPeriod.routes"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -84,6 +103,10 @@ async function startServer() {
     console.log("Connecting to database...");
     await connectDB();
     console.log("Database connected, starting HTTP server...");
+
+    // Initialize cron jobs
+    const { initializeCronJobs } = require('./jobs/cron');
+    initializeCronJobs();
 
     return new Promise((resolve, reject) => {
       const server = httpServer.listen(PORT, () => {

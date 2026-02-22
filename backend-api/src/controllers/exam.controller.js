@@ -1,6 +1,5 @@
 const Exam = require('../models/exam.model');
 const StudentExam = require('../models/studentExam.model');
-const Student = require('../models/student.model');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 
@@ -11,22 +10,19 @@ const ClassEnrollment = require('../models/classEnrollment.model');
  */
 const getMyExams = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    // Step 1: Find student record by user ID
-    const student = await Student.findOne({ email: req.user.email }).exec();
-
-    if (!student) {
-      return res.status(404).json({
+    const studentId = req.auth?.sub;
+    
+    if (!studentId) {
+      return res.status(401).json({
         success: false,
-        message: 'Student record not found',
+        message: 'Unauthorized',
       });
     }
 
-    // Step 2: Find all enrolled classes
+    // Step 1: Find all enrolled classes
     const classEnrollments = await ClassEnrollment.find({
-      student: student._id,
-      status: 'enrolled',
+      student: studentId,
+      status: { $in: ['enrolled', 'active', 'completed'] },
     })
       .populate('classSection')
       .exec();
@@ -41,7 +37,7 @@ const getMyExams = async (req, res) => {
 
     const enrolledClassIds = classEnrollments.map((e) => e.classSection._id);
 
-    // Step 3: Find exams for those classes, populate references
+    // Step 2: Find exams for those classes, populate references
     const exams = await Exam.find({
       classSection: { $in: enrolledClassIds },
       status: { $ne: 'cancelled' },
@@ -53,12 +49,12 @@ const getMyExams = async (req, res) => {
       .sort({ examDate: 1 })
       .exec();
 
-    // Step 4: For each exam, get the student's exam registration (SBD)
+    // Step 3: For each exam, get the student's exam registration (SBD)
     const examsWithSBD = await Promise.all(
       exams.map(async (exam) => {
         const studentExam = await StudentExam.findOne({
           exam: exam._id,
-          student: student._id,
+          student: studentId,
         }).exec();
 
         return {
@@ -104,7 +100,14 @@ const getMyExams = async (req, res) => {
 const getExamDetails = async (req, res) => {
   try {
     const { examId } = req.params;
-    const userId = req.user.id;
+    const studentId = req.auth?.sub;
+
+    if (!studentId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
 
     // Get exam details
     const exam = await Exam.findById(examId)
@@ -121,20 +124,10 @@ const getExamDetails = async (req, res) => {
       });
     }
 
-    // Find student
-    const student = await Student.findOne({ email: req.user.email }).exec();
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student record not found',
-      });
-    }
-
     // Get student's exam registration
     const studentExam = await StudentExam.findOne({
       exam: examId,
-      student: student._id,
+      student: studentId,
     }).exec();
 
     if (!studentExam) {

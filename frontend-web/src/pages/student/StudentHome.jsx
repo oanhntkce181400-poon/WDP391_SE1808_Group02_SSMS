@@ -43,6 +43,7 @@ const lookupItems = [
   { label: 'Lịch thi & Địa điểm',        badge: 'MỚI', isLink: true, path: '/student/exams' },
   { label: 'Đề cương môn học',           badge: null, path: null },
   { label: 'Danh sách wishlist môn học', badge: null, path: null },
+  { label: 'Đánh giá lớp học',           badge: null, isLink: true, path: '/student/feedback' },
 ];
 
 const reportItems = [
@@ -286,7 +287,17 @@ export default function StudentHome() {
                     <button
                       key={index}
                       ref={(el) => setItemRef(itemId, el)}
-                      onClick={() => item.path && navigate(item.path)}
+                      onClick={() => {
+                        if (item.isLink) {
+                          if (item.label === 'Lịch thi & Địa điểm') {
+                            navigate('/student/exams');
+                          } else if (item.label === 'Đánh giá lớp học') {
+                            navigate('/student/feedback');
+                          }
+                        } else if (item.path) {
+                          navigate(item.path);
+                        }
+                      }}
                       className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                         highlighted
                           ? 'bg-yellow-100 shadow-md ring-2 ring-yellow-400'

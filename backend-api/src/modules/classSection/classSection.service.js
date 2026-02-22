@@ -249,6 +249,41 @@ async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek,
   return conflicts;
 }
 
+async function getMyClasses(userId) {
+  const Student = require('../../models/student.model');
+  const ClassEnrollment = require('../../models/classEnrollment.model');
+  
+  // Find student by userId
+  const student = await Student.findOne({ userId });
+  if (!student) {
+    throw new Error('Student record not found');
+  }
+
+  // Find enrollments for this student
+  const enrollments = await ClassEnrollment.find({
+    student: student._id,
+    status: { $in: ['enrolled', 'completed'] }
+  })
+    .populate({
+      path: 'classSection',
+      populate: [
+        { path: 'subject', select: 'subjectCode subjectName credits' },
+        { path: 'teacher', select: 'teacherCode fullName' },
+        { path: 'room', select: 'roomCode roomName roomNumber' },
+        { path: 'timeslot', select: 'groupName startTime endTime dayOfWeek' },
+      ],
+    })
+    .sort({ createdAt: -1 })
+    .exec();
+
+  // Extract class sections from enrollments
+  return enrollments.map(e => ({
+    ...e.classSection.toObject(),
+    enrollmentId: e._id,
+  }));
+}
+}
+
 module.exports = {
   listClasses,
   getClassById,
@@ -260,4 +295,5 @@ module.exports = {
   getClassEnrollments,
   dropCourse,
   checkScheduleConflict,
+  getMyClasses,
 };
