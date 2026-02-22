@@ -80,8 +80,12 @@ export default function SubjectManagement() {
           name: item.subjectName,
           credits: item.credits,
           tuitionFee: item.tuitionFee || item.credits * 630000,
-          department: item.majorCodes || item.majorCode || [],
+          facultyCode: item.facultyCode, // Faculty code
+          majorCode: item.majorCode,
+          majorCodes: item.majorCodes || [],
+          majorRequirements: item.majorRequirements || [],
           isCommon: item.isCommon || false,
+          description: item.description,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
         }));
@@ -173,9 +177,18 @@ export default function SubjectManagement() {
       );
     }
 
-    // Filter by department
+    // Filter by department (supports both old and new field names)
     if (filters.department) {
       filtered = filtered.filter((subject) => {
+        // Check managedByDepartment first (new field)
+        if (subject.managedByDepartment && subject.managedByDepartment.includes(filters.department)) {
+          return true;
+        }
+        // Check majorCode (single department)
+        if (subject.majorCode && subject.majorCode.includes(filters.department)) {
+          return true;
+        }
+        // Check department array (old field)
         const dept = Array.isArray(subject.department)
           ? subject.department
           : [subject.department];
@@ -253,8 +266,12 @@ export default function SubjectManagement() {
       code: subject.code || subject.subjectCode,
       name: subject.name || subject.subjectName,
       credits: subject.credits,
-      department:
-        subject.department || subject.majorCodes || subject.majorCode || [],
+      description: subject.description,
+      managedByFaculty: subject.facultyCode || subject.managedByFaculty, // Faculty
+      facultyCode: subject.facultyCode,
+      majorCode: subject.majorCode,
+      majorCodes: subject.majorCodes || [],
+      majorRequirements: subject.majorRequirements || [],
       isCommon: subject.isCommon || false,
       createdAt: subject.createdAt,
       updatedAt: subject.updatedAt,
@@ -283,9 +300,13 @@ export default function SubjectManagement() {
       code: subject.code || subject.subjectCode,
       name: subject.name || subject.subjectName,
       credits: subject.credits,
-      department: subject.department || subject.majorCode,
-      isCommon: subject.isCommon || false,
       description: subject.description,
+      managedByFaculty: subject.facultyCode || subject.managedByFaculty,
+      facultyCode: subject.facultyCode,
+      majorCode: subject.majorCode,
+      majorCodes: subject.majorCodes || [],
+      majorRequirements: subject.majorRequirements || [],
+      isCommon: subject.isCommon || false,
       createdAt: subject.createdAt,
       updatedAt: subject.updatedAt,
     };
@@ -315,11 +336,12 @@ export default function SubjectManagement() {
     try {
       // Transform frontend fields to backend fields
       const backendData = {
-        code: formData.code,
-        name: formData.name,
+        subjectCode: formData.code,
+        subjectName: formData.name,
         credits: formData.credits,
-        department: formData.department,
-        isCommon: formData.isCommon || false, // Môn chung cho toàn khoa
+        description: formData.description,
+        facultyCode: formData.managedByFaculty || formData.facultyCode, // Khoa quản lý
+        majorRequirements: formData.majorRequirements || [], // Array of { majorCode, isRequired }
       };
 
       if (selectedSubject) {

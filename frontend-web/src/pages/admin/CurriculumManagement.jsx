@@ -172,7 +172,7 @@ export default function CurriculumManagement() {
           if (!curriculumData) {
             console.error('Curriculum not found');
             showToast('Không tìm thấy khung chương trình!', 'error');
-            navigate('/admin/curriculum');
+            navigate('/admin/curriculum-list');
             return;
           }
           
@@ -196,7 +196,7 @@ export default function CurriculumManagement() {
           console.error('Error fetching curriculum:', error);
           if (error.response?.status === 404) {
             showToast('Không tìm thấy khung chương trình!', 'error');
-            navigate('/admin/curriculum');
+            navigate('/admin/curriculum-list');
           } else {
             showToast('Lỗi khi tải dữ liệu khung chương trình!', 'error');
           }
@@ -308,28 +308,19 @@ export default function CurriculumManagement() {
     return raw;
   })();
 
-  // Filter available subjects
+  // Filter available subjects - Show ALL subjects without filtering by major/department
   const filteredSubjects = availableSubjects.filter(
     (subject) => {
       const isScheduled = scheduledCourseCodes.has(normalizeCode(subject.code));
-      const isCommon = subject.isCommon;
-      const matchesMajor = !curriculumMajorCode ||
-        (Array.isArray(subject.department)
-          ? subject.department.map(normalizeCode).includes(curriculumMajorCode)
-          : [normalizeCode(subject.department)].filter(Boolean).includes(curriculumMajorCode));
-      
       const matchesSearch = subject.code.toLowerCase().includes(searchKeyword.toLowerCase()) ||
         subject.name.toLowerCase().includes(searchKeyword.toLowerCase());
       
-      const passes = !isScheduled && (isCommon || matchesMajor) && matchesSearch;
+      // Allow all subjects - no filtering by department/major
+      const passes = !isScheduled && matchesSearch;
       
       if (subject.code === 'CE001' || subject.code === 'ENG001') {
         console.log(`Subject ${subject.code}:`, {
           isScheduled,
-          isCommon,
-          department: subject.department,
-          curriculumMajorCode,
-          matchesMajor,
           matchesSearch,
           passes
         });
@@ -565,7 +556,7 @@ export default function CurriculumManagement() {
       console.error('Error saving curriculum:', error);
       if (error.response?.status === 404) {
         showToast('Không tìm thấy khung chương trình! Đang chuyển hướng...', 'error');
-        setTimeout(() => navigate('/admin/curriculum'), 2000);
+        setTimeout(() => navigate('/admin/curriculum-list'), 2000);
       } else {
         showToast('Lưu thất bại! ' + (error.response?.data?.message || error.message || 'Vui lòng thử lại.'), 'error');
       }
@@ -772,7 +763,7 @@ export default function CurriculumManagement() {
           <div className="p-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 mb-4 text-sm">
-              <Link to="/admin/curriculum" className="text-slate-500 hover:text-primary transition-colors">
+              <Link to="/admin/curriculum-list" className="text-slate-500 hover:text-primary transition-colors">
                 Khung chương trình
               </Link>
               <img src={nextIcon} alt=">" className="w-4 h-4 text-slate-400 rotate-90" />
@@ -888,9 +879,10 @@ export default function CurriculumManagement() {
             </div>
           </div>
 
-          {/* Semesters Board */}
-          <div className="flex-1 overflow-x-auto no-scrollbar p-6">
-            <div className="flex gap-6 h-full min-w-max">
+          {/* Semesters Board - Only show in board view */}
+          {viewMode === 'board' && (
+            <div className="flex-1 overflow-x-auto no-scrollbar p-6">
+              <div className="flex gap-6 h-full min-w-max">
               {semesters.map((semester) => (
                 <div key={semester.id} className="w-80 flex flex-col h-full">
                   {/* Semester Header */}
@@ -909,7 +901,7 @@ export default function CurriculumManagement() {
                   {/* Courses Drop Zone */}
                   <div
                     className="flex-1 flex flex-col gap-3 p-3 bg-slate-200/50 dark:bg-slate-800/40 rounded-xl border-2 border-dashed border-transparent hover:border-primary/20 transition-all overflow-y-auto no-scrollbar"
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, semester.id)}
                     onDrop={(e) => handleDropToSemester(e, semester.id)}
                   >
                     {semester.courses.map((course) => (
@@ -972,6 +964,121 @@ export default function CurriculumManagement() {
               </button>
             </div>
           </div>
+          )}
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <div className="flex-1 overflow-auto p-6">
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-slate-50 dark:bg-slate-900/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">Mã môn</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">Tên môn học</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-slate-500 uppercase">Tín chỉ</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-slate-500 uppercase">Học kỳ</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">Tiên quyết</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-slate-500 uppercase">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {semesters.flatMap(semester => 
+                      semester.courses.map((course, idx) => {
+                        const prereqs = prereqMap.get(normalizeCode(course.code)) || [];
+                        return (
+                          <tr key={`${semester.id}-${course.code}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded">{course.code}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{course.name}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-sm text-slate-600 dark:text-slate-400">{course.credits}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                {semester.name}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {prereqs.length > 0 ? prereqs.map(p => (
+                                  <span key={p} className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded">
+                                    {p}
+                                  </span>
+                                )) : <span className="text-xs text-slate-400">-</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button 
+                                onClick={() => handleRemoveCourse(semester.id, course.code)}
+                                className="text-slate-400 hover:text-red-500 transition-colors"
+                              >
+                                <img src={deleteIcon} alt="Xóa" className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+                {semesters.every(s => s.courses.length === 0) && (
+                  <div className="p-8 text-center text-slate-400">
+                    <p className="text-sm">Chưa có môn học nào</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Prerequisite Diagram View */}
+          {viewMode === 'diagram' && (
+            <div className="flex-1 overflow-auto p-6">
+              <div className="flex gap-8 min-w-max">
+                {semesters.map((semester) => (
+                  <div key={semester.id} className="w-64 shrink-0">
+                    <div className="bg-gradient-to-r from-primary/10 to-transparent dark:from-primary/5 rounded-t-lg px-4 py-3 border-b-2 border-primary">
+                      <h3 className="font-bold text-slate-900 dark:text-slate-100">{semester.name}</h3>
+                      <p className="text-xs text-slate-500">{semester.courses.length} môn • {semester.credits} TC</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-b-lg p-4 min-h-[200px] space-y-3">
+                      {semester.courses.length > 0 ? semester.courses.map(course => {
+                        const prereqs = prereqMap.get(normalizeCode(course.code)) || [];
+                        return (
+                          <div key={course.code} className="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-primary">{course.code}</span>
+                              <button 
+                                onClick={() => handleRemoveCourse(semester.id, course.code)}
+                                className="text-slate-300 hover:text-red-500"
+                              >
+                                <img src={deleteIcon} alt="Xóa" className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 line-clamp-2">{course.name}</p>
+                            {prereqs.length > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                </svg>
+                                <span className="truncate">{prereqs.join(', ')}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }) : (
+                        <div className="text-center text-slate-400 py-8 text-xs">
+                          Chưa có môn
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <footer className="h-12 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center justify-between shrink-0">

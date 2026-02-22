@@ -22,6 +22,9 @@ const classService = {
     axiosClient.post('/classes/enrollment/create', { classId, studentId }),
 
   dropCourse: (enrollmentId) => axiosClient.post(`/classes/enrollment/${enrollmentId}/drop`),
+
+  // Check schedule conflict
+  checkConflict: (data) => axiosClient.post('/classes/check-conflict', data),
 };
 
 export default classService;

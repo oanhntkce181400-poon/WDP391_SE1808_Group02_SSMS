@@ -71,6 +71,10 @@ classSectionSchema.index({ subject: 1 });
 classSectionSchema.index({ teacher: 1 });
 classSectionSchema.index({ academicYear: 1, semester: 1 });
 classSectionSchema.index({ status: 1 });
+// Index for schedule conflict checking
+classSectionSchema.index({ semester: 1, academicYear: 1, timeslot: 1, dayOfWeek: 1 });
+classSectionSchema.index({ teacher: 1, timeslot: 1, dayOfWeek: 1 });
+classSectionSchema.index({ room: 1, timeslot: 1, dayOfWeek: 1 });
 
 const ClassSection = mongoose.model("ClassSection", classSectionSchema);
 

@@ -1,6 +1,6 @@
-const majorService = require('../services/major.service');
+const facultyService = require('../services/faculty.service');
 
-exports.getMajors = async (req, res) => {
+exports.getFaculties = async (req, res) => {
   try {
     const { keyword = '', isActive, page = 1, limit = 10 } = req.query;
 
@@ -10,7 +10,7 @@ exports.getMajors = async (req, res) => {
       else if (String(isActive).toLowerCase() === 'false') parsedIsActive = false;
     }
 
-    const majors = await majorService.getMajors({
+    const faculties = await facultyService.getFaculties({
       keyword,
       isActive: parsedIsActive,
     });
@@ -20,16 +20,16 @@ exports.getMajors = async (req, res) => {
     const limitNum = parseInt(limit);
     const startIndex = (pageNum - 1) * limitNum;
     const endIndex = startIndex + limitNum;
-    const paginatedMajors = majors.slice(startIndex, endIndex);
+    const paginatedFaculties = faculties.slice(startIndex, endIndex);
 
     res.json({
       success: true,
-      data: paginatedMajors,
+      data: paginatedFaculties,
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: majors.length,
-        totalPages: Math.ceil(majors.length / limitNum),
+        total: faculties.length,
+        totalPages: Math.ceil(faculties.length / limitNum),
       },
     });
   } catch (error) {
@@ -40,42 +40,35 @@ exports.getMajors = async (req, res) => {
   }
 };
 
-exports.createMajor = async (req, res) => {
+exports.createFaculty = async (req, res) => {
   try {
-    const { majorCode, majorName, majorNameEn, faculty, isActive } = req.body;
+    const { facultyCode, facultyName, shortName, description, isActive } = req.body;
 
-    if (!majorCode || !majorName) {
+    if (!facultyCode || !facultyName) {
       return res.status(400).json({
         success: false,
-        message: 'Mã ngành và tên ngành là bắt buộc',
+        message: 'Mã khoa và tên khoa là bắt buộc',
       });
     }
 
-    if (!faculty) {
-      return res.status(400).json({
-        success: false,
-        message: 'Khoa là bắt buộc',
-      });
-    }
-
-    const newMajor = await majorService.createMajor({
-      majorCode,
-      majorName,
-      majorNameEn,
-      faculty,
+    const newFaculty = await facultyService.createFaculty({
+      facultyCode,
+      facultyName,
+      shortName,
+      description,
       isActive: isActive !== undefined ? isActive : true,
     });
 
     res.status(201).json({
       success: true,
-      data: newMajor,
-      message: 'Thêm ngành đào tạo thành công',
+      data: newFaculty,
+      message: 'Thêm khoa thành công',
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Mã ngành đã tồn tại',
+        message: 'Mã khoa đã tồn tại',
       });
     }
     res.status(500).json({
@@ -85,42 +78,30 @@ exports.createMajor = async (req, res) => {
   }
 };
 
-exports.updateMajor = async (req, res) => {
+exports.updateFaculty = async (req, res) => {
   try {
     const { id } = req.params;
-    const { majorCode, majorName, majorNameEn, faculty, isActive } = req.body;
+    const { facultyCode, facultyName, shortName, description, isActive } = req.body;
 
-    // Validate faculty if provided
-    if (faculty) {
-      const facultyService = require('../services/faculty.service');
-      const existingFaculty = await facultyService.getFacultyById(faculty);
-      if (!existingFaculty) {
-        return res.status(400).json({
-          success: false,
-          message: 'Khoa không tồn tại',
-        });
-      }
-    }
-
-    const updatedMajor = await majorService.updateMajor(id, {
-      majorCode,
-      majorName,
-      majorNameEn,
-      faculty,
+    const updatedFaculty = await facultyService.updateFaculty(id, {
+      facultyCode,
+      facultyName,
+      shortName,
+      description,
       isActive,
     });
 
-    if (!updatedMajor) {
+    if (!updatedFaculty) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngành đào tạo',
+        message: 'Không tìm thấy khoa',
       });
     }
 
     res.json({
       success: true,
-      data: updatedMajor,
-      message: 'Cập nhật ngành đào tạo thành công',
+      data: updatedFaculty,
+      message: 'Cập nhật khoa thành công',
     });
   } catch (error) {
     res.status(500).json({
@@ -130,22 +111,22 @@ exports.updateMajor = async (req, res) => {
   }
 };
 
-exports.deleteMajor = async (req, res) => {
+exports.deleteFaculty = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deleted = await majorService.deleteMajor(id);
+    const deleted = await facultyService.deleteFaculty(id);
 
     if (!deleted) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngành đào tạo',
+        message: 'Không tìm thấy khoa',
       });
     }
 
     res.json({
       success: true,
-      message: 'Xóa ngành đào tạo thành công',
+      message: 'Xóa khoa thành công',
     });
   } catch (error) {
     res.status(500).json({
@@ -155,7 +136,7 @@ exports.deleteMajor = async (req, res) => {
   }
 };
 
-exports.exportMajors = async (req, res) => {
+exports.exportFaculties = async (req, res) => {
   try {
     const { keyword = '', isActive } = req.query;
 
@@ -165,19 +146,19 @@ exports.exportMajors = async (req, res) => {
       else if (String(isActive).toLowerCase() === 'false') parsedIsActive = false;
     }
 
-    const majors = await majorService.getMajors({
+    const faculties = await facultyService.getFaculties({
       keyword,
       isActive: parsedIsActive,
     });
 
     // Simple CSV export
-    let csv = 'Mã ngành,Tên ngành,Tên tiếng Anh,Số lượng SV,Trạng thái\n';
-    majors.forEach((major) => {
-      csv += `${major.majorCode},${major.majorName},${major.majorNameEn || ''},${major.studentCount || 0},${major.isActive ? 'Đang đào tạo' : 'Ngừng tuyển sinh'}\n`;
+    let csv = 'Mã khoa,Tên khoa,Tên viết tắt,Số ngành,Số sinh viên,Trạng thái\n';
+    faculties.forEach((faculty) => {
+      csv += `${faculty.facultyCode},${faculty.facultyName},${faculty.shortName || ''},${faculty.majorCount || 0},${faculty.studentCount || 0},${faculty.isActive ? 'Hoạt động' : 'Không hoạt động'}\n`;
     });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=majors.csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=faculties.csv');
     res.send('\uFEFF' + csv); // Add BOM for Excel UTF-8 support
   } catch (error) {
     res.status(500).json({

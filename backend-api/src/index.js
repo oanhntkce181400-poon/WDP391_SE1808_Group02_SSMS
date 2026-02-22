@@ -46,6 +46,7 @@ app.use("/api/rooms", require("./routes/room.routes"));
 app.use("/api/timeslots", require("./routes/timeslot.routes"));
 app.use("/api/tuition-fees", require("./routes/tuitionFee.routes"));
 app.use("/api/majors", require("./routes/major.routes"));
+app.use("/api/faculties", require("./routes/faculty.routes"));
 app.use("/api/error-logs", require("./routes/errorLog.routes"));
 app.use("/api/classes", require("./modules/classSection/classSection.routes"));
 app.use("/api/semesters", require("./modules/semester/semester.routes"));

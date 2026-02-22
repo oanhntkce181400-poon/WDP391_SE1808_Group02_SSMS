@@ -1,4 +1,5 @@
 const repo = require("./classSection.repository");
+const ClassSection = require("../../models/classSection.model");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -73,6 +74,33 @@ async function createClassSection(body = {}) {
   const exists = await repo.findClassByCode(body.classCode);
   if (exists) throw new Error("Class code already exists");
 
+  // Check for schedule conflict before creating
+  if (body.teacher && body.room && body.timeslot && body.dayOfWeek) {
+    const conflicts = await checkScheduleConflict({
+      teacherId: body.teacher,
+      roomId: body.room,
+      timeslotId: body.timeslot,
+      dayOfWeek: parseInt(body.dayOfWeek, 10),
+      semester: parseInt(body.semester, 10),
+      academicYear: body.academicYear,
+      excludeClassId: null
+    });
+
+    if (conflicts.length > 0) {
+      const teacherConflict = conflicts.find(c => String(c.teacher?._id) === String(body.teacher));
+      const roomConflict = conflicts.find(c => String(c.room?._id) === String(body.room));
+
+      let errorMsg = "Trùng lịch giảng dạy! ";
+      if (teacherConflict) {
+        errorMsg += `GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã có lớp ${teacherConflict.classCode}. `;
+      }
+      if (roomConflict) {
+        errorMsg += `Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}.`;
+      }
+      throw new Error(errorMsg);
+    }
+  }
+
   return repo.createClass({
     classCode: body.classCode,
     className: body.className,
@@ -89,6 +117,33 @@ async function createClassSection(body = {}) {
 }
 
 async function updateClassSection(classId, updates = {}) {
+  // Check for schedule conflict before updating
+  if (updates.teacher && updates.room && updates.timeslot && updates.dayOfWeek && updates.semester && updates.academicYear) {
+    const conflicts = await checkScheduleConflict({
+      teacherId: updates.teacher,
+      roomId: updates.room,
+      timeslotId: updates.timeslot,
+      dayOfWeek: parseInt(updates.dayOfWeek, 10),
+      semester: parseInt(updates.semester, 10),
+      academicYear: updates.academicYear,
+      excludeClassId: classId
+    });
+
+    if (conflicts.length > 0) {
+      const teacherConflict = conflicts.find(c => String(c.teacher?._id) === String(updates.teacher));
+      const roomConflict = conflicts.find(c => String(c.room?._id) === String(updates.room));
+
+      let errorMsg = "Trùng lịch giảng dạy! ";
+      if (teacherConflict) {
+        errorMsg += `GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã có lớp ${teacherConflict.classCode}. `;
+      }
+      if (roomConflict) {
+        errorMsg += `Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}.`;
+      }
+      throw new Error(errorMsg);
+    }
+  }
+
   const updated = await repo.updateClassById(classId, updates);
   if (!updated) throw new Error("Class section not found");
   return updated;
@@ -155,6 +210,45 @@ async function dropCourse(enrollmentId) {
   return updated;
 }
 
+// ─── Check Schedule Conflict ───────────────────────────────────
+
+async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek, semester, academicYear, excludeClassId }) {
+  // Build query to find conflicts
+  const query = {
+    semester,
+    academicYear,
+    status: "active",
+    $or: [
+      // Conflict: Same teacher at same timeslot and dayOfWeek
+      {
+        teacher: teacherId,
+        timeslot: timeslotId,
+        dayOfWeek: dayOfWeek
+      },
+      // Conflict: Same room at same timeslot and dayOfWeek
+      {
+        room: roomId,
+        timeslot: timeslotId,
+        dayOfWeek: dayOfWeek
+      }
+    ]
+  };
+
+  // If updating, exclude the current class
+  if (excludeClassId) {
+    query._id = { $ne: excludeClassId };
+  }
+
+  const conflicts = await ClassSection.find(query)
+    .populate("teacher", "teacherCode fullName")
+    .populate("room", "roomCode roomName")
+    .populate("timeslot", "groupName startTime endTime")
+    .populate("subject", "subjectCode subjectName")
+    .lean();
+
+  return conflicts;
+}
+
 module.exports = {
   listClasses,
   getClassById,
@@ -165,4 +259,5 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  checkScheduleConflict,
 };

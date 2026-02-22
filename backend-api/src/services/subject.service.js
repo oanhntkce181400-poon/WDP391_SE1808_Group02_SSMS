@@ -5,12 +5,16 @@ class SubjectService {
   async createSubject(data) {
     try {
       const subject = new Subject({
-        subjectCode: data.code,
-        subjectName: data.name,
+        subjectCode: data.code || data.subjectCode,
+        subjectName: data.name || data.subjectName,
         credits: data.credits,
-        majorCode: data.department?.[0] || null, // Single department (backward compatibility)
-        majorCodes: data.department || [], // Multiple departments
-        isCommon: data.isCommon || false, // Môn chung cho toàn khoa
+        tuitionFee: data.tuitionFee || data.credits * 630000,
+        majorCode: data.majorCode || null,
+        majorCodes: data.majorCodes || data.department || [],
+        isCommon: data.isCommon || false,
+        facultyCode: data.facultyCode || data.managedByFaculty || null, // New: Khoa quản lý
+        majorRequirements: data.majorRequirements || [],
+        description: data.description || '',
       });
       await subject.save();
       return subject;
@@ -66,12 +70,16 @@ class SubjectService {
   async updateSubject(id, data) {
     try {
       const updateData = {
-        subjectCode: data.code,
-        subjectName: data.name,
+        subjectCode: data.code || data.subjectCode,
+        subjectName: data.name || data.subjectName,
         credits: data.credits,
-        majorCode: data.department?.[0] || null,
-        majorCodes: data.department || [],
+        tuitionFee: data.tuitionFee || data.credits * 630000,
+        majorCode: data.majorCode || null,
+        majorCodes: data.majorCodes || data.department || [],
         isCommon: data.isCommon || false,
+        facultyCode: data.facultyCode || data.managedByFaculty || null,
+        majorRequirements: data.majorRequirements || [],
+        description: data.description || '',
       };
 
       const subject = await Subject.findByIdAndUpdate(id, updateData, {

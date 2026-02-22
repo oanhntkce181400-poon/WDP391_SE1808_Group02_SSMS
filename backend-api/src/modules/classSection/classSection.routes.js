@@ -29,4 +29,12 @@ router.get(
 );
 router.get("/:classId/enrollments", authMiddleware, ctrl.getClassEnrollments);
 
+// Check schedule conflict
+router.post(
+  "/check-conflict",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.checkConflict
+);
+
 module.exports = router;

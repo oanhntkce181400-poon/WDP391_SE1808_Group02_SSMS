@@ -23,7 +23,7 @@ const CARDS = [
     desc: "Quản lý thông tin môn học",
   },
   {
-    to: "/admin/curriculum",
+    to: "/admin/curriculum-list",
     emoji: "📋",
     color: "bg-green-100",
     title: "Khung chương trình",

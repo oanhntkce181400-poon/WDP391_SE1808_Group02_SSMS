@@ -146,15 +146,17 @@ export default function SubjectList({
                     </div>
                   </td>
                   <td className="px-6 py-5 text-slate-500 text-sm dark:text-slate-400">
-                    {subject.isCommon
-                      ? 'Môn chung cho toàn khoa'
-                      : subject.department
-                      ? (Array.isArray(subject.department)
-                          ? subject.department
-                              .map((code) => majorCodeToName.get(String(code || '').trim()) || code)
-                              .join(', ')
-                          : majorCodeToName.get(String(subject.department || '').trim()) || subject.department)
-                      : ''}
+                    {subject.facultyCode 
+                      ? majorCodeToName.get(String(subject.facultyCode).trim()) || subject.facultyCode
+                      : subject.isCommon
+                        ? 'Môn chung cho toàn khoa'
+                        : subject.department
+                          ? (Array.isArray(subject.department)
+                              ? subject.department
+                                  .map((code) => majorCodeToName.get(String(code || '').trim()) || code)
+                                  .join(', ')
+                              : majorCodeToName.get(String(subject.department || '').trim()) || subject.department)
+                          : ''}
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex justify-end gap-1">

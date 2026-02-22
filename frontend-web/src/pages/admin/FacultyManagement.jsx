@@ -1,13 +1,11 @@
-// Major Management Page - CRUD operations for Majors (Ngành đào tạo)
+// Faculty Management Page - CRUD operations for Faculty (Khoa)
 import { useState, useEffect, useCallback } from 'react';
-import majorService from '../../services/majorService';
 import facultyService from '../../services/facultyService';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
-export default function MajorManagement() {
-  // State for majors data
-  const [majors, setMajors] = useState([]);
+export default function FacultyManagement() {
+  // State for faculties data
   const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,22 +27,23 @@ export default function MajorManagement() {
   // State for modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedMajor, setSelectedMajor] = useState(null);
+  const [selectedFaculty, setSelectedFaculty] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
 
   // State for form data
   const [formData, setFormData] = useState({
     code: '',
     name: '',
-    faculty: '',
+    shortName: '',
+    description: '',
     status: 'active',
   });
 
   // State for toast notifications
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  // Fetch majors from API
-  const fetchMajors = useCallback(async (page = 1) => {
+  // Fetch faculties from API
+  const fetchFaculties = useCallback(async (page = 1) => {
     setLoading(true);
     setError(null);
     try {
@@ -55,10 +54,10 @@ export default function MajorManagement() {
         ...(filters.status !== 'all' && { isActive: filters.status === 'active' }),
       };
 
-      const response = await majorService.getMajors(params);
+      const response = await facultyService.getFaculties(params);
       
       if (response?.data?.success) {
-        setMajors(response.data.data || []);
+        setFaculties(response.data.data || []);
         setPagination(prev => ({
           ...prev,
           currentPage: response.data.pagination?.page || 1,
@@ -67,33 +66,18 @@ export default function MajorManagement() {
         }));
       }
     } catch (err) {
-      console.error('Error fetching majors:', err);
-      setError('Không thể tải danh sách ngành đào tạo');
-      showToast('Không thể tải danh sách ngành đào tạo', 'error');
+      console.error('Error fetching faculties:', err);
+      setError('Không thể tải danh sách khoa');
+      showToast('Không thể tải danh sách khoa', 'error');
     } finally {
       setLoading(false);
     }
   }, [filters, pagination.limit]);
 
-  // Load majors on mount and when filters change
+  // Load faculties on mount and when filters change
   useEffect(() => {
-    fetchMajors(1);
+    fetchFaculties(1);
   }, [filters]);
-
-  // Load faculties for dropdown
-  useEffect(() => {
-    const fetchFaculties = async () => {
-      try {
-        const response = await facultyService.getFaculties({ isActive: true });
-        if (response?.data?.success) {
-          setFaculties(response.data.data || []);
-        }
-      } catch (err) {
-        console.error('Error fetching faculties:', err);
-      }
-    };
-    fetchFaculties();
-  }, []);
 
   // Show toast notification
   const showToast = (message, type = 'success') => {
@@ -102,21 +86,23 @@ export default function MajorManagement() {
   };
 
   // Handle create/edit modal
-  const handleOpenModal = (major = null) => {
-    if (major) {
-      setSelectedMajor(major);
+  const handleOpenModal = (faculty = null) => {
+    if (faculty) {
+      setSelectedFaculty(faculty);
       setFormData({
-        code: major.majorCode || '',
-        name: major.majorName || '',
-        faculty: major.faculty?._id || major.faculty || '',
-        status: major.isActive ? 'active' : 'inactive',
+        code: faculty.facultyCode || '',
+        name: faculty.facultyName || '',
+        shortName: faculty.shortName || '',
+        description: faculty.description || '',
+        status: faculty.isActive ? 'active' : 'inactive',
       });
     } else {
-      setSelectedMajor(null);
+      setSelectedFaculty(null);
       setFormData({
         code: '',
         name: '',
-        faculty: '',
+        shortName: '',
+        description: '',
         status: 'active',
       });
     }
@@ -125,11 +111,12 @@ export default function MajorManagement() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedMajor(null);
+    setSelectedFaculty(null);
     setFormData({
       code: '',
       name: '',
-      faculty: '',
+      shortName: '',
+      description: '',
       status: 'active',
     });
   };
@@ -141,27 +128,28 @@ export default function MajorManagement() {
 
     try {
       const payload = {
-        majorCode: formData.code,
-        majorName: formData.name,
-        faculty: formData.faculty,
+        facultyCode: formData.code,
+        facultyName: formData.name,
+        shortName: formData.shortName,
+        description: formData.description,
         isActive: formData.status === 'active',
       };
 
-      console.log('=== SUBMITTING MAJOR ===');
+      console.log('=== SUBMITTING FACULTY ===');
       console.log('FormData:', formData);
       console.log('Payload:', payload);
 
-      if (selectedMajor) {
-        await majorService.updateMajor(selectedMajor._id, payload);
-        showToast('Cập nhật ngành đào tạo thành công', 'success');
+      if (selectedFaculty) {
+        await facultyService.updateFaculty(selectedFaculty._id, payload);
+        showToast('Cập nhật khoa thành công', 'success');
       } else {
-        await majorService.createMajor(payload);
-        showToast('Thêm ngành đào tạo thành công', 'success');
+        await facultyService.createFaculty(payload);
+        showToast('Thêm khoa thành công', 'success');
       }
       handleCloseModal();
-      fetchMajors(pagination.currentPage);
+      fetchFaculties(pagination.currentPage);
     } catch (err) {
-      console.error('Error saving major:', err);
+      console.error('Error saving faculty:', err);
       showToast(err.response?.data?.message || 'Có lỗi xảy ra', 'error');
     } finally {
       setModalLoading(false);
@@ -169,26 +157,26 @@ export default function MajorManagement() {
   };
 
   // Handle delete
-  const handleOpenDeleteModal = (major) => {
-    setSelectedMajor(major);
+  const handleOpenDeleteModal = (faculty) => {
+    setSelectedFaculty(faculty);
     setIsDeleteModalOpen(true);
   };
 
   const handleCloseDeleteModal = () => {
     setIsDeleteModalOpen(false);
-    setSelectedMajor(null);
+    setSelectedFaculty(null);
   };
 
   const handleDelete = async () => {
     setModalLoading(true);
     try {
-      await majorService.deleteMajor(selectedMajor._id);
-      showToast('Xóa ngành đào tạo thành công', 'success');
+      await facultyService.deleteFaculty(selectedFaculty._id);
+      showToast('Xóa khoa thành công', 'success');
       handleCloseDeleteModal();
-      fetchMajors(pagination.currentPage);
+      fetchFaculties(pagination.currentPage);
     } catch (err) {
-      console.error('Error deleting major:', err);
-      showToast(err.response?.data?.message || 'Không thể xóa ngành đào tạo', 'error');
+      console.error('Error deleting faculty:', err);
+      showToast(err.response?.data?.message || 'Không thể xóa khoa', 'error');
     } finally {
       setModalLoading(false);
     }
@@ -197,17 +185,17 @@ export default function MajorManagement() {
   // Handle export
   const handleExport = async () => {
     try {
-      const response = await majorService.exportMajors(filters);
+      const response = await facultyService.exportFaculties(filters);
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `majors_${new Date().getTime()}.xlsx`);
+      link.setAttribute('download', `faculties_${new Date().getTime()}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       showToast('Xuất file Excel thành công', 'success');
     } catch (err) {
-      console.error('Error exporting majors:', err);
+      console.error('Error exporting faculties:', err);
       showToast('Không thể xuất file Excel', 'error');
     }
   };
@@ -215,7 +203,7 @@ export default function MajorManagement() {
   // Handle pagination
   const handlePageChange = (page) => {
     if (page >= 1 && page <= pagination.totalPages) {
-      fetchMajors(page);
+      fetchFaculties(page);
     }
   };
 
@@ -226,7 +214,7 @@ export default function MajorManagement() {
 
   // Apply filters
   const handleApplyFilters = () => {
-    fetchMajors(1);
+    fetchFaculties(1);
   };
 
   return (
@@ -245,11 +233,11 @@ export default function MajorManagement() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">Quản lý Ngành đào tạo</h1>
+              <h1 className="text-2xl font-bold text-slate-800">Quản lý Khoa</h1>
               <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
                 <span className="hover:text-blue-600 cursor-pointer">🏠 Cấu hình</span>
                 <img src={nextIcon} alt="/" className="w-3 h-3" />
-                <span className="text-slate-700 font-medium">Ngành đào tạo</span>
+                <span className="text-slate-700 font-medium">Khoa</span>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -265,7 +253,7 @@ export default function MajorManagement() {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <img src={addIcon} alt="+" className="w-4 h-4 invert" />
-                <span className="font-medium">Thêm ngành mới</span>
+                <span className="font-medium">Thêm khoa mới</span>
               </button>
             </div>
           </div>
@@ -280,7 +268,7 @@ export default function MajorManagement() {
               <label className="block text-sm font-medium text-slate-700 mb-2">TÌM KIẾM</label>
               <input
                 type="text"
-                placeholder="Tên hoặc mã ngành..."
+                placeholder="Tên hoặc mã khoa..."
                 value={filters.keyword}
                 onChange={(e) => handleFilterChange('keyword', e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -294,8 +282,8 @@ export default function MajorManagement() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">Tất cả</option>
-                <option value="active">Đang đào tạo</option>
-                <option value="inactive">Ngừng tuyển sinh</option>
+                <option value="active">Hoạt động</option>
+                <option value="inactive">Không hoạt động</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -325,59 +313,57 @@ export default function MajorManagement() {
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
                       STT
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Mã Ngành</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tên Ngành Đào Tạo</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Khoa</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Số Lượng SV</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Mã Khoa</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tên Khoa</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tên viết tắt</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Số Ngành</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Trạng Thái</th>
                     <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {majors.length === 0 ? (
+                  {faculties.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="px-6 py-12 text-center text-slate-500">
                         Không có dữ liệu
                       </td>
                     </tr>
                   ) : (
-                    majors.map((major, index) => (
-                      <tr key={major._id} className="hover:bg-slate-50 transition-colors">
+                    faculties.map((faculty, index) => (
+                      <tr key={faculty._id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 text-center text-slate-700 font-medium">
                           {(pagination.currentPage - 1) * pagination.limit + index + 1}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="font-mono font-semibold text-slate-700">{major.majorCode}</span>
+                          <span className="font-mono font-semibold text-slate-700">{faculty.facultyCode}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-slate-900">{major.majorName}</div>
+                          <div className="font-medium text-slate-900">{faculty.facultyName}</div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="text-slate-700">
-                            {major.facultyName || major.faculty?.facultyName || '-'}
-                          </div>
+                        <td className="px-6 py-4 text-slate-600">
+                          {faculty.shortName || '-'}
                         </td>
-                        <td className="px-6 py-4 text-slate-700">{major.studentCount || 0}</td>
+                        <td className="px-6 py-4 text-slate-700">{faculty.majorCount || 0}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                            major.isActive 
+                            faculty.isActive 
                               ? 'bg-green-100 text-green-800' 
                               : 'bg-gray-100 text-gray-800'
                           }`}>
-                            {major.isActive ? 'Đang đào tạo' : 'Ngừng tuyển sinh'}
+                            {faculty.isActive ? 'Hoạt động' : 'Không hoạt động'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleOpenModal(major)}
+                              onClick={() => handleOpenModal(faculty)}
                               className="text-blue-600 hover:text-blue-800 font-medium text-sm"
                             >
                               Sửa
                             </button>
                             <span className="text-slate-300">|</span>
                             <button
-                              onClick={() => handleOpenDeleteModal(major)}
+                              onClick={() => handleOpenDeleteModal(faculty)}
                               className="text-red-600 hover:text-red-800 font-medium text-sm"
                             >
                               Xóa
@@ -436,13 +422,13 @@ export default function MajorManagement() {
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200">
               <h2 className="text-xl font-bold text-slate-800">
-                {selectedMajor ? 'Chỉnh sửa ngành đào tạo' : 'Thêm ngành đào tạo mới'}
+                {selectedFaculty ? 'Chỉnh sửa khoa' : 'Thêm khoa mới'}
               </h2>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Mã ngành <span className="text-red-500">*</span>
+                  Mã khoa <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -450,12 +436,12 @@ export default function MajorManagement() {
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="VD: SE, AI, IB..."
+                  placeholder="VD: CIT, SE, AI..."
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Tên ngành <span className="text-red-500">*</span>
+                  Tên khoa <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -463,26 +449,32 @@ export default function MajorManagement() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Kỹ thuật phần mềm"
+                  placeholder="Khoa Công nghệ Thông tin"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Khoa <span className="text-red-500">*</span>
+                  Tên viết tắt
                 </label>
-                <select
-                  required
-                  value={formData.faculty}
-                  onChange={(e) => setFormData({ ...formData, faculty: e.target.value })}
+                <input
+                  type="text"
+                  value={formData.shortName}
+                  onChange={(e) => setFormData({ ...formData, shortName: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- Chọn Khoa --</option>
-                  {faculties.map((faculty) => (
-                    <option key={faculty._id} value={faculty._id}>
-                      {faculty.facultyName} ({faculty.facultyCode})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="CNTT"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Mô tả
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Mô tả về khoa..."
+                  rows={3}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Trạng thái</label>
@@ -491,8 +483,8 @@ export default function MajorManagement() {
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="active">Đang đào tạo</option>
-                  <option value="inactive">Ngừng tuyển sinh</option>
+                  <option value="active">Hoạt động</option>
+                  <option value="inactive">Không hoạt động</option>
                 </select>
               </div>
               <div className="flex items-center justify-end gap-3 pt-4">
@@ -508,7 +500,7 @@ export default function MajorManagement() {
                   disabled={modalLoading}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
-                  {modalLoading ? 'Đang lưu...' : (selectedMajor ? 'Cập nhật' : 'Thêm mới')}
+                  {modalLoading ? 'Đang lưu...' : (selectedFaculty ? 'Cập nhật' : 'Thêm mới')}
                 </button>
               </div>
             </form>
@@ -523,7 +515,7 @@ export default function MajorManagement() {
             <div className="p-6">
               <h2 className="text-xl font-bold text-slate-800 mb-4">Xác nhận xóa</h2>
               <p className="text-slate-600 mb-6">
-                Bạn có chắc chắn muốn xóa ngành <strong>{selectedMajor?.name}</strong>?
+                Bạn có chắc chắn muốn xóa khoa <strong>{selectedFaculty?.facultyName}</strong>?
                 Hành động này không thể hoàn tác.
               </p>
               <div className="flex items-center justify-end gap-3">

@@ -126,6 +126,38 @@ async function dropCourse(req, res) {
   }
 }
 
+async function checkConflict(req, res) {
+  try {
+    const { teacherId, roomId, timeslotId, dayOfWeek, semester, academicYear, excludeClassId } = req.body;
+
+    // Validate required fields
+    if (!teacherId || !roomId || !timeslotId || !dayOfWeek || !semester || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc để kiểm tra trùng lịch"
+      });
+    }
+
+    const conflicts = await service.checkScheduleConflict({
+      teacherId,
+      roomId,
+      timeslotId,
+      dayOfWeek: parseInt(dayOfWeek, 10),
+      semester: parseInt(semester, 10),
+      academicYear,
+      excludeClassId
+    });
+
+    return res.json({
+      success: true,
+      hasConflict: conflicts.length > 0,
+      conflicts
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
@@ -136,4 +168,5 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  checkConflict,
 };

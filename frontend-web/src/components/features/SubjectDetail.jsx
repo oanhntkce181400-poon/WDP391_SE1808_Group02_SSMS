@@ -125,13 +125,35 @@ export default function SubjectDetail({ isOpen, onClose, subject }) {
                 Khoa quản lý
               </label>
               <p className="text-slate-900 dark:text-white font-semibold">
-                {subject.department
-                  ? (Array.isArray(subject.department)
-                      ? subject.department.join(', ')
-                      : subject.department)
-                  : 'Chưa phân công'}
+                {subject.facultyCode || subject.managedByFaculty || 'Chưa phân công'}
               </p>
             </div>
+
+            {/* Major Requirements */}
+            {subject.majorRequirements && subject.majorRequirements.length > 0 && (
+              <div className="col-span-2 flex flex-col gap-1">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Chuyên ngành áp dụng
+                </label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {subject.majorRequirements.map((req, index) => (
+                    <span
+                      key={index}
+                      className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-medium ${
+                        req.isRequired
+                          ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
+                          : 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                      }`}
+                    >
+                      {req.majorCode}
+                      <span className="ml-1 text-xs opacity-75">
+                        ({req.isRequired ? 'Bắt buộc' : 'Tự chọn'})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Created At */}
             <div className="flex flex-col gap-1">

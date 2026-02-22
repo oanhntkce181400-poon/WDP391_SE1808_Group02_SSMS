@@ -29,6 +29,7 @@ export default function CurriculumList() {
     code: '',
     name: '',
     major: '',
+    majorId: '', // Store ObjectId of Major
     academicYear: '2024/2025',
     description: '',
     status: 'active',
@@ -84,6 +85,7 @@ export default function CurriculumList() {
       code: '',
       name: '',
       major: '',
+      majorId: '',
       academicYear: '2024/2025',
       description: '',
       status: 'active',
@@ -98,6 +100,7 @@ export default function CurriculumList() {
       code: curriculum.code || curriculum.curriculumCode || '',
       name: curriculum.name || curriculum.title || '',
       major: curriculum.major || '',
+      majorId: curriculum.majorId || '',
       academicYear: curriculum.academicYear || '',
       description: curriculum.description || '',
       status: curriculum.status || 'active',
@@ -224,7 +227,7 @@ export default function CurriculumList() {
                       Tên chương trình
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Khoa
+                      Chuyên ngành
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                       Năm học
@@ -361,18 +364,25 @@ export default function CurriculumList() {
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 dark:text-white mb-1.5">
-                  Khoa/Viện quản lý <span className="text-red-500">*</span>
+                  Chuyên ngành <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.major}
-                  onChange={(e) => setFormData({ ...formData, major: e.target.value })}
+                  value={formData.majorId}
+                  onChange={(e) => {
+                    const selectedMajor = majors.find(m => m._id === e.target.value);
+                    setFormData({ 
+                      ...formData, 
+                      majorId: e.target.value,
+                      major: selectedMajor ? selectedMajor.majorCode : ''
+                    });
+                  }}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-1 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
                   required
                 >
-                  <option value="">Chọn khoa/viện</option>
+                  <option value="">Chọn chuyên ngành</option>
                   {majors.map((major) => (
-                    <option key={major.majorCode} value={major.majorCode}>
-                      {major.majorName}
+                    <option key={major._id} value={major._id}>
+                      {major.majorName} ({major.majorCode})
                     </option>
                   ))}
                 </select>

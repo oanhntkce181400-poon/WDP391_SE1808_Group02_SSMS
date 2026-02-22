@@ -56,7 +56,7 @@ export default function Header() {
     { label: "Lớp học", href: "/admin/classes" },
     { label: "Môn học", href: "/admin/subjects" },
     { label: "Phòng học", href: "/admin/rooms" },
-    { label: "Khung chương trình", href: "/admin/curriculum" },
+    { label: "Khung chương trình", href: "/admin/curriculum-list" },
     { label: "Người dùng", href: "/admin/users" },
     { label: "Đơn từ", href: "/admin/requests" },
     { label: "Điểm danh", href: "/admin/attendance" },
@@ -67,6 +67,7 @@ export default function Header() {
   // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
   const moreNav = [
     { label: "Xếp lịch", href: "#" },
+    { label: "Khoa", href: "/admin/faculties" },
     { label: "Chuyên ngành", href: "/admin/majors" },
     { label: "Giảng viên", href: "/admin/lecturers" },
     { label: "Giờ học", href: "/admin/timeslots" },

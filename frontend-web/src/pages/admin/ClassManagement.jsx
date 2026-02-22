@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  AlertCircle,
 } from "lucide-react";
 import classService from "../../services/classService";
 import subjectService from "../../services/subjectService";
@@ -80,6 +81,7 @@ const EMPTY_FORM = {
   teacher: "",
   room: "",
   timeslot: "",
+  dayOfWeek: "",
   semester: "",
   academicYear: "",
   maxCapacity: "",
@@ -116,6 +118,11 @@ export default function ClassManagement() {
   const [selected, setSelected] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+
+  // Conflict checking state
+  const [conflictWarning, setConflictWarning] = useState(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
+  const [conflictData, setConflictData] = useState(null);
 
   /* ── Toast helper ── */
   const showToast = (message, type = "success") => {
@@ -188,11 +195,18 @@ export default function ClassManagement() {
   /* ── Create ── */
   const openCreate = () => {
     setFormData(EMPTY_FORM);
+    setConflictWarning(null);
+    setConflictData(null);
     setShowCreate(true);
   };
 
   const submitCreate = async (e) => {
     e.preventDefault();
+    // Prevent submit if there's a conflict
+    if (conflictWarning) {
+      showToast("Vui lòng chọn lịch khác để tránh trùng lịch!", "error");
+      return;
+    }
     setSubmitting(true);
     try {
       await classService.createClass({
@@ -202,6 +216,7 @@ export default function ClassManagement() {
         teacher: formData.teacher,
         room: formData.room,
         timeslot: formData.timeslot,
+        dayOfWeek: Number(formData.dayOfWeek),
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
@@ -230,16 +245,24 @@ export default function ClassManagement() {
       teacher: cls.teacher?._id || cls.teacher || "",
       room: cls.room?._id || cls.room || "",
       timeslot: cls.timeslot?._id || cls.timeslot || "",
+      dayOfWeek: cls.dayOfWeek?.toString() || "",
       semester: cls.semester || "",
       academicYear: cls.academicYear || "",
       maxCapacity: cls.maxCapacity || "",
       status: cls.status || "active",
     });
+    setConflictWarning(null);
+    setConflictData(null);
     setShowEdit(true);
   };
 
   const submitEdit = async (e) => {
     e.preventDefault();
+    // Prevent submit if there's a conflict
+    if (conflictWarning) {
+      showToast("Vui lòng chọn lịch khác để tránh trùng lịch!", "error");
+      return;
+    }
     setSubmitting(true);
     try {
       await classService.updateClass(selected._id, {
@@ -248,6 +271,7 @@ export default function ClassManagement() {
         teacher: formData.teacher,
         room: formData.room,
         timeslot: formData.timeslot,
+        dayOfWeek: Number(formData.dayOfWeek),
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
@@ -288,6 +312,70 @@ export default function ClassManagement() {
   /* ── Input change helper ── */
   const handleChange = (e) =>
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+
+  /* ── Check schedule conflict ── */
+  const checkConflict = useCallback(async (data) => {
+    // Only check if we have all required fields
+    if (!data.teacher || !data.room || !data.timeslot || !data.dayOfWeek || !data.semester || !data.academicYear) {
+      setConflictWarning(null);
+      setConflictData(null);
+      return;
+    }
+
+    setCheckingConflict(true);
+    try {
+      const response = await classService.checkConflict({
+        teacherId: data.teacher,
+        roomId: data.room,
+        timeslotId: data.timeslot,
+        dayOfWeek: data.dayOfWeek,
+        semester: data.semester,
+        academicYear: data.academicYear,
+        excludeClassId: selected?._id || null
+      });
+
+      const result = response.data;
+      if (result.hasConflict && result.conflicts?.length > 0) {
+        const conflicts = result.conflicts;
+        const teacherConflict = conflicts.find(c => String(c.teacher?._id) === data.teacher);
+        const roomConflict = conflicts.find(c => String(c.room?._id) === data.room);
+
+        let message = "⚠️ Trùng lịch giảng dạy! ";
+        const conflictDetails = [];
+
+        if (teacherConflict) {
+          conflictDetails.push(`GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã dạy lớp ${teacherConflict.classCode} (${teacherConflict.subject?.subjectCode})`);
+        }
+        if (roomConflict) {
+          conflictDetails.push(`Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}`);
+        }
+
+        setConflictWarning(message + conflictDetails.join(" | "));
+        setConflictData(conflicts);
+      } else {
+        setConflictWarning(null);
+        setConflictData(null);
+      }
+    } catch (err) {
+      console.error("Error checking conflict:", err);
+      // Don't show error to user, just reset conflict state
+      setConflictWarning(null);
+      setConflictData(null);
+    } finally {
+      setCheckingConflict(false);
+    }
+  }, [selected]);
+
+  // Debounced check conflict when form data changes
+  useEffect(() => {
+    if (!showCreate && !showEdit) return;
+
+    const timer = setTimeout(() => {
+      checkConflict(formData);
+    }, 300); // Debounce 300ms
+
+    return () => clearTimeout(timer);
+  }, [formData.teacher, formData.room, formData.timeslot, formData.dayOfWeek, formData.semester, formData.academicYear, showCreate, showEdit, checkConflict]);
 
   /* ─────────── RENDER ─────────── */
   return (
@@ -498,12 +586,16 @@ export default function ClassManagement() {
           onClose={() => {
             setShowCreate(false);
             setShowEdit(false);
+            setConflictWarning(null);
+            setConflictData(null);
           }}
           submitting={submitting}
           subjects={subjects}
           teachers={teachers}
           rooms={rooms}
           timeslots={timeslots}
+          conflictWarning={conflictWarning}
+          checkingConflict={checkingConflict}
         />
       )}
 
@@ -573,6 +665,8 @@ function ClassFormModal({
   teachers,
   rooms,
   timeslots,
+  conflictWarning,
+  checkingConflict,
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -587,6 +681,26 @@ function ClassFormModal({
             <X size={18} />
           </button>
         </div>
+
+        {/* Conflict Warning */}
+        {conflictWarning && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
+              <p className="text-sm text-red-700">{conflictWarning}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Checking status */}
+        {checkingConflict && !conflictWarning && (
+          <div className="mx-6 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+              <span className="text-sm text-blue-700">Đang kiểm tra trùng lịch...</span>
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <form
@@ -724,7 +838,7 @@ function ClassFormModal({
           {/* Lịch học */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Lịch học <span className="text-red-500">*</span>
+              Ca học <span className="text-red-500">*</span>
             </label>
             <select
               name="timeslot"
@@ -739,6 +853,29 @@ function ClassFormModal({
                   {ts.groupName}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Thứ trong tuần */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Thứ <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="dayOfWeek"
+              required
+              value={formData.dayOfWeek}
+              onChange={onChange}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+            >
+              <option value="">-- Chọn thứ --</option>
+              <option value="1">Thứ 2 (Monday)</option>
+              <option value="2">Thứ 3 (Tuesday)</option>
+              <option value="3">Thứ 4 (Wednesday)</option>
+              <option value="4">Thứ 5 (Thursday)</option>
+              <option value="5">Thứ 6 (Friday)</option>
+              <option value="6">Thứ 7 (Saturday)</option>
+              <option value="7">Chủ nhật (Sunday)</option>
             </select>
           </div>
 
@@ -789,10 +926,10 @@ function ClassFormModal({
           <button
             type="submit"
             form="class-form"
-            disabled={submitting}
+            disabled={submitting || !!conflictWarning}
             className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
           >
-            {submitting ? "Đang lưu..." : "Lưu"}
+            {submitting ? "Đang lưu..." : conflictWarning ? "Không thể lưu (Trùng lịch)" : "Lưu"}
           </button>
         </div>
       </div>

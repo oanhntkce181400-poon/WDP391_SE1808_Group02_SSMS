@@ -14,6 +14,7 @@ import CurriculumManagement from "./pages/admin/CurriculumManagement";
 import UserListPage from "./pages/UserListPage";
 import GeneralSettingsPage from "./pages/admin/GeneralSettingsPage";
 import MajorManagement from "./pages/admin/MajorManagement";
+import FacultyManagement from "./pages/admin/FacultyManagement";
 import StudentHome from "./pages/student/StudentHome";
 import ExamSchedulePage from "./pages/student/ExamSchedulePage";
 import SchedulePage from "./pages/student/SchedulePage";
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="users" element={<UserListPage />} />
         <Route path="settings" element={<GeneralSettingsPage />} />
         <Route path="majors" element={<MajorManagement />} />
+        <Route path="faculties" element={<FacultyManagement />} />
         <Route path="rooms" element={<RoomManagement />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum-list" element={<CurriculumList />} />
