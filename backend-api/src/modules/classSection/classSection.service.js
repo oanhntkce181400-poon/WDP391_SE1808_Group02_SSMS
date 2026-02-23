@@ -5,8 +5,6 @@ const REQUIRED_CLASS_FIELDS = [
   "className",
   "subject",
   "teacher",
-  "room",
-  "timeslot",
   "semester",
   "academicYear",
   "maxCapacity",
@@ -104,8 +102,9 @@ async function deleteClassSection(classId) {
     );
   }
 
-  await repo.deleteClassById(classId);
+  // Clean up enrollments first, then delete the class
   await repo.deleteEnrollmentsByClass(classId);
+  await repo.deleteClassById(classId);
 }
 
 // ─── Enrollment ───────────────────────────────────
@@ -156,26 +155,34 @@ async function dropCourse(enrollmentId) {
 
 // ─── Check Schedule Conflict ───────────────────────────────────
 
-async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek, semester, academicYear, excludeClassId }) {
+async function checkScheduleConflict({
+  teacherId,
+  roomId,
+  timeslotId,
+  dayOfWeek,
+  semester,
+  academicYear,
+  excludeClassId,
+}) {
   // Build query to find conflicts
   const query = {
     semester,
     academicYear,
-    status: "active",
+    status: { $nin: ["cancelled", "completed"] },
     $or: [
       // Conflict: Same teacher at same timeslot and dayOfWeek
       {
         teacher: teacherId,
         timeslot: timeslotId,
-        dayOfWeek: dayOfWeek
+        dayOfWeek: dayOfWeek,
       },
       // Conflict: Same room at same timeslot and dayOfWeek
       {
         room: roomId,
         timeslot: timeslotId,
-        dayOfWeek: dayOfWeek
-      }
-    ]
+        dayOfWeek: dayOfWeek,
+      },
+    ],
   };
 
   // If updating, exclude the current class
@@ -183,14 +190,7 @@ async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek,
     query._id = { $ne: excludeClassId };
   }
 
-  const conflicts = await ClassSection.find(query)
-    .populate("teacher", "teacherCode fullName")
-    .populate("room", "roomCode roomName")
-    .populate("timeslot", "groupName startTime endTime")
-    .populate("subject", "subjectCode subjectName")
-    .lean();
-
-  return conflicts;
+  return repo.findConflicts(query);
 }
 
 // ─── Bulk Update Status ───────────────────────────────────
@@ -213,11 +213,8 @@ async function bulkUpdateStatus(classIds, newStatus) {
     throw new Error("Trạng thái mới không được để trống");
   }
 
-  // Get all classes
-  const classes = await ClassSection.find({ _id: { $in: classIds } })
-    .populate("teacher", "fullName")
-    .populate("subject", "subjectCode subjectName")
-    .lean();
+  // Get all classes via repository
+  const classes = await repo.findClassesByIds(classIds);
 
   if (classes.length !== classIds.length) {
     throw new Error("Một số lớp học không tồn tại");
@@ -266,8 +263,8 @@ async function bulkUpdateStatus(classIds, newStatus) {
       }
     }
 
-    // Update status
-    await ClassSection.findByIdAndUpdate(cls._id, { status: newStatus });
+    // Update status via repository
+    await repo.updateClassStatus(cls._id, newStatus);
 
     results.success.push({
       classId: cls._id,
@@ -307,11 +304,13 @@ async function getMyClasses(userId) {
     .sort({ createdAt: -1 })
     .exec();
 
-  // Extract class sections from enrollments
-  return enrollments.map((e) => ({
-    ...e.classSection.toObject(),
-    enrollmentId: e._id,
-  }));
+  // Extract class sections from enrollments, filter out orphaned ones
+  return enrollments
+    .filter((e) => e.classSection != null)
+    .map((e) => ({
+      ...e.classSection.toObject(),
+      enrollmentId: e._id,
+    }));
 }
 
 module.exports = {
