@@ -21,6 +21,7 @@ import subjectService from "../../services/subjectService";
 import semesterService from "../../services/semesterService";
 import lecturerService from "../../services/lecturerService";
 import AssignScheduleModal from "../../components/features/AssignScheduleModal";
+import ReassignClassModal from "../../components/features/ReassignClassModal";
 
 /* ───── helpers ───── */
 // Kiểm tra xem lớp đã có lịch chưa (có thể mở lớp)
@@ -133,6 +134,10 @@ export default function ClassManagement() {
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedClassForSchedule, setSelectedClassForSchedule] = useState(null);
+
+  // Reassign class modal state
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [selectedClassForReassign, setSelectedClassForReassign] = useState(null);
 
   // Bulk selection state
   const [selectedClasses, setSelectedClasses] = useState([]);
@@ -532,6 +537,18 @@ export default function ClassManagement() {
                         >
                           <Calendar size={15} />
                         </button>
+                        {cls.currentEnrollment > 0 && (cls.status === "published" || cls.status === "scheduled" || cls.status === "active") && (
+                          <button
+                            onClick={() => {
+                              setSelectedClassForReassign(cls);
+                              setShowReassignModal(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Chuyển lớp"
+                          >
+                            <Users size={15} />
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(cls)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -660,6 +677,21 @@ export default function ClassManagement() {
           }}
           onSuccess={() => {
             // Refresh class list after successful schedule assignment
+            fetchClasses(pagination.page, search, statusFilter);
+          }}
+        />
+      )}
+
+      {/* ── Reassign Class Modal ── */}
+      {showReassignModal && selectedClassForReassign && (
+        <ReassignClassModal
+          sourceClass={selectedClassForReassign}
+          onClose={() => {
+            setShowReassignModal(false);
+            setSelectedClassForReassign(null);
+          }}
+          onSuccess={() => {
+            // Refresh class list after successful reassign
             fetchClasses(pagination.page, search, statusFilter);
           }}
         />

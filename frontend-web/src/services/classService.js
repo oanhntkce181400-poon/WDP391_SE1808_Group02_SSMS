@@ -28,6 +28,9 @@ const classService = {
 
   // Bulk update status
   bulkUpdateStatus: (ids, status) => axiosClient.patch('/classes/bulk-status', { ids, status }),
+
+  // Reassign class - chuyển sinh viên giữa các lớp
+  reassignClass: (data) => axiosClient.post('/classes/reassign', data),
 };
 
 export default classService;

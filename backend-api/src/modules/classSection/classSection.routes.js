@@ -23,6 +23,14 @@ router.post(
   ctrl.checkConflict
 );
 
+// Reassign class - chuyển sinh viên giữa các lớp
+router.post(
+  "/reassign",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.reassignClass
+);
+
 // Enrollment endpoints
 router.post(
   "/enrollment/create",

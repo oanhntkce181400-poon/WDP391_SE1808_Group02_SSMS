@@ -188,6 +188,46 @@ async function bulkUpdateStatus(req, res) {
   }
 }
 
+async function reassignClass(req, res) {
+  try {
+    const { fromClassId, toClassId, studentIds, closeSourceClass } = req.body;
+
+    if (!fromClassId || !toClassId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin lớp nguồn hoặc lớp đích"
+      });
+    }
+
+    if (fromClassId === toClassId) {
+      return res.status(400).json({
+        success: false,
+        message: "Lớp nguồn và lớp đích không được trùng nhau"
+      });
+    }
+
+    const result = await service.reassignClass({
+      fromClassId,
+      toClassId,
+      studentIds,
+      closeSourceClass: closeSourceClass === true,
+    });
+
+    let message = `Đã chuyển ${result.movedCount} sinh viên thành công`;
+    if (result.skippedCount > 0) {
+      message += ` (${result.skippedCount} sinh viên đã đăng ký lớp đích, bỏ qua)`;
+    }
+
+    return res.json({
+      success: true,
+      message,
+      data: result
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
@@ -200,4 +240,5 @@ module.exports = {
   dropCourse,
   checkConflict,
   bulkUpdateStatus,
+  reassignClass,
 };

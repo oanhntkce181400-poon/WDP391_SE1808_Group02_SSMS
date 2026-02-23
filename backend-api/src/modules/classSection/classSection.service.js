@@ -1,4 +1,8 @@
 const repo = require("./classSection.repository");
+const mongoose = require("mongoose");
+const ClassSection = require("../../models/classSection.model");
+const ClassEnrollment = require("../../models/classEnrollment.model");
+const Schedule = require("../../models/schedule.model");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -72,6 +76,12 @@ async function createClassSection(body = {}) {
   const exists = await repo.findClassByCode(body.classCode);
   if (exists) throw new Error("Class code already exists");
 
+  // Chuyển status "active" cũ thành "published" để tương thích
+  let status = body.status || "draft";
+  if (status === "active") {
+    status = "published";
+  }
+
   return repo.createClass({
     classCode: body.classCode,
     className: body.className,
@@ -82,12 +92,17 @@ async function createClassSection(body = {}) {
     semester: Number(body.semester),
     academicYear: body.academicYear,
     maxCapacity: Number(body.maxCapacity),
-    status: body.status || "active",
+    status: status,
     dayOfWeek: body.dayOfWeek,
   });
 }
 
 async function updateClassSection(classId, updates = {}) {
+  // Chuyển status "active" cũ thành "published" để tương thích
+  if (updates.status === "active") {
+    updates.status = "published";
+  }
+  
   const updated = await repo.updateClassById(classId, updates);
   if (!updated) throw new Error("Class section not found");
   return updated;
@@ -152,6 +167,120 @@ async function dropCourse(enrollmentId) {
   const updated = await repo.updateEnrollmentStatus(enrollmentId, "dropped");
   await repo.decrementEnrollmentCount(String(enrollment.classSection));
   return updated;
+}
+
+// ─── Reassign Class ───────────────────────────────────
+
+async function reassignClass({ fromClassId, toClassId, studentIds, closeSourceClass = false }) {
+  try {
+    // Bước 1: Validate 2 lớp
+    const [fromClass, toClass] = await Promise.all([
+      ClassSection.findById(fromClassId),
+      ClassSection.findById(toClassId),
+    ]);
+
+    if (!fromClass) throw new Error("Lớp nguồn không tồn tại");
+    if (!toClass) throw new Error("Lớp đích không tồn tại");
+
+    // Check cùng môn học
+    if (String(fromClass.subject) !== String(toClass.subject)) {
+      throw new Error("Hai lớp phải cùng môn học");
+    }
+
+    // Check cùng học kỳ và năm học
+    if (fromClass.semester !== toClass.semester || fromClass.academicYear !== toClass.academicYear) {
+      throw new Error("Hai lớp phải cùng học kỳ và năm học");
+    }
+
+    // Check lớp đích có lịch học
+    const toClassSchedule = await Schedule.countDocuments({
+      classSection: toClassId,
+      status: "active",
+    });
+
+    const toClassHasOldSchedule = toClass.room && toClass.timeslot && toClass.dayOfWeek;
+
+    if (toClassSchedule === 0 && !toClassHasOldSchedule) {
+      throw new Error("Lớp đích chưa được gán lịch học");
+    }
+
+    // Bước 2: Lấy danh sách sinh viên cần chuyển
+    const enrollmentsQuery = {
+      classSection: fromClassId,
+      status: "enrolled",
+    };
+
+    if (studentIds && studentIds.length > 0) {
+      enrollmentsQuery.student = { $in: studentIds };
+    }
+
+    const enrollmentsToMove = await ClassEnrollment.find(enrollmentsQuery);
+    
+    // Bước 2.5: Lọc bỏ sinh viên đã có trong lớp đích
+    const toClassEnrollments = await ClassEnrollment.find({
+      classSection: toClassId,
+      status: "enrolled",
+    });
+    const toClassStudentIds = new Set(toClassEnrollments.map(e => e.student.toString()));
+    
+    const validEnrollments = enrollmentsToMove.filter(e => !toClassStudentIds.has(e.student.toString()));
+    const skippedStudents = enrollmentsToMove.length - validEnrollments.length;
+    const studentCount = validEnrollments.length;
+
+    if (studentCount === 0) {
+      throw new Error("Không có sinh viên nào để chuyển (tất cả đã đăng ký lớp đích)");
+    }
+
+    // Check capacity của lớp đích
+    const availableSlots = toClass.maxCapacity - toClass.currentEnrollment;
+    if (studentCount > availableSlots) {
+      throw new Error(`Lớp đích chỉ còn ${availableSlots} chỗ, cần ${studentCount} chỗ`);
+    }
+
+    // Bước 3: Update enrollment - chuyển sinh viên sang lớp mới
+    const enrollmentIds = validEnrollments.map(e => e._id);
+    await ClassEnrollment.updateMany(
+      { _id: { $in: enrollmentIds } },
+      { classSection: toClassId }
+    );
+
+    // Bước 4: Cập nhật sĩ số 2 lớp
+    await ClassSection.findByIdAndUpdate(
+      fromClassId,
+      { $inc: { currentEnrollment: -studentCount } }
+    );
+
+    await ClassSection.findByIdAndUpdate(
+      toClassId,
+      { $inc: { currentEnrollment: studentCount } }
+    );
+
+    // Bước 5: Nếu closeSourceClass = true và lớp nguồn không còn SV thì đóng lớp
+    if (closeSourceClass) {
+      const remainingCount = await ClassEnrollment.countDocuments({
+        classSection: fromClassId,
+        status: "enrolled",
+      });
+
+      if (remainingCount === 0) {
+        await ClassSection.findByIdAndUpdate(
+          fromClassId,
+          { status: "cancelled" }
+        );
+      }
+    }
+
+    return {
+      success: true,
+      movedCount: studentCount,
+      skippedCount: skippedStudents,
+      fromClassId,
+      toClassId,
+      closeSourceClass: closeSourceClass && (await ClassEnrollment.countDocuments({ classSection: fromClassId, status: "enrolled" })) === 0,
+    };
+  } catch (error) {
+    throw error;
+  }
 }
 
 // ─── Check Schedule Conflict ───────────────────────────────────
@@ -324,6 +453,7 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  reassignClass,
   checkScheduleConflict,
   bulkUpdateStatus,
   getMyClasses,
