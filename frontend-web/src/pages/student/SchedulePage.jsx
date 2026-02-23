@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import scheduleService from '../../services/scheduleService';
 
 const TIME_SLOTS = [
-  { label: 'Ca 1', startTime: '07:30', endTime: '09:00', matchFrom: '07:00', matchTo: '09:30' },
-  { label: 'Ca 2', startTime: '09:30', endTime: '11:00', matchFrom: '09:30', matchTo: '12:00' },
-  { label: 'Ca 3', startTime: '12:30', endTime: '14:00', matchFrom: '12:00', matchTo: '14:30' },
-  { label: 'Ca 4', startTime: '14:30', endTime: '16:00', matchFrom: '14:30', matchTo: '17:00' },
-  { label: 'Ca 5', startTime: '17:00', endTime: '18:30', matchFrom: '17:00', matchTo: '19:30' },
-  { label: 'Ca 6', startTime: '20:00', endTime: '22:00', matchFrom: '19:30', matchTo: '23:59' },
+  { label: 'Ca 1', startTime: '07:00', endTime: '09:15' },
+  { label: 'Ca 2', startTime: '09:30', endTime: '11:45' },
+  { label: 'Ca 3', startTime: '12:30', endTime: '14:45' },
+  { label: 'Ca 4', startTime: '15:00', endTime: '17:15' },
+  { label: 'Ca 5', startTime: '17:30', endTime: '19:45' },
+  { label: 'Ca 6', startTime: '20:00', endTime: '22:00' },
 ];
 
 const DAYS = [
@@ -56,10 +56,7 @@ function getMondayOfWeek(date) {
 }
 
 function toDateStr(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return date.toISOString().split('T')[0];
 }
 
 function getDateOfDay(weekStartStr, dayOfWeek) {
@@ -135,19 +132,10 @@ export default function SchedulePage() {
   const getColor = (code) => dynamicColorMap[code] || FALLBACK_COLORS[0];
 
  
-  function timeToMinutes(t) {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  }
-
   function getScheduleForCell(dayOfWeek, timeSlot) {
-    const from = timeToMinutes(timeSlot.matchFrom);
-    const to   = timeToMinutes(timeSlot.matchTo);
-    return schedules.find((s) => {
-      if (s.dayOfWeek !== dayOfWeek) return false;
-      const start = timeToMinutes(s.startTime);
-      return start >= from && start < to;
-    });
+    return schedules.find(
+      (s) => s.dayOfWeek === dayOfWeek && s.startTime === timeSlot.startTime
+    );
   }
 
   const weekEndStr = toDateStr(

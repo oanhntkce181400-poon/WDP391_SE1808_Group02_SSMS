@@ -1,8 +1,9 @@
 import axiosClient from './axiosClient';
 
 const scheduleService = {
-  // Sinh viên xem lịch học của mình theo tuần
-  getMySchedule: (weekStart) => axiosClient.get('/schedules/my', { params: { weekStart } }),
+  // Lấy lịch học của sinh viên hiện tại (theo tuần)
+  getMySchedule: (weekStart) => 
+    axiosClient.get('/schedules/my', { params: { weekStart } }),
 
   // Lấy tất cả lịch học của một lớp
   getClassSchedules: (classId) => axiosClient.get(`/classes/${classId}/schedules`),
