@@ -37,5 +37,8 @@ TEST_GUIDE.md
 backend-api/MODELS_DOCUMENTATION.md
 backend-api/SEED_DATA_DOCUMENTATION.md
 
+# Docs folder (UC descriptions, helper scripts)
+backend-api/docs/
+
 # Uploads folder
 uploads/

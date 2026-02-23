@@ -15,7 +15,9 @@ async function findClasses(filter, { skip, limit, sort } = {}) {
     .populate("teacher", "teacherCode fullName email department")
     .populate("room", "roomCode roomName capacity")
     .populate("timeslot", "groupName startTime endTime")
-    .sort(sort || { academicYear: -1, semester: -1, classCode: 1 })
+    .sort(
+      sort || { createdAt: -1, academicYear: -1, semester: -1, classCode: 1 },
+    )
     .skip(skip || 0)
     .limit(limit || 10)
     .lean()
@@ -152,6 +154,26 @@ async function findStudentById(studentId) {
   return Student.findById(studentId).exec();
 }
 
+async function findClassesByIds(ids) {
+  return ClassSection.find({ _id: { $in: ids } })
+    .populate("teacher", "fullName")
+    .populate("subject", "subjectCode subjectName")
+    .lean();
+}
+
+async function updateClassStatus(id, status) {
+  return ClassSection.findByIdAndUpdate(id, { status }).exec();
+}
+
+async function findConflicts(query) {
+  return ClassSection.find(query)
+    .populate("teacher", "teacherCode fullName")
+    .populate("room", "roomCode roomName")
+    .populate("timeslot", "groupName startTime endTime")
+    .populate("subject", "subjectCode subjectName")
+    .lean();
+}
+
 module.exports = {
   countClasses,
   findClasses,
@@ -172,4 +194,7 @@ module.exports = {
   incrementEnrollmentCount,
   decrementEnrollmentCount,
   findStudentById,
+  findClassesByIds,
+  updateClassStatus,
+  findConflicts,
 };
