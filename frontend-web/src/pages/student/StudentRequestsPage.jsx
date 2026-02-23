@@ -264,6 +264,20 @@ export default function StudentRequestsPage() {
                   {/* Dòng 2: Lý do (tóm tắt) */}
                   <p className="mt-2 text-sm text-slate-600 line-clamp-2">{req.reason}</p>
 
+                  {/* Dòng 2b: Ghi chú từ phòng CTSV (nếu có) */}
+                  {req.staffNote && (
+                    <div className={`mt-2 rounded-lg px-3 py-2 text-sm ${
+                      req.status === 'Approved'
+                        ? 'bg-green-50 border border-green-200 text-green-800'
+                        : req.status === 'Rejected'
+                        ? 'bg-red-50 border border-red-200 text-red-800'
+                        : 'bg-blue-50 border border-blue-200 text-blue-800'
+                    }`}>
+                      <span className="font-semibold">Phản hồi từ phòng CTSV: </span>
+                      {req.staffNote}
+                    </div>
+                  )}
+
                   {/* Dòng 3: Nút thao tác (chỉ hiện khi Pending) */}
                   {req.status === 'Pending' && (
                     <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">

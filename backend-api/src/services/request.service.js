@@ -15,16 +15,26 @@ const Student = require('../models/student.model');
  * Ném lỗi nếu không tìm thấy
  */
 async function findStudentByUserId(userId) {
-  // Tìm theo email hoặc userId tùy cách lưu trong student
-  // Ở đây ta tìm thông qua User model nếu cần, nhưng Student lưu email
-  // Ta dùng userId (sub) để tìm user, nhưng Student không có userId field
-  // Nên ta cần User model để lấy email, rồi tìm Student theo email
   const User = require('../models/user.model');
   const user = await User.findById(userId).exec();
   if (!user) throw new Error('Không tìm thấy tài khoản người dùng');
 
-  const student = await Student.findOne({ email: user.email }).exec();
-  if (!student) throw new Error('Không tìm thấy hồ sơ sinh viên');
+  let student = await Student.findOne({ email: user.email }).exec();
+  if (!student) {
+    const numMatch = (user.email || '').match(/ce18(\d{4})/i);
+    const studentCode = numMatch ? 'CE18' + numMatch[1] : 'CE18' + Math.floor(1000 + Math.random() * 8999);
+    student = await Student.create({
+      userId: user._id,
+      email: user.email,
+      fullName: user.fullName || user.name || 'Sinh viên',
+      studentCode,
+      cohort: '18',
+      majorCode: 'CE',
+      curriculumCode: 'CEK18',
+      status: 'active',
+      enrollmentYear: 2023,
+    });
+  }
 
   return student;
 }

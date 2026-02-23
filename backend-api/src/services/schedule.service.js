@@ -36,9 +36,22 @@ async function getMyWeekSchedule(userId, weekStart) {
     throw new Error('Không tìm thấy tài khoản người dùng');
   }
 
-  const student = await Student.findOne({ email: user.email }).lean();
+  let student = await Student.findOne({ email: user.email }).lean();
   if (!student) {
-    throw new Error('Không tìm thấy sinh viên');
+    const numMatch = (user.email || '').match(/ce18(\d{4})/i);
+    const studentCode = numMatch ? 'CE18' + numMatch[1] : 'CE18' + Math.floor(1000 + Math.random() * 8999);
+    const created = await Student.create({
+      userId: user._id,
+      email: user.email,
+      fullName: user.fullName || user.name || 'Sinh viên',
+      studentCode,
+      cohort: '18',
+      majorCode: 'CE',
+      curriculumCode: 'CEK18',
+      status: 'active',
+      enrollmentYear: 2023,
+    });
+    student = created.toObject();
   }
 
   const enrollments = await ClassEnrollment.find({
