@@ -46,6 +46,9 @@ router.get(
 );
 router.get("/:classId/enrollments", authMiddleware, ctrl.getClassEnrollments);
 
+// Student tự đăng ký lớp (không cần admin)
+router.post("/:classId/self-enroll", authMiddleware, ctrl.selfEnroll);
+
 // Class Section CRUD - PHẢI ĐẶT SAU các route cụ thể
 router.get("/", authMiddleware, ctrl.getAll);
 router.get("/:classId", authMiddleware, ctrl.getById);

@@ -1,3 +1,6 @@
+# Personal study notes
+HUYHM_30PHUT.md
+
 # Node
 node_modules/
 dist/
@@ -36,6 +39,9 @@ SUMMARY.md
 TEST_GUIDE.md
 backend-api/MODELS_DOCUMENTATION.md
 backend-api/SEED_DATA_DOCUMENTATION.md
+
+# Docs folder (UC descriptions, helper scripts)
+backend-api/docs/
 
 # Uploads folder
 uploads/
