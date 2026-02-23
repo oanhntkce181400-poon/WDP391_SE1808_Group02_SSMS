@@ -1,19 +1,8 @@
-// AttendancePage.jsx
-// Trang Quản lý Điểm danh - dành cho Admin / Staff / Giảng viên
-// Chức năng:
-//   1. Xem danh sách lớp học dạng thẻ (ClassCard)
-//   2. Chọn lớp → xem danh sách buổi học + tạo buổi mới
-//   3. Chọn buổi → bảng điểm danh nhanh (Present/Absent/Late) → Lưu
-// Tác giả: Group02 - WDP391
+
 
 import { useState, useEffect } from 'react';
 import attendanceService from '../../services/attendanceService';
 
-// ─────────────────────────────────────────────────────────────
-// HẰNG SỐ
-// ─────────────────────────────────────────────────────────────
-
-// Màu sắc cho badge trạng thái điểm danh
 const STATUS_STYLES = {
   Present: 'bg-green-100 text-green-800 border border-green-200',
   Late:    'bg-yellow-100 text-yellow-800 border border-yellow-200',

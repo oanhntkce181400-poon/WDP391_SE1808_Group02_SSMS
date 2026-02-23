@@ -28,6 +28,9 @@ const classService = {
 
   // Bulk update status
   bulkUpdateStatus: (ids, status) => axiosClient.patch('/classes/bulk-status', { ids, status }),
+
+  // Student tự đăng ký lớp
+  selfEnroll: (classId) => axiosClient.post(`/classes/${classId}/self-enroll`),
 };
 
 export default classService;

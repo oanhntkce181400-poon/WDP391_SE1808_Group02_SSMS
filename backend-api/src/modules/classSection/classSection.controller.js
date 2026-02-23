@@ -195,6 +195,16 @@ module.exports = {
   update,
   remove,
   enrollStudent,
+  selfEnroll: async (req, res) => {
+    try {
+      const userId = req.user?.userId || req.user?._id;
+      const { classId } = req.params;
+      const data = await service.selfEnroll(userId, classId);
+      return res.status(201).json({ success: true, message: "Đăng ký lớp thành công", data });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  },
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
