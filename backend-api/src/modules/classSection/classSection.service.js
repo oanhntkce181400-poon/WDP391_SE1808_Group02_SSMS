@@ -1,15 +1,12 @@
 const repo = require("./classSection.repository");
-const ClassSection = require("../../models/classSection.model");
-const Schedule = require("../../models/schedule.model");
-const Timeslot = require("../../models/timeslot.model");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
   "className",
   "subject",
   "teacher",
-  // "room", // Removed - scheduling is done via AssignScheduleModal
-  // "timeslot", // Removed - scheduling is done via AssignScheduleModal
+  "room",
+  "timeslot",
   "semester",
   "academicYear",
   "maxCapacity",
@@ -37,7 +34,6 @@ async function listClasses(query = {}) {
   if (search) {
     const subjectIds = await repo.findSubjectIdsBySearch(search);
     filter.$or = [
-      { className: { $regex: search, $options: "i" } },
       { classCode: { $regex: search, $options: "i" } },
       ...(subjectIds.length > 0 ? [{ subject: { $in: subjectIds } }] : []),
     ];
@@ -76,73 +72,22 @@ async function createClassSection(body = {}) {
   const exists = await repo.findClassByCode(body.classCode);
   if (exists) throw new Error("Class code already exists");
 
-  // Check for schedule conflict before creating
-  if (body.teacher && body.room && body.timeslot && body.dayOfWeek) {
-    const conflicts = await checkScheduleConflict({
-      teacherId: body.teacher,
-      roomId: body.room,
-      timeslotId: body.timeslot,
-      dayOfWeek: parseInt(body.dayOfWeek, 10),
-      semester: parseInt(body.semester, 10),
-      academicYear: body.academicYear,
-      excludeClassId: null
-    });
-
-    if (conflicts.length > 0) {
-      const teacherConflict = conflicts.find(c => String(c.teacher?._id) === String(body.teacher));
-      const roomConflict = conflicts.find(c => String(c.room?._id) === String(body.room));
-
-      let errorMsg = "Trùng lịch giảng dạy! ";
-      if (teacherConflict) {
-        errorMsg += `GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã có lớp ${teacherConflict.classCode}. `;
-      }
-      if (roomConflict) {
-        errorMsg += `Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}.`;
-      }
-      throw new Error(errorMsg);
-    }
-  }
-
   return repo.createClass({
     classCode: body.classCode,
     className: body.className,
     subject: body.subject,
     teacher: body.teacher,
+    room: body.room,
+    timeslot: body.timeslot,
     semester: Number(body.semester),
     academicYear: body.academicYear,
     maxCapacity: Number(body.maxCapacity),
-    status: body.status || "draft",
+    status: body.status || "active",
+    dayOfWeek: body.dayOfWeek,
   });
 }
 
 async function updateClassSection(classId, updates = {}) {
-  // Check for schedule conflict before updating
-  if (updates.teacher && updates.room && updates.timeslot && updates.dayOfWeek && updates.semester && updates.academicYear) {
-    const conflicts = await checkScheduleConflict({
-      teacherId: updates.teacher,
-      roomId: updates.room,
-      timeslotId: updates.timeslot,
-      dayOfWeek: parseInt(updates.dayOfWeek, 10),
-      semester: parseInt(updates.semester, 10),
-      academicYear: updates.academicYear,
-      excludeClassId: classId
-    });
-
-    if (conflicts.length > 0) {
-      const teacherConflict = conflicts.find(c => String(c.teacher?._id) === String(updates.teacher));
-      const roomConflict = conflicts.find(c => String(c.room?._id) === String(updates.room));
-
-      let errorMsg = "Trùng lịch giảng dạy! ";
-      if (teacherConflict) {
-        errorMsg += `GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã có lớp ${teacherConflict.classCode}. `;
-      }
-      if (roomConflict) {
-        errorMsg += `Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}.`;
-      }
-      throw new Error(errorMsg);
-    }
-  }
-
   const updated = await repo.updateClassById(classId, updates);
   if (!updated) throw new Error("Class section not found");
   return updated;
@@ -301,6 +246,7 @@ async function bulkUpdateStatus(classIds, newStatus) {
     // Special validation for publishing: check if class has schedule
     if (newStatus === "published") {
       // Check in Schedule collection
+      const Schedule = require("../../models/schedule.model");
       const scheduleCount = await Schedule.countDocuments({
         classSection: cls._id,
         status: "active",
@@ -334,6 +280,40 @@ async function bulkUpdateStatus(classIds, newStatus) {
   return results;
 }
 
+async function getMyClasses(userId) {
+  const Student = require("../../models/student.model");
+  const ClassEnrollment = require("../../models/classEnrollment.model");
+
+  // Find student by userId
+  const student = await Student.findOne({ userId });
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  // Find enrollments for this student
+  const enrollments = await ClassEnrollment.find({
+    student: student._id,
+    status: { $in: ["enrolled", "completed"] },
+  })
+    .populate({
+      path: "classSection",
+      populate: [
+        { path: "subject", select: "subjectCode subjectName credits" },
+        { path: "teacher", select: "teacherCode fullName" },
+        { path: "room", select: "roomCode roomName roomNumber" },
+        { path: "timeslot", select: "groupName startTime endTime dayOfWeek" },
+      ],
+    })
+    .sort({ createdAt: -1 })
+    .exec();
+
+  // Extract class sections from enrollments
+  return enrollments.map((e) => ({
+    ...e.classSection.toObject(),
+    enrollmentId: e._id,
+  }));
+}
+
 module.exports = {
   listClasses,
   getClassById,
@@ -346,4 +326,5 @@ module.exports = {
   dropCourse,
   checkScheduleConflict,
   bulkUpdateStatus,
+  getMyClasses,
 };
