@@ -31,6 +31,9 @@ const classService = {
 
   // Reassign class - chuyển sinh viên giữa các lớp
   reassignClass: (data) => axiosClient.post('/classes/reassign', data),
+
+  // Student tự đăng ký lớp
+  selfEnroll: (classId) => axiosClient.post(`/classes/${classId}/self-enroll`),
 };
 
 export default classService;
