@@ -26,12 +26,12 @@ const classSectionSchema = new mongoose.Schema(
     room: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Room",
-      required: true,
+      required: false, // Scheduling is done via Schedule model
     },
     timeslot: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Timeslot",
-      required: true,
+      required: false, // Scheduling is done via Schedule model
     },
     semester: {
       type: Number,
@@ -53,8 +53,8 @@ const classSectionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "cancelled", "completed"],
-      default: "active",
+      enum: ["draft", "scheduled", "published", "locked", "cancelled", "completed"],
+      default: "draft",
     },
     // Ngày học trong tuần: 1=Thứ 2, 2=Thứ 3, ..., 6=Thứ 7, 7=Chủ nhật
     dayOfWeek: {

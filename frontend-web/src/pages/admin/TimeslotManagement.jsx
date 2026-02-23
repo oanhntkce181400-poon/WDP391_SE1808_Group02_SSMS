@@ -57,11 +57,10 @@ export default function TimeslotManagement() {
         id: item._id,
         groupName: item.groupName,
         description: item.description || '',
-        startDate: item.startDate,
-        endDate: item.endDate,
         startTime: item.startTime,
         endTime: item.endTime,
-        sessionsPerDay: item.sessionsPerDay,
+        startPeriod: item.startPeriod,
+        endPeriod: item.endPeriod,
         status: item.status,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
@@ -281,13 +280,13 @@ export default function TimeslotManagement() {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tên nhóm môn
+                Tên ca
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Ngày bắt đầu
+                Tiết
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Ngày kết thúc
+                Giờ học
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Thao tác
@@ -322,10 +321,14 @@ export default function TimeslotManagement() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{formatDate(timeslot.startDate)}</div>
+                    <div className="text-sm text-gray-900">
+                      Tiết {timeslot.startPeriod} - {timeslot.endPeriod}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{formatDate(timeslot.endDate)}</div>
+                    <div className="text-sm text-gray-900">
+                      {timeslot.startTime} - {timeslot.endTime}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">

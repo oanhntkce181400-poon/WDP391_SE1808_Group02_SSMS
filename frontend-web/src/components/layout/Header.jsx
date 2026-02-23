@@ -57,20 +57,17 @@ export default function Header() {
     { label: "Môn học", href: "/admin/subjects" },
     { label: "Phòng học", href: "/admin/rooms" },
     { label: "Khung chương trình", href: "/admin/curriculum-list" },
-    { label: "Khung chương trình", href: "/admin/curriculum" },
-    { label: "Sinh viên", href: "/admin/students" },
     { label: "Người dùng", href: "/admin/users" },
     { label: "Đơn từ", href: "/admin/requests" },
     { label: "Điểm danh", href: "/admin/attendance" },
     { label: "Đánh giá", href: "/admin/feedback-management" },
-    
+    { label: "Thống kê Đánh giá", href: "/admin/feedback-statistics" },
   ];
 
   // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
   const moreNav = [
     { label: "Xếp lịch", href: "#" },
     { label: "Khoa", href: "/admin/faculties" },
-    { label: "Đợt đăng ký", href: "/admin/registration-periods" },
     { label: "Chuyên ngành", href: "/admin/majors" },
     { label: "Giảng viên", href: "/admin/lecturers" },
     { label: "Giờ học", href: "/admin/timeslots" },
@@ -79,7 +76,6 @@ export default function Header() {
     { label: "Cài đặt", href: "/admin/settings" },
     { label: "Nhật ký lỗi", href: "/admin/error-logs" },
     { label: "Nhân sự", href: "/admin/actors" },
-    { label: "Thống kê Đánh giá", href: "/admin/feedback-statistics" },
   ];
 
   // Kiểm tra link có đang active không

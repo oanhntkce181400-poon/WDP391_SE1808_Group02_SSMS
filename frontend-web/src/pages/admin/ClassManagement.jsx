@@ -13,16 +13,30 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Calendar,
+  CheckSquare,
 } from "lucide-react";
 import classService from "../../services/classService";
 import subjectService from "../../services/subjectService";
 import semesterService from "../../services/semesterService";
 import lecturerService from "../../services/lecturerService";
-import roomService from "../../services/roomService";
-import timeslotService from "../../services/timeslotService";
+import AssignScheduleModal from "../../components/features/AssignScheduleModal";
 
 /* ───── helpers ───── */
+// Kiểm tra xem lớp đã có lịch chưa (có thể mở lớp)
+const hasSchedule = (cls) => {
+  // Lớp đã ở trạng thái scheduled hoặc published = đã có lịch
+  if (cls.status === "scheduled" || cls.status === "published") return true;
+  // Hoặc có room/timeslot (format cũ)
+  if (cls.room && cls.timeslot && cls.dayOfWeek) return true;
+  return false;
+};
+
 const STATUS_CONFIG = {
+  draft: { label: "Nháp", bg: "bg-gray-100", text: "text-gray-700" },
+  scheduled: { label: "Đã xếp lịch", bg: "bg-blue-100", text: "text-blue-700" },
+  published: { label: "Đã công bố", bg: "bg-green-100", text: "text-green-700" },
+  locked: { label: "Đã khóa", bg: "bg-red-100", text: "text-red-700" },
   active: { label: "Đang mở", bg: "bg-emerald-100", text: "text-emerald-700" },
   cancelled: { label: "Đã hủy", bg: "bg-red-100", text: "text-red-700" },
   completed: {
@@ -79,13 +93,10 @@ const EMPTY_FORM = {
   className: "",
   subject: "",
   teacher: "",
-  room: "",
-  timeslot: "",
-  dayOfWeek: "",
   semester: "",
   academicYear: "",
   maxCapacity: "",
-  status: "active",
+  status: "draft",
 };
 
 export default function ClassManagement() {
@@ -108,8 +119,6 @@ export default function ClassManagement() {
   // dropdowns
   const [subjects, setSubjects] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [rooms, setRooms] = useState([]);
-  const [timeslots, setTimeslots] = useState([]);
 
   // modals
   const [showCreate, setShowCreate] = useState(false);
@@ -118,11 +127,15 @@ export default function ClassManagement() {
   const [selected, setSelected] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
-
-  // Conflict checking state
   const [conflictWarning, setConflictWarning] = useState(null);
-  const [checkingConflict, setCheckingConflict] = useState(false);
   const [conflictData, setConflictData] = useState(null);
+
+  // Schedule modal state
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedClassForSchedule, setSelectedClassForSchedule] = useState(null);
+
+  // Bulk selection state
+  const [selectedClasses, setSelectedClasses] = useState([]);
 
   /* ── Toast helper ── */
   const showToast = (message, type = "success") => {
@@ -169,17 +182,6 @@ export default function ClassManagement() {
       .getAll({ limit: 200 })
       .then((r) => setTeachers(r.data.data || []))
       .catch(() => {});
-    roomService
-      .getRooms({ limit: 200 })
-      .then((r) => {
-        const raw = r.data;
-        setRooms(raw.data || raw.rooms || []);
-      })
-      .catch(() => {});
-    timeslotService
-      .getTimeslots({ limit: 200 })
-      .then((r) => setTimeslots(r.data.data || r.data.timeslots || []))
-      .catch(() => {});
   }, [fetchClasses]);
 
   const handleSearch = (e) => {
@@ -192,6 +194,62 @@ export default function ClassManagement() {
     fetchClasses(1, search, val);
   };
 
+  /* ── Bulk Selection ── */
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      // Chỉ chọn các lớp đã có lịch
+      const classesWithSchedule = classes.filter(cls => hasSchedule(cls)).map(c => c._id);
+      setSelectedClasses(classesWithSchedule);
+    } else {
+      setSelectedClasses([]);
+    }
+  };
+
+  const handleSelectOne = (classId) => {
+    setSelectedClasses((prev) =>
+      prev.includes(classId)
+        ? prev.filter((id) => id !== classId)
+        : [...prev, classId]
+    );
+  };
+
+  const handleBulkPublish = async () => {
+    if (selectedClasses.length === 0) return;
+    setSubmitting(true);
+    try {
+      const res = await classService.bulkUpdateStatus(selectedClasses, "published");
+      showToast(`Đã mở ${res.data.data.success.length}/${selectedClasses.length} lớp`);
+      setSelectedClasses([]);
+      fetchClasses(pagination.page, search, statusFilter);
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Mở lớp thất bại";
+      showToast(msg, "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkStatus = async (newStatus) => {
+    if (selectedClasses.length === 0) return;
+    setSubmitting(true);
+    try {
+      const res = await classService.bulkUpdateStatus(selectedClasses, newStatus);
+      const { success, failed } = res.data.data;
+      let msg = `Cập nhật thành công ${success.length}/${selectedClasses.length} lớp`;
+      if (failed.length > 0) {
+        msg += `. ${failed.length} lớp thất bại: ${failed.map(f => f.classCode).join(", ")}`;
+      }
+      showToast(msg, failed.length > 0 ? "warning" : "success");
+      setSelectedClasses([]);
+      fetchClasses(pagination.page, search, statusFilter);
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Cập nhật thất bại";
+      showToast(msg, "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   /* ── Create ── */
   const openCreate = () => {
     setFormData(EMPTY_FORM);
@@ -202,11 +260,6 @@ export default function ClassManagement() {
 
   const submitCreate = async (e) => {
     e.preventDefault();
-    // Prevent submit if there's a conflict
-    if (conflictWarning) {
-      showToast("Vui lòng chọn lịch khác để tránh trùng lịch!", "error");
-      return;
-    }
     setSubmitting(true);
     try {
       await classService.createClass({
@@ -214,9 +267,6 @@ export default function ClassManagement() {
         className: formData.className,
         subject: formData.subject,
         teacher: formData.teacher,
-        room: formData.room,
-        timeslot: formData.timeslot,
-        dayOfWeek: Number(formData.dayOfWeek),
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
@@ -243,35 +293,22 @@ export default function ClassManagement() {
       className: cls.className,
       subject: cls.subject?._id || cls.subject || "",
       teacher: cls.teacher?._id || cls.teacher || "",
-      room: cls.room?._id || cls.room || "",
-      timeslot: cls.timeslot?._id || cls.timeslot || "",
-      dayOfWeek: cls.dayOfWeek?.toString() || "",
       semester: cls.semester || "",
       academicYear: cls.academicYear || "",
       maxCapacity: cls.maxCapacity || "",
-      status: cls.status || "active",
+      status: cls.status || "draft",
     });
-    setConflictWarning(null);
-    setConflictData(null);
     setShowEdit(true);
   };
 
   const submitEdit = async (e) => {
     e.preventDefault();
-    // Prevent submit if there's a conflict
-    if (conflictWarning) {
-      showToast("Vui lòng chọn lịch khác để tránh trùng lịch!", "error");
-      return;
-    }
     setSubmitting(true);
     try {
       await classService.updateClass(selected._id, {
         className: formData.className,
         subject: formData.subject,
         teacher: formData.teacher,
-        room: formData.room,
-        timeslot: formData.timeslot,
-        dayOfWeek: Number(formData.dayOfWeek),
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
@@ -293,6 +330,12 @@ export default function ClassManagement() {
     setShowDelete(true);
   };
 
+  /* ── Assign Schedule ── */
+  const openAssignSchedule = (cls) => {
+    setSelectedClassForSchedule(cls);
+    setShowScheduleModal(true);
+  };
+
   const confirmDelete = async () => {
     setSubmitting(true);
     try {
@@ -312,70 +355,6 @@ export default function ClassManagement() {
   /* ── Input change helper ── */
   const handleChange = (e) =>
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
-
-  /* ── Check schedule conflict ── */
-  const checkConflict = useCallback(async (data) => {
-    // Only check if we have all required fields
-    if (!data.teacher || !data.room || !data.timeslot || !data.dayOfWeek || !data.semester || !data.academicYear) {
-      setConflictWarning(null);
-      setConflictData(null);
-      return;
-    }
-
-    setCheckingConflict(true);
-    try {
-      const response = await classService.checkConflict({
-        teacherId: data.teacher,
-        roomId: data.room,
-        timeslotId: data.timeslot,
-        dayOfWeek: data.dayOfWeek,
-        semester: data.semester,
-        academicYear: data.academicYear,
-        excludeClassId: selected?._id || null
-      });
-
-      const result = response.data;
-      if (result.hasConflict && result.conflicts?.length > 0) {
-        const conflicts = result.conflicts;
-        const teacherConflict = conflicts.find(c => String(c.teacher?._id) === data.teacher);
-        const roomConflict = conflicts.find(c => String(c.room?._id) === data.room);
-
-        let message = "⚠️ Trùng lịch giảng dạy! ";
-        const conflictDetails = [];
-
-        if (teacherConflict) {
-          conflictDetails.push(`GV ${teacherConflict.teacher?.fullName || teacherConflict.teacher} đã dạy lớp ${teacherConflict.classCode} (${teacherConflict.subject?.subjectCode})`);
-        }
-        if (roomConflict) {
-          conflictDetails.push(`Phòng ${roomConflict.room?.roomCode || roomConflict.room} đã được đặt cho lớp ${roomConflict.classCode}`);
-        }
-
-        setConflictWarning(message + conflictDetails.join(" | "));
-        setConflictData(conflicts);
-      } else {
-        setConflictWarning(null);
-        setConflictData(null);
-      }
-    } catch (err) {
-      console.error("Error checking conflict:", err);
-      // Don't show error to user, just reset conflict state
-      setConflictWarning(null);
-      setConflictData(null);
-    } finally {
-      setCheckingConflict(false);
-    }
-  }, [selected]);
-
-  // Debounced check conflict when form data changes
-  useEffect(() => {
-    if (!showCreate && !showEdit) return;
-
-    const timer = setTimeout(() => {
-      checkConflict(formData);
-    }, 300); // Debounce 300ms
-
-    return () => clearTimeout(timer);
-  }, [formData.teacher, formData.room, formData.timeslot, formData.dayOfWeek, formData.semester, formData.academicYear, showCreate, showEdit, checkConflict]);
 
   /* ─────────── RENDER ─────────── */
   return (
@@ -435,7 +414,10 @@ export default function ClassManagement() {
             className="px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
           >
             <option value="">Tất cả trạng thái</option>
-            <option value="active">Đang mở</option>
+            <option value="draft">Bản nháp</option>
+            <option value="scheduled">Đã lên lịch</option>
+            <option value="published">Đang mở</option>
+            <option value="locked">Bị khóa</option>
             <option value="completed">Đã kết thúc</option>
             <option value="cancelled">Đã hủy</option>
           </select>
@@ -459,6 +441,15 @@ export default function ClassManagement() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <th className="px-2 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedClasses.length === classes.filter(c => hasSchedule(c)).length && classes.filter(c => hasSchedule(c)).length > 0}
+                      onChange={handleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      title="Chọn tất cả lớp đã có lịch"
+                    />
+                  </th>
                   {[
                     "Mã lớp",
                     "Tên lớp",
@@ -480,11 +471,23 @@ export default function ClassManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {classes.map((cls) => (
+                {classes.map((cls) => {
+                  const clsHasSchedule = hasSchedule(cls);
+                  return (
                   <tr
                     key={cls._id}
-                    className="hover:bg-slate-50 transition-colors"
+                    className={`hover:bg-slate-50 transition-colors ${selectedClasses.includes(cls._id) ? 'bg-indigo-50' : ''} ${!clsHasSchedule ? 'opacity-60' : ''}`}
                   >
+                    <td className="px-2 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedClasses.includes(cls._id)}
+                        onChange={() => clsHasSchedule && handleSelectOne(cls._id)}
+                        disabled={!clsHasSchedule}
+                        title={!clsHasSchedule ? "Lớp chưa được gán lịch" : ""}
+                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-40"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-700">
                       {cls.classCode}
                     </td>
@@ -523,6 +526,13 @@ export default function ClassManagement() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
                         <button
+                          onClick={() => openAssignSchedule(cls)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Gán phòng và lịch"
+                        >
+                          <Calendar size={15} />
+                        </button>
+                        <button
                           onClick={() => openEdit(cls)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           title="Chỉnh sửa"
@@ -539,9 +549,56 @@ export default function ClassManagement() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {selectedClasses.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-4 z-50" style={{ transform: "translateX(-50%)" }}>
+            <div className="flex items-center gap-2">
+              <CheckSquare size={18} className="text-indigo-400" />
+              <span className="font-medium">{selectedClasses.length} lớp được chọn</span>
+            </div>
+            <div style={{ width: "1px", height: "24px", backgroundColor: "#334155" }}></div>
+            <button
+              onClick={() => handleBulkStatus("scheduled")}
+              disabled={submitting}
+              className="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Chuyển sang Duyệt
+            </button>
+            <button
+              onClick={handleBulkPublish}
+              disabled={submitting}
+              className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <CheckCircle size={16} />
+              Mở lớp
+            </button>
+            <button
+              onClick={() => handleBulkStatus("locked")}
+              disabled={submitting}
+              className="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Khóa lớp
+            </button>
+            <button
+              onClick={() => handleBulkStatus("cancelled")}
+              disabled={submitting}
+              className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Hủy lớp
+            </button>
+            <button
+              onClick={() => setSelectedClasses([])}
+              className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+              title="Bỏ chọn"
+            >
+              <X size={18} />
+            </button>
           </div>
         )}
 
@@ -586,16 +643,25 @@ export default function ClassManagement() {
           onClose={() => {
             setShowCreate(false);
             setShowEdit(false);
-            setConflictWarning(null);
-            setConflictData(null);
           }}
           submitting={submitting}
           subjects={subjects}
           teachers={teachers}
-          rooms={rooms}
-          timeslots={timeslots}
-          conflictWarning={conflictWarning}
-          checkingConflict={checkingConflict}
+        />
+      )}
+
+      {/* ── Assign Schedule Modal ── */}
+      {showScheduleModal && selectedClassForSchedule && (
+        <AssignScheduleModal
+          classSection={selectedClassForSchedule}
+          onClose={() => {
+            setShowScheduleModal(false);
+            setSelectedClassForSchedule(null);
+          }}
+          onSuccess={() => {
+            // Refresh class list after successful schedule assignment
+            fetchClasses(pagination.page, search, statusFilter);
+          }}
         />
       )}
 
@@ -663,10 +729,6 @@ function ClassFormModal({
   submitting,
   subjects,
   teachers,
-  rooms,
-  timeslots,
-  conflictWarning,
-  checkingConflict,
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -681,26 +743,6 @@ function ClassFormModal({
             <X size={18} />
           </button>
         </div>
-
-        {/* Conflict Warning */}
-        {conflictWarning && (
-          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
-              <p className="text-sm text-red-700">{conflictWarning}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Checking status */}
-        {checkingConflict && !conflictWarning && (
-          <div className="mx-6 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
-              <span className="text-sm text-blue-700">Đang kiểm tra trùng lịch...</span>
-            </div>
-          </div>
-        )}
 
         {/* Body */}
         <form
@@ -814,71 +856,6 @@ function ClassFormModal({
             />
           </div>
 
-          {/* Phòng học */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Phòng học <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="room"
-              required
-              value={formData.room}
-              onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
-            >
-              <option value="">-- Chọn phòng --</option>
-              {rooms.map((r) => (
-                <option key={r._id} value={r._id}>
-                  {r.roomCode} — {r.roomName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Lịch học */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Ca học <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="timeslot"
-              required
-              value={formData.timeslot}
-              onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
-            >
-              <option value="">-- Chọn ca học --</option>
-              {timeslots.map((ts) => (
-                <option key={ts._id} value={ts._id}>
-                  {ts.groupName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Thứ trong tuần */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Thứ <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="dayOfWeek"
-              required
-              value={formData.dayOfWeek}
-              onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
-            >
-              <option value="">-- Chọn thứ --</option>
-              <option value="1">Thứ 2 (Monday)</option>
-              <option value="2">Thứ 3 (Tuesday)</option>
-              <option value="3">Thứ 4 (Wednesday)</option>
-              <option value="4">Thứ 5 (Thursday)</option>
-              <option value="5">Thứ 6 (Friday)</option>
-              <option value="6">Thứ 7 (Saturday)</option>
-              <option value="7">Chủ nhật (Sunday)</option>
-            </select>
-          </div>
-
           {/* Sĩ số tối đa */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -907,7 +884,10 @@ function ClassFormModal({
               onChange={onChange}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
             >
-              <option value="active">Đang mở</option>
+              <option value="draft">Bản nháp</option>
+              <option value="scheduled">Đã lên lịch</option>
+              <option value="published">Đang mở</option>
+              <option value="locked">Bị khóa</option>
               <option value="completed">Đã kết thúc</option>
               <option value="cancelled">Đã hủy</option>
             </select>
@@ -926,10 +906,10 @@ function ClassFormModal({
           <button
             type="submit"
             form="class-form"
-            disabled={submitting || !!conflictWarning}
+            disabled={submitting}
             className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
           >
-            {submitting ? "Đang lưu..." : conflictWarning ? "Không thể lưu (Trùng lịch)" : "Lưu"}
+            {submitting ? "Đang lưu..." : "Lưu"}
           </button>
         </div>
       </div>

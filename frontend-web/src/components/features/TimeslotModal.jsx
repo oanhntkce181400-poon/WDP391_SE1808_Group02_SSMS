@@ -6,11 +6,10 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
   const [formData, setFormData] = useState({
     groupName: '',
     description: '',
-    startDate: '',
-    endDate: '',
     startTime: '',
     endTime: '',
-    sessionsPerDay: 3,
+    startPeriod: 1,
+    endPeriod: 3,
   });
 
   const [errors, setErrors] = useState({});
@@ -21,22 +20,20 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
       setFormData({
         groupName: timeslot.groupName || '',
         description: timeslot.description || '',
-        startDate: timeslot.startDate ? new Date(timeslot.startDate).toISOString().split('T')[0] : '',
-        endDate: timeslot.endDate ? new Date(timeslot.endDate).toISOString().split('T')[0] : '',
         startTime: timeslot.startTime || '',
         endTime: timeslot.endTime || '',
-        sessionsPerDay: timeslot.sessionsPerDay || 3,
+        startPeriod: timeslot.startPeriod || 1,
+        endPeriod: timeslot.endPeriod || 3,
       });
     } else {
       // Reset form for new timeslot
       setFormData({
         groupName: '',
         description: '',
-        startDate: '',
-        endDate: '',
         startTime: '',
         endTime: '',
-        sessionsPerDay: 3,
+        startPeriod: 1,
+        endPeriod: 3,
       });
     }
     setErrors({});
@@ -46,19 +43,7 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
     const newErrors = {};
     
     if (!formData.groupName.trim()) {
-      newErrors.groupName = 'Tên nhóm môn là bắt buộc';
-    }
-    
-    if (!formData.startDate) {
-      newErrors.startDate = 'Ngày bắt đầu là bắt buộc';
-    }
-    
-    if (!formData.endDate) {
-      newErrors.endDate = 'Ngày kết thúc là bắt buộc';
-    }
-    
-    if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
-      newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+      newErrors.groupName = 'Tên ca là bắt buộc';
     }
     
     if (!formData.startTime) {
@@ -67,6 +52,14 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
     
     if (!formData.endTime) {
       newErrors.endTime = 'Giờ kết thúc là bắt buộc';
+    }
+
+    if (!formData.startPeriod) {
+      newErrors.startPeriod = 'Tiết bắt đầu là bắt buộc';
+    }
+
+    if (!formData.endPeriod) {
+      newErrors.endPeriod = 'Tiết kết thúc là bắt buộc';
     }
     
     setErrors(newErrors);
@@ -79,9 +72,8 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
       onSubmit({
         groupName: formData.groupName,
         description: formData.description,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        sessionsPerDay: parseInt(formData.sessionsPerDay, 10),
+        startPeriod: parseInt(formData.startPeriod, 10),
+        endPeriod: parseInt(formData.endPeriod, 10),
         startTime: formData.startTime,
         endTime: formData.endTime,
       });
@@ -124,7 +116,7 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
             {/* Group Name */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="groupName">
-                Tên nhóm môn <span className="text-red-500">*</span>
+                Tên ca (Tiết) <span className="text-red-500">*</span>
               </label>
               <input
                 className={`form-input rounded-lg border ${
@@ -134,7 +126,7 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
                 } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
                 id="groupName"
                 name="groupName"
-                placeholder="VD: Nhóm Đại cương, Nhóm Chuyên ngành"
+                placeholder="VD: Ca 1 (Sáng) - Tiết 1-3"
                 type="text"
                 value={formData.groupName}
                 onChange={handleChange}
@@ -152,55 +144,12 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
                 className="form-textarea rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm"
                 id="description"
                 name="description"
-                placeholder="Mô tả về nhóm môn học..."
-                rows="3"
+                placeholder="Mô tả về ca học..."
+                rows="2"
                 value={formData.description}
                 onChange={handleChange}
                 disabled={loading}
               />
-            </div>
-
-            {/* Date Range */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="startDate">
-                  Ngày bắt đầu <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className={`form-input rounded-lg border ${
-                    errors.startDate
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                      : 'border-slate-200 dark:border-slate-700'
-                  } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                  id="startDate"
-                  name="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-                {errors.startDate && <p className="text-sm text-red-500">{errors.startDate}</p>}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="endDate">
-                  Ngày kết thúc <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className={`form-input rounded-lg border ${
-                    errors.endDate
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                      : 'border-slate-200 dark:border-slate-700'
-                  } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                  id="endDate"
-                  name="endDate"
-                  type="date"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  disabled={loading}
-                />
-                {errors.endDate && <p className="text-sm text-red-500">{errors.endDate}</p>}
-              </div>
             </div>
 
             {/* Time Range */}
@@ -244,24 +193,55 @@ export default function TimeslotModal({ isOpen, onClose, onSubmit, timeslot, loa
                 />
                 {errors.endTime && <p className="text-sm text-red-500">{errors.endTime}</p>}
               </div>
-
-            {/* Sessions Per Day */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="sessionsPerDay">
-                Số tiết/ngày <span className="text-red-500">*</span>
-              </label>
-              <input
-                className="form-input rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm"
-                id="sessionsPerDay"
-                name="sessionsPerDay"
-                type="number"
-                min="1"
-                max="10"
-                value={formData.sessionsPerDay}
-                onChange={handleChange}
-                disabled={loading}
-              />
             </div>
+
+            {/* Time Period Range */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Start Period */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="startPeriod">
+                  Tiết bắt đầu <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className={`form-input rounded-lg border ${
+                    errors.startPeriod
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-slate-200 dark:border-slate-700'
+                  } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
+                  id="startPeriod"
+                  name="startPeriod"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.startPeriod}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                {errors.startPeriod && <p className="text-sm text-red-500">{errors.startPeriod}</p>}
+              </div>
+
+              {/* End Period */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="endPeriod">
+                  Tiết kết thúc <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className={`form-input rounded-lg border ${
+                    errors.endPeriod
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'border-slate-200 dark:border-slate-700'
+                  } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
+                  id="endPeriod"
+                  name="endPeriod"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={formData.endPeriod}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                {errors.endPeriod && <p className="text-sm text-red-500">{errors.endPeriod}</p>}
+              </div>
             </div>
           </div>
 

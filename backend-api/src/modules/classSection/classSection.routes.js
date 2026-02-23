@@ -7,13 +7,21 @@ const router = Router();
 
 const ADMIN_STAFF = rbacMiddleware(["admin", "staff"]);
 
-// Class Section CRUD
-router.get("/", authMiddleware, ctrl.getAll);
-router.get("/my-classes", authMiddleware, ctrl.getMyClasses); // Must be before /:classId
-router.get("/:classId", authMiddleware, ctrl.getById);
-router.post("/", authMiddleware, ADMIN_STAFF, ctrl.create);
-router.patch("/:classId", authMiddleware, ADMIN_STAFF, ctrl.update);
-router.delete("/:classId", authMiddleware, ADMIN_STAFF, ctrl.remove);
+// Bulk update status - PHẢI ĐẶT TRƯỚC /:classId
+router.patch(
+  "/bulk-status",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.bulkUpdateStatus
+);
+
+// Check schedule conflict
+router.post(
+  "/check-conflict",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.checkConflict
+);
 
 // Enrollment endpoints
 router.post(
@@ -26,16 +34,15 @@ router.post("/enrollment/:enrollmentId/drop", authMiddleware, ctrl.dropCourse);
 router.get(
   "/student/:studentId/enrollments",
   authMiddleware,
-  ctrl.getStudentEnrollments,
+  ctrl.getStudentEnrollments
 );
 router.get("/:classId/enrollments", authMiddleware, ctrl.getClassEnrollments);
 
-// Check schedule conflict
-router.post(
-  "/check-conflict",
-  authMiddleware,
-  ADMIN_STAFF,
-  ctrl.checkConflict
-);
+// Class Section CRUD - PHẢI ĐẶT SAU các route cụ thể
+router.get("/", authMiddleware, ctrl.getAll);
+router.get("/:classId", authMiddleware, ctrl.getById);
+router.post("/", authMiddleware, ADMIN_STAFF, ctrl.create);
+router.patch("/:classId", authMiddleware, ADMIN_STAFF, ctrl.update);
+router.delete("/:classId", authMiddleware, ADMIN_STAFF, ctrl.remove);
 
 module.exports = router;

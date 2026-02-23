@@ -1,13 +1,15 @@
 const repo = require("./classSection.repository");
 const ClassSection = require("../../models/classSection.model");
+const Schedule = require("../../models/schedule.model");
+const Timeslot = require("../../models/timeslot.model");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
   "className",
   "subject",
   "teacher",
-  "room",
-  "timeslot",
+  // "room", // Removed - scheduling is done via AssignScheduleModal
+  // "timeslot", // Removed - scheduling is done via AssignScheduleModal
   "semester",
   "academicYear",
   "maxCapacity",
@@ -106,13 +108,10 @@ async function createClassSection(body = {}) {
     className: body.className,
     subject: body.subject,
     teacher: body.teacher,
-    room: body.room,
-    timeslot: body.timeslot,
     semester: Number(body.semester),
     academicYear: body.academicYear,
     maxCapacity: Number(body.maxCapacity),
-    status: body.status || "active",
-    dayOfWeek: body.dayOfWeek,
+    status: body.status || "draft",
   });
 }
 
@@ -249,39 +248,90 @@ async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek,
   return conflicts;
 }
 
-async function getMyClasses(userId) {
-  const Student = require('../../models/student.model');
-  const ClassEnrollment = require('../../models/classEnrollment.model');
-  
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error('Student record not found');
+// ─── Bulk Update Status ───────────────────────────────────
+
+const VALID_STATUS_TRANSITIONS = {
+  draft: ["scheduled", "published", "cancelled"],
+  scheduled: ["published", "cancelled"],
+  published: ["locked", "completed", "cancelled"],
+  locked: ["completed", "cancelled"],
+  completed: [],
+  cancelled: [],
+};
+
+async function bulkUpdateStatus(classIds, newStatus) {
+  if (!classIds || classIds.length === 0) {
+    throw new Error("Danh sách ID lớp học không được để trống");
   }
 
-  // Find enrollments for this student
-  const enrollments = await ClassEnrollment.find({
-    student: student._id,
-    status: { $in: ['enrolled', 'completed'] }
-  })
-    .populate({
-      path: 'classSection',
-      populate: [
-        { path: 'subject', select: 'subjectCode subjectName credits' },
-        { path: 'teacher', select: 'teacherCode fullName' },
-        { path: 'room', select: 'roomCode roomName roomNumber' },
-        { path: 'timeslot', select: 'groupName startTime endTime dayOfWeek' },
-      ],
-    })
-    .sort({ createdAt: -1 })
-    .exec();
+  if (!newStatus) {
+    throw new Error("Trạng thái mới không được để trống");
+  }
 
-  // Extract class sections from enrollments
-  return enrollments.map(e => ({
-    ...e.classSection.toObject(),
-    enrollmentId: e._id,
-  }));
-}
+  // Get all classes
+  const classes = await ClassSection.find({ _id: { $in: classIds } })
+    .populate("teacher", "fullName")
+    .populate("subject", "subjectCode subjectName")
+    .lean();
+
+  if (classes.length !== classIds.length) {
+    throw new Error("Một số lớp học không tồn tại");
+  }
+
+  const results = {
+    success: [],
+    failed: [],
+  };
+
+  for (const cls of classes) {
+    const currentStatus = cls.status || "draft";
+    const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+
+    // Validate status transition
+    if (!allowedTransitions.includes(newStatus)) {
+      results.failed.push({
+        classId: cls._id,
+        classCode: cls.classCode,
+        currentStatus,
+        message: `Không thể chuyển từ "${currentStatus}" sang "${newStatus}"`,
+      });
+      continue;
+    }
+
+    // Special validation for publishing: check if class has schedule
+    if (newStatus === "published") {
+      // Check in Schedule collection
+      const scheduleCount = await Schedule.countDocuments({
+        classSection: cls._id,
+        status: "active",
+      });
+
+      // Also check if ClassSection has room/timeslot (old format)
+      const hasOldSchedule = cls.room && cls.timeslot && cls.dayOfWeek;
+
+      if (scheduleCount === 0 && !hasOldSchedule) {
+        results.failed.push({
+          classId: cls._id,
+          classCode: cls.classCode,
+          currentStatus,
+          message: `Lớp ${cls.classCode} chưa được gán lịch học, không thể mở lớp`,
+        });
+        continue;
+      }
+    }
+
+    // Update status
+    await ClassSection.findByIdAndUpdate(cls._id, { status: newStatus });
+
+    results.success.push({
+      classId: cls._id,
+      classCode: cls.classCode,
+      previousStatus: currentStatus,
+      newStatus,
+    });
+  }
+
+  return results;
 }
 
 module.exports = {
@@ -295,5 +345,5 @@ module.exports = {
   getClassEnrollments,
   dropCourse,
   checkScheduleConflict,
-  getMyClasses,
+  bulkUpdateStatus,
 };

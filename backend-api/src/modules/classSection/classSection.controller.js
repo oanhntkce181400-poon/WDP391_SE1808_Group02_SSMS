@@ -158,22 +158,31 @@ async function checkConflict(req, res) {
   }
 }
 
-async function getMyClasses(req, res) {
+async function bulkUpdateStatus(req, res) {
   try {
-    const userId = req.auth?.sub;
-    if (!userId) {
-      return res.status(401).json({
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: 'Unauthorized',
+        message: "Danh sách ID lớp học không hợp lệ"
       });
     }
 
-    const data = await service.getMyClasses(userId);
-    return res.json({ success: true, data, total: data.length });
-  } catch (err) {
-    return handleError(res, err);
-  }
-}
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: "Trạng thái mới không được để trống"
+      });
+    }
+
+    const result = await service.bulkUpdateStatus(ids, status);
+
+    return res.json({
+      success: true,
+      message: `Cập nhật thành công ${result.success.length}/${ids.length} lớp`,
+      data: result
+    });
   } catch (err) {
     return handleError(res, err);
   }
@@ -190,5 +199,5 @@ module.exports = {
   getClassEnrollments,
   dropCourse,
   checkConflict,
-  getMyClasses,
+  bulkUpdateStatus,
 };

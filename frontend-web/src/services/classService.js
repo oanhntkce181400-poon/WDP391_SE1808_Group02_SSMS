@@ -25,6 +25,9 @@ const classService = {
 
   // Check schedule conflict
   checkConflict: (data) => axiosClient.post('/classes/check-conflict', data),
+
+  // Bulk update status
+  bulkUpdateStatus: (ids, status) => axiosClient.patch('/classes/bulk-status', { ids, status }),
 };
 
 export default classService;

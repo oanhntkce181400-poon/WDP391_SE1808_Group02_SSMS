@@ -33,10 +33,6 @@ import FeedbackManagementPage from "./pages/admin/FeedbackManagementPage";
 import FeedbackStatisticsPage from "./pages/admin/FeedbackStatisticsPage";
 import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
-import StudentFeedbackPage from "./pages/student/StudentFeedbackPage";
-import StudentSchedulePage from "./pages/student/SchedulePage";
-import StudentManagementPage from "./pages/admin/StudentManagementPage";
-import RegistrationPeriodPage from "./pages/admin/RegistrationPeriodPage";
 
 export default function App() {
   return (
@@ -86,8 +82,6 @@ export default function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
-        <Route path="students" element={<StudentManagementPage />} />
-        <Route path="registration-periods" element={<RegistrationPeriodPage />} />
       </Route>
 
       {/* Student routes with layout */}
@@ -105,7 +99,6 @@ export default function App() {
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
         <Route path="finance" element={<TuitionPage />} />
-        <Route path="feedback" element={<StudentFeedbackPage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -127,56 +120,10 @@ export default function App() {
         }
       />
 
-      {/* Root route - smart redirect based on user role */}
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="*" element={<RootRedirect />} />
+      <Route path="/" element={<Navigate to="/admin" replace />} />
+      <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
   );
-}
-
-function RootRedirect() {
-  const location = useLocation();
-  const [status, setStatus] = useState('checking');
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    authService
-      .me()
-      .then((response) => {
-        if (isMounted) {
-          setUser(response.data.user);
-          setStatus('authenticated');
-        }
-      })
-      .catch(() => {
-        if (isMounted) setStatus("unauthenticated");
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  if (status === "checking") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="rounded-2xl bg-white px-6 py-4 text-sm font-medium text-slate-700 shadow-xl shadow-slate-200/50 ring-1 ring-slate-900/5">
-          Checking session...
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "unauthenticated") {
-    return <Navigate to="/login" replace state={{ from: location }} />;
-  }
-
-  // Redirect based on user role
-  if (user?.role === 'student') {
-    return <Navigate to="/student" replace />;
-  }
-  return <Navigate to="/admin" replace />;
 }
 
 function ProtectedRoute({ children, allowedRoles }) {

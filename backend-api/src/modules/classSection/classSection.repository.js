@@ -18,6 +18,7 @@ async function findClasses(filter, { skip, limit, sort } = {}) {
     .sort(sort || { academicYear: -1, semester: -1, classCode: 1 })
     .skip(skip || 0)
     .limit(limit || 10)
+    .lean()
     .exec();
 }
 
