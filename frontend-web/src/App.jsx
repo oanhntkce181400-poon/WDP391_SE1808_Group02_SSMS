@@ -19,7 +19,10 @@ import StudentHome from "./pages/student/StudentHome";
 import ExamSchedulePage from "./pages/student/ExamSchedulePage";
 import SchedulePage from "./pages/student/SchedulePage";
 import StudentRequestsPage from "./pages/student/StudentRequestsPage";
+import AnnouncementPage from "./pages/student/AnnouncementPage";
+import ClassRegistrationPage from "./pages/student/ClassRegistrationPage";
 import RoomManagement from "./pages/admin/RoomManagement";
+import ExamScheduling from "./pages/admin/ExamScheduling";
 import TimeslotManagement from "./pages/admin/TimeslotManagement";
 import TuitionFeeManagement from "./pages/admin/TuitionFeeManagement";
 import ErrorLogsPage from "./pages/admin/ErrorLogsPage";
@@ -33,6 +36,7 @@ import FeedbackManagementPage from "./pages/admin/FeedbackManagementPage";
 import FeedbackStatisticsPage from "./pages/admin/FeedbackStatisticsPage";
 import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
+import AnnouncementManagement from "./pages/admin/AnnouncementManagement";
 
 export default function App() {
   return (
@@ -61,6 +65,7 @@ export default function App() {
         <Route path="majors" element={<MajorManagement />} />
         <Route path="faculties" element={<FacultyManagement />} />
         <Route path="rooms" element={<RoomManagement />} />
+        <Route path="exam-scheduling" element={<ExamScheduling />} />
         <Route path="timeslots" element={<TimeslotManagement />} />
         <Route path="curriculum-list" element={<CurriculumList />} />
         <Route
@@ -82,6 +87,7 @@ export default function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
+        <Route path="announcements" element={<AnnouncementManagement />} />
       </Route>
 
       {/* Student routes with layout */}
@@ -95,6 +101,8 @@ export default function App() {
       >
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
+        <Route path="announcements" element={<AnnouncementPage />} />
+        <Route path="registration" element={<ClassRegistrationPage />} />
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="applications" element={<StudentRequestsPage />} />

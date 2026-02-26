@@ -2,6 +2,101 @@ const Exam = require('../models/exam.model');
 const StudentExam = require('../models/studentExam.model');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
+const examService = require('../services/exam.service');
+const examRepository = require('../modules/exam/exam.repository');
+
+/**
+ * Admin: Get all exams with filtering, pagination and search
+ */
+const getAllExams = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      keyword = '',
+      subject,
+      room,
+      examDate,
+      startDate,
+      endDate,
+      status,
+      sortBy = 'examDate',
+      sortOrder = 'desc',
+    } = req.query;
+
+    // Build query filters
+    const query = {};
+
+    // Keyword search (examCode)
+    if (keyword) {
+      query.examCode = { $regex: keyword, $options: 'i' };
+    }
+
+    // Filter by subject
+    if (subject) {
+      query.subject = subject;
+    }
+
+    // Filter by room
+    if (room) {
+      query.room = room;
+    }
+
+    // Filter by exact exam date
+    if (examDate) {
+      const date = new Date(examDate);
+      const nextDate = new Date(date);
+      nextDate.setDate(date.getDate() + 1);
+      query.examDate = {
+        $gte: date,
+        $lt: nextDate,
+      };
+    }
+
+    // Filter by date range
+    if (startDate && endDate) {
+      query.examDate = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    // Filter by status
+    if (status) {
+      query.status = status;
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Use repository to fetch data
+    const [data, total] = await Promise.all([
+      examRepository.findWithFilter(query, {
+        skip,
+        limit: parseInt(limit),
+        sort: sortOptions,
+      }),
+      examRepository.countExams(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
+    });
+  } catch (error) {
+    console.error('Error getting all exams:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get exams',
+      error: error.message,
+    });
+  }
+};
 
 /**
  * Get exam schedule for current student
@@ -175,21 +270,25 @@ const createExam = async (req, res) => {
       maxCapacity,
     } = req.body;
 
-    // Validate required fields
-    if (
-      !examCode ||
-      !classSection ||
-      !subject ||
-      !room ||
-      !slot ||
-      !examDate ||
-      !startTime ||
-      !endTime ||
-      !maxCapacity
-    ) {
+    // Validate using service layer
+    const validation = await examService.validateExamCreation({
+      examCode,
+      subject,
+      room,
+      slot,
+      examDate,
+      startTime,
+      endTime,
+      maxCapacity,
+    });
+
+    if (!validation.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields',
+        message: 'Validation failed',
+        errors: validation.errors,
+        roomConflict: validation.roomConflict,
+        studentConflict: validation.studentConflict,
       });
     }
 
@@ -202,7 +301,8 @@ const createExam = async (req, res) => {
       });
     }
 
-    const newExam = new Exam({
+    // Create exam using repository
+    const newExam = await examRepository.save({
       examCode,
       classSection,
       subject,
@@ -216,7 +316,10 @@ const createExam = async (req, res) => {
       maxCapacity,
     });
 
-    await newExam.save();
+    // Notify students (async, don't wait)
+    examService.notifyStudents(newExam, 'created').catch((err) => {
+      console.error('Error notifying students:', err);
+    });
 
     return res.status(201).json({
       success: true,
@@ -241,15 +344,19 @@ const updateExam = async (req, res) => {
     const { examId } = req.params;
     const updates = req.body;
 
-    const exam = await Exam.findByIdAndUpdate(examId, updates, {
-      new: true,
-      runValidators: true,
-    })
-      .populate('subject')
-      .populate('classSection')
-      .populate('room')
-      .populate('slot')
-      .exec();
+    // Validate updates using service layer
+    const validation = await examService.validateExamUpdate(examId, updates);
+
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validation.errors,
+      });
+    }
+
+    // Update exam using repository
+    const exam = await examRepository.update(examId, updates);
 
     if (!exam) {
       return res.status(404).json({
@@ -257,6 +364,11 @@ const updateExam = async (req, res) => {
         message: 'Exam not found',
       });
     }
+
+    // Notify students about update (async, don't wait)
+    examService.notifyStudents(exam, 'updated').catch((err) => {
+      console.error('Error notifying students:', err);
+    });
 
     return res.status(200).json({
       success: true,
@@ -280,7 +392,8 @@ const deleteExam = async (req, res) => {
   try {
     const { examId } = req.params;
 
-    const exam = await Exam.findByIdAndDelete(examId).exec();
+    // Get exam details before deletion for notification
+    const exam = await examRepository.findById(examId);
 
     if (!exam) {
       return res.status(404).json({
@@ -289,8 +402,16 @@ const deleteExam = async (req, res) => {
       });
     }
 
+    // Delete exam using repository
+    await examRepository.deleteById(examId);
+
     // Also delete associated student exam records
-    await StudentExam.deleteMany({ exam: examId }).exec();
+    await examRepository.deleteStudentExams(examId);
+
+    // Notify students about deletion (async, don't wait)
+    examService.notifyStudents(exam, 'deleted').catch((err) => {
+      console.error('Error notifying students:', err);
+    });
 
     return res.status(200).json({
       success: true,
@@ -377,6 +498,7 @@ const registerStudentForExam = async (req, res) => {
 };
 
 module.exports = {
+  getAllExams,
   getMyExams,
   getExamDetails,
   createExam,

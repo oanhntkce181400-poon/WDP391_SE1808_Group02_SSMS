@@ -1,34 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExamScheduleSummary from '../../components/features/ExamScheduleSummary';
+import announcementService from '../../services/announcementService';
 
-// Data arrays
-const newsItems = [
-  {
-    type: 'THÔNG BÁO QUAN TRỌNG',
-    title: 'Lưu ý về thời hạn nộp đơn cho kỳ học Spring 2024',
-    description: 'Vui lòng kiểm tra kỳ học trước khi nộp đơn...',
-    date: '28/01/2026',
-  },
-  {
-    type: 'HỌC VỤ',
-    title: 'Đăng ký chuyên ngành hợp HK Spring 2024',
-    description: 'Hạn chót đăng ký 15/12/2023. Sinh viên lưu ý thao tác...',
-    date: '25/01/2026',
-  },
-  {
-    type: 'SỰ KIỆN',
-    title: 'Ngày hội việc làm IT Job Fair 2024',
-    description: 'Cơ hội thực tập tại các doanh nghiệp hàng đầu...',
-    date: '20/01/2026',
-  },
-  {
-    type: 'THI CỬ',
-    title: 'Lịch thi Final kỳ Fall 2023 - Đợt 2',
-    description: 'Cập nhật danh sách phòng thi và giờ thi chi tiết...',
-    date: '15/01/2026',
-  },
-];
+// Data arrays - procedures, lookupItems, reportItems, regulationItems
+// (newsItems will be fetched from API)
 
 const procedures = [
   { label: 'Tạm hoãn học tập',         path: '/student/applications' },
@@ -64,14 +40,66 @@ export default function StudentHome() {
   const [user, setUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedItems, setHighlightedItems] = useState(new Set());
+  const [newsItems, setNewsItems] = useState([]); // State for announcements
+  const [loadingNews, setLoadingNews] = useState(false);
   const itemRefs = useRef({});
   const navigate = useNavigate();
+
+  // Helper functions
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN');
+  };
+
+  const getCategoryLabel = (category) => {
+    const labels = {
+      hoc_vu: 'Học vụ',
+      tai_chinh: 'Tài chính',
+      su_kien: 'Sự kiện',
+      khac: 'Khác',
+    };
+    return labels[category] || 'Thông báo';
+  };
 
   useEffect(() => {
     const authUser = localStorage.getItem('auth_user');
     if (authUser) {
       setUser(JSON.parse(authUser));
     }
+  }, []);
+
+  // Fetch announcements (top 4 mới nhất)
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      setLoadingNews(true);
+      try {
+        const response = await announcementService.getActiveAnnouncements({
+          page: 1,
+          limit: 4,
+        });
+        const announcements = response.data.data.announcements || [];
+        
+        // Transform to match newsItems format
+        const transformedNews = announcements.map((ann) => ({
+          type: getCategoryLabel(ann.category).toUpperCase(),
+          title: ann.title,
+          description: ann.content?.replace(/<[^>]*>/g, '').substring(0, 100) + '...',
+          date: formatDate(ann.createdAt),
+          id: ann._id || ann.id,
+        }));
+        
+        setNewsItems(transformedNews);
+      } catch (error) {
+        console.error('Error fetching announcements:', error);
+        // Fallback to empty array
+        setNewsItems([]);
+      } finally {
+        setLoadingNews(false);
+      }
+    };
+
+    fetchAnnouncements();
   }, []);
 
   // Search and highlight logic
@@ -109,7 +137,7 @@ export default function StudentHome() {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [searchQuery, procedures, lookupItems, reportItems, regulationItems]);
+  }, [searchQuery]);
 
   const setItemRef = (id, element) => {
     if (element) {
@@ -190,48 +218,68 @@ export default function StudentHome() {
           <div className="space-y-6 lg:col-span-2">
             {/* News */}
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-shadow hover:shadow-lg">
-              <div className="mb-5 flex items-center gap-2">
-                <span className="text-2xl">📢</span>
-                <h2 className="text-lg font-bold text-slate-900">Thông báo & Tin tức</h2>
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">📢</span>
+                  <h2 className="text-lg font-bold text-slate-900">Thông báo & Tin tức</h2>
+                </div>
+                <button
+                  onClick={() => navigate('/student/announcements')}
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Xem tất cả »
+                </button>
               </div>
-              <div className="space-y-3">
-                {newsItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="group cursor-pointer rounded-lg border border-slate-200 bg-gradient-to-r from-white to-slate-50 px-4 py-3 transition hover:border-blue-300 hover:shadow-md"
-                  >
-                    <div>
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="rounded-md bg-slate-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                          {item.type}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700">
-                          <svg
-                            className="h-3 w-3"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                          {item.date}
-                        </span>
+              {loadingNews ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : newsItems.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <span className="text-4xl mb-2 block">📭</span>
+                  <p className="text-sm">Chưa có thông báo nào</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {newsItems.map((item, index) => (
+                    <div
+                      key={item.id || index}
+                      className="group cursor-pointer rounded-lg border border-slate-200 bg-gradient-to-r from-white to-slate-50 px-4 py-3 transition hover:border-blue-300 hover:shadow-md"
+                      onClick={() => navigate('/student/announcements')}
+                    >
+                      <div>
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="rounded-md bg-slate-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                            {item.type}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700">
+                            <svg
+                              className="h-3 w-3"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              />
+                            </svg>
+                            {item.date}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 transition group-hover:text-blue-700">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                          {item.description}
+                        </p>
                       </div>
-                      <p className="text-sm font-semibold text-slate-900 transition group-hover:text-blue-700">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                        {item.description}
-                      </p>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Procedures */}
