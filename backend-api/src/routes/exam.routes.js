@@ -6,6 +6,18 @@ const rbacMiddleware = require('../middlewares/rbac.middleware');
 const router = express.Router();
 
 /**
+ * Admin Routes (require authentication + admin/staff role)
+ */
+
+// GET /api/exams - Get all exams with filtering and pagination
+router.get(
+  '/',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  examController.getAllExams
+);
+
+/**
  * Student Routes (require authentication)
  */
 

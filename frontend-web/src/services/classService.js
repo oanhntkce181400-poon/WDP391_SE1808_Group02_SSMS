@@ -31,6 +31,12 @@ const classService = {
 
   // Student tự đăng ký lớp
   selfEnroll: (classId) => axiosClient.post(`/classes/${classId}/self-enroll`),
+
+  // UC22 - Search Available Classes
+  searchClasses: (params) => axiosClient.get('/classes/search', { params }),
+
+  // UC39 - View Class List with Capacity
+  getClassList: () => axiosClient.get('/classes/list'),
 };
 
 export default classService;

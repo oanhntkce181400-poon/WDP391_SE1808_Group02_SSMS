@@ -188,6 +188,46 @@ async function bulkUpdateStatus(req, res) {
   }
 }
 
+// ─── UC22 - Search Available Classes ────────────────────────────────
+
+async function searchClasses(req, res) {
+  try {
+    const { subject_id, semester, keyword, page, limit, sortBy, sortOrder } = req.query;
+    const result = await service.searchAvailableClasses({
+      subject_id,
+      semester,
+      keyword,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    });
+    return res.json({
+      success: true,
+      message: 'Classes retrieved successfully',
+      ...result,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// ─── UC39 - View Class List with Capacity ────────────────────────────────
+
+async function getClassList(req, res) {
+  try {
+    const classes = await service.getClassListWithCapacity();
+    return res.json({
+      success: true,
+      message: 'Class list retrieved successfully',
+      data: classes,
+      total: classes.length,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
@@ -210,4 +250,6 @@ module.exports = {
   dropCourse,
   checkConflict,
   bulkUpdateStatus,
+  searchClasses,
+  getClassList,
 };

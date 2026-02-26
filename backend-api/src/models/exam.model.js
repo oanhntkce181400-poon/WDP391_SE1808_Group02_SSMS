@@ -11,7 +11,7 @@ const examSchema = new mongoose.Schema(
     classSection: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ClassSection",
-      required: true,
+      required: false,
     },
     subject: {
       type: mongoose.Schema.Types.ObjectId,
