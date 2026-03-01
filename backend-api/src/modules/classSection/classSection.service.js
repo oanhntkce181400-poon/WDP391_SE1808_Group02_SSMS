@@ -443,6 +443,110 @@ async function getMyClasses(userId) {
   }));
 }
 
+// ─── UC22 - Search Available Classes ────────────────────────────────
+
+/**
+ * Search available classes with advanced filters
+ * For student registration feature
+ */
+async function searchAvailableClasses(criteria = {}) {
+  const {
+    subject_id,
+    semester,
+    keyword,
+    page = 1,
+    limit = 20,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = criteria;
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+  // Build query - only published/scheduled classes
+  const filter = {
+    status: { $in: ['published', 'scheduled'] },
+  };
+
+  if (subject_id) filter.subject = subject_id;
+  if (semester) filter.semester = parseInt(semester, 10);
+
+  // Keyword search
+  if (keyword) {
+    const subjectIds = await repo.findSubjectIdsBySearch(keyword);
+    filter.$or = [
+      { classCode: { $regex: keyword, $options: 'i' } },
+      { className: { $regex: keyword, $options: 'i' } },
+      ...(subjectIds.length > 0 ? [{ subject: { $in: subjectIds } }] : []),
+    ];
+  }
+
+  // Build sort
+  const sortOptions = {};
+  sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+  // Execute query with pagination
+  const [total, classes] = await Promise.all([
+    repo.countClasses(filter),
+    repo.findClasses(filter, {
+      skip: (pageNum - 1) * limitNum,
+      limit: limitNum,
+      sort: sortOptions,
+    }),
+  ]);
+
+  // Add occupancy info
+  const classesWithOccupancy = classes.map((cls) => {
+    const occupancy = Math.round((cls.currentEnrollment / cls.maxCapacity) * 100) || 0;
+    return {
+      ...cls,
+      occupancyPercentage: occupancy,
+      availableSlots: cls.maxCapacity - cls.currentEnrollment,
+      isFull: cls.currentEnrollment >= cls.maxCapacity,
+    };
+  });
+
+  return {
+    classes: classesWithOccupancy,
+    pagination: {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    },
+  };
+}
+
+// ─── UC39 - View Class List with Capacity ────────────────────────────────
+
+/**
+ * Get class list with occupancy percentage and status color
+ */
+async function getClassListWithCapacity() {
+  const classes = await repo.findClasses(
+    { status: { $in: ['published', 'scheduled'] } },
+    { sort: { createdAt: -1 } }
+  );
+
+  return classes.map((cls) => {
+    const occupancy = Math.round((cls.currentEnrollment / cls.maxCapacity) * 100) || 0;
+    let statusColor = 'green'; // Available
+    if (occupancy >= 100) statusColor = 'red'; // Full
+    else if (occupancy >= 80) statusColor = 'yellow'; // Almost full
+
+    return {
+      ...cls,
+      occupancyPercentage: occupancy,
+      availableSlots: cls.maxCapacity - cls.currentEnrollment,
+      capacity: {
+        current: cls.currentEnrollment,
+        max: cls.maxCapacity,
+      },
+      statusColor,
+    };
+  });
+}
+
 module.exports = {
   listClasses,
   getClassById,
@@ -457,4 +561,6 @@ module.exports = {
   checkScheduleConflict,
   bulkUpdateStatus,
   getMyClasses,
+  searchAvailableClasses,
+  getClassListWithCapacity,
 };

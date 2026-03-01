@@ -187,7 +187,6 @@ async function bulkUpdateStatus(req, res) {
     return handleError(res, err);
   }
 }
-
 async function reassignClass(req, res) {
   try {
     const { fromClassId, toClassId, studentIds, closeSourceClass } = req.body;
@@ -227,7 +226,6 @@ async function reassignClass(req, res) {
     return handleError(res, err);
   }
 }
-
 module.exports = {
   getAll,
   getById,

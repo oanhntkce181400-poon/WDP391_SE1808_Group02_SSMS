@@ -58,6 +58,13 @@ const CARDS = [
     desc: "Quản lý ca học và thời khóa biểu",
   },
   {
+    to: "/admin/announcements",
+    emoji: "📢",
+    color: "bg-indigo-100",
+    title: "Thông báo",
+    desc: "Quản lý thông báo gửi đến sinh viên",
+  },
+  {
     to: "/admin/tuition-fees",
     emoji: "💰",
     color: "bg-emerald-100",

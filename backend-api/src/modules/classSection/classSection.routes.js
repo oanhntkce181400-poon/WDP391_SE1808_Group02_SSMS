@@ -7,6 +7,16 @@ const router = Router();
 
 const ADMIN_STAFF = rbacMiddleware(["admin", "staff"]);
 
+// ─── UC22 & UC39 - Student Registration Features ────────────────────
+
+// UC22 - Search Available Classes
+router.get("/search", authMiddleware, ctrl.searchClasses);
+
+// UC39 - View Class List with Capacity
+router.get("/list", authMiddleware, ctrl.getClassList);
+
+// ─── Admin Routes ────────────────────
+
 // Bulk update status - PHẢI ĐẶT TRƯỚC /:classId
 router.patch(
   "/bulk-status",
