@@ -82,7 +82,8 @@ async function createClassSection(body = {}) {
     status = "published";
   }
 
-  return repo.createClass({
+  // Tạo lớp học phần
+  const newClass = await repo.createClass({
     classCode: body.classCode,
     className: body.className,
     subject: body.subject,
@@ -95,9 +96,31 @@ async function createClassSection(body = {}) {
     status: status,
     dayOfWeek: body.dayOfWeek,
   });
+
+  // 🔥 GỌI WAITLIST AUTO-ASSIGN KHI TẠO LỚP THÀNH CÔNG VÀ STATUS LÀ PUBLISHED
+  if (status === 'published') {
+    try {
+      const waitlistService = require('../waitlist/waitlist.service');
+      const waitlistResult = await waitlistService.processWaitlist(
+        body.subject,
+        Number(body.semester),
+        body.academicYear
+      );
+      console.log(`[ClassSection] Waitlist processed: ${waitlistResult.enrolled} students enrolled out of ${waitlistResult.processed}`);
+    } catch (waitlistError) {
+      // Log lỗi nhưng không ảnh hưởng đến việc tạo lớp
+      console.error('[ClassSection] Error processing waitlist:', waitlistError.message);
+    }
+  }
+
+  return newClass;
 }
 
 async function updateClassSection(classId, updates = {}) {
+  // Lấy thông tin lớp trước khi cập nhật
+  const existingClass = await repo.findClassById(classId);
+  if (!existingClass) throw new Error("Class section not found");
+
   // Chuyển status "active" cũ thành "published" để tương thích
   if (updates.status === "active") {
     updates.status = "published";
@@ -105,6 +128,23 @@ async function updateClassSection(classId, updates = {}) {
   
   const updated = await repo.updateClassById(classId, updates);
   if (!updated) throw new Error("Class section not found");
+
+  // 🔥 GỌI WAITLIST AUTO-ASSIGN KHI STATUS ĐƯỢC CẬP NHẬT THÀNH PUBLISHED
+  if (updates.status === 'published' && existingClass.status !== 'published') {
+    try {
+      const waitlistService = require('../waitlist/waitlist.service');
+      const waitlistResult = await waitlistService.processWaitlist(
+        updated.subject,
+        updated.semester,
+        updated.academicYear
+      );
+      console.log(`[ClassSection] Waitlist processed on update: ${waitlistResult.enrolled} students enrolled out of ${waitlistResult.processed}`);
+    } catch (waitlistError) {
+      // Log lỗi nhưng không ảnh hưởng đến việc cập nhật lớp
+      console.error('[ClassSection] Error processing waitlist on update:', waitlistError.message);
+    }
+  }
+
   return updated;
 }
 
@@ -140,6 +180,18 @@ async function enrollStudent(classId, studentId) {
 
   const existing = await repo.findEnrollment(classId, studentId);
   if (existing) throw new Error("Student is already enrolled in this class");
+
+  // 🔒 Kiểm tra: SV có đang trong waitlist cho môn này không?
+  // Nếu đang WAITLIST → KHÔNG cho đăng ký lớp hiện tại
+  const waitlistRepo = require('../waitlist/waitlist.repository');
+  const waitlistEntry = await waitlistRepo.findOne({
+    student: studentId,
+    subject: cls.subject,
+    status: 'WAITING'
+  });
+  if (waitlistEntry) {
+    throw new Error("Sinh viên đang trong danh sách chờ bảo lưu cho môn này. Vui lòng hủy waitlist trước khi đăng ký lớp mới.");
+  }
 
   const enrollment = await repo.createEnrollment({
     classSection: classId,
@@ -443,6 +495,87 @@ async function getMyClasses(userId) {
   }));
 }
 
+// ─── Get Class Details for Student ───────────────────────────────────
+
+async function getClassDetails(classId, userId) {
+  const ClassEnrollment = require("../../models/classEnrollment.model");
+  const Student = require("../../models/student.model");
+  const Schedule = require("../../models/schedule.model");
+
+  // Find student by userId
+  const student = await Student.findOne({ userId });
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  // Check if student is enrolled in this class
+  const enrollment = await ClassEnrollment.findOne({
+    student: student._id,
+    classSection: classId,
+    status: { $in: ["enrolled", "completed"] },
+  });
+
+  if (!enrollment) {
+    throw new Error("Bạn chưa đăng ký lớp học phần này");
+  }
+
+  // Get class with all related data
+  const repo = require("./classSection.repository");
+  const cls = await repo.findClassById(classId)
+    .populate("subject")
+    .populate("teacher")
+    .populate("room")
+    .populate("timeslot");
+
+  if (!cls) {
+    throw new Error("Class section not found");
+  }
+
+  // Get schedules from new Schedule model
+  const schedules = await Schedule.find({
+    classSection: classId,
+    status: "active",
+  }).populate("room", "roomCode roomName");
+
+  // Get classmates (enrolled students) - limit to 50
+  const classmates = await ClassEnrollment.find({
+    classSection: classId,
+    status: "enrolled",
+  })
+    .populate("student", "studentCode fullName email")
+    .limit(50);
+
+  return {
+    classId: cls._id,
+    classCode: cls.classCode,
+    className: cls.className,
+    subject: cls.subject,
+    teacher: cls.teacher,
+    schedules: schedules.map(s => ({
+      dayOfWeek: s.dayOfWeek,
+      startPeriod: s.startPeriod,
+      endPeriod: s.endPeriod,
+      startDate: s.startDate,
+      endDate: s.endDate,
+      room: s.room,
+    })),
+    // Fallback for old schedule format
+    room: cls.room,
+    timeslot: cls.timeslot,
+    dayOfWeek: cls.dayOfWeek,
+    syllabus: cls.subject?.syllabus || "Chưa cập nhật",
+    materials: cls.subject?.materials || [],
+    classmates: classmates.map(c => ({
+      studentId: c.student?.studentCode,
+      name: c.student?.fullName,
+      email: c.student?.email,
+    })),
+    enrollmentStatus: enrollment.status,
+    currentEnrollment: cls.currentEnrollment,
+    maxCapacity: cls.maxCapacity,
+  };
+}
+
 module.exports = {
   listClasses,
   getClassById,
@@ -457,4 +590,5 @@ module.exports = {
   checkScheduleConflict,
   bulkUpdateStatus,
   getMyClasses,
+  getClassDetails,
 };

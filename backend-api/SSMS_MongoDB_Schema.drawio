@@ -1,0 +1,459 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.5.1" pages="1">
+  <diagram name="MongoDB Schema - SSMS" id="mongodb-schema">
+    <mxGraphModel dx="25000" dy="15000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="6000" pageHeight="4500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- ==================== TITLE ==================== -->
+        <mxCell id="title" value="SSMS MongoDB Database Schema - 41 Collections&#xa;🔑 PK | ★ Unique | 🔗 FK | ── N = One-to-Many | ── 1 = One-to-One" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#333333" vertex="1" parent="1">
+          <mxGeometry x="2000" y="10" width="800" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== USERS &amp; AUTH (Blue) ==================== -->
+        <mxCell id="users" value="users&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ email (unique)&#xa;★ googleId (unique)&#xa;+ password&#xa;+ fullName&#xa;+ authProvider&#xa;+ role&#xa;+ isActive&#xa;+ status&#xa;+ mustChangePassword&#xa;+ lastLoginAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="250" width="280" x="40" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="roles" value="roles&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ roleCode (unique)&#xa;+ name&#xa;+ description&#xa;+ isSystemRole&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="120" width="260" x="40" y="350" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="permissions" value="permissions&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ permCode (unique)&#xa;+ name&#xa;+ module&#xa;+ action" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="100" width="260" x="40" y="490" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="userRoles" value="userRoles&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 user_id → users&#xa;🔗 role_id → roles&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="70" width="260" x="40" y="610" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="rolePermissions" value="rolePermissions&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 role_id → roles&#xa;🔗 perm_id → permissions" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="60" width="260" x="40" y="700" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="refreshTokens" value="refreshTokens&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 user_id → users&#xa;★ tokenHash&#xa;★ jti&#xa;+ familyId&#xa;+ expiresAt&#xa;+ issuedAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="140" width="280" x="40" y="780" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="passwordResetOtps" value="passwordResetOtps&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 user_id → users&#xa;+ email&#xa;+ otpHash&#xa;+ purpose&#xa;+ expiresAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="100" width="280" x="40" y="940" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="loginEvents" value="loginEvents&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 user_id → users&#xa;+ ipAddress&#xa;+ userAgent&#xa;+ eventType&#xa;+ success&#xa;+ occurredAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="110" width="280" x="40" y="1060" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="deviceSessions" value="deviceSessions&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 user_id → users&#xa;+ device&#xa;+ ipAddress&#xa;+ userAgent&#xa;+ startedAt&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="110" width="280" x="40" y="1190" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="wallets" value="wallets&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 userId → users&#xa;★ userId (unique)&#xa;+ balance" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="50" width="260" x="40" y="1320" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== STUDENTS &amp; TEACHERS (Purple) ==================== -->
+        <mxCell id="students" value="students&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ studentCode (unique)&#xa;★ email (unique)&#xa;★ userId (unique)&#xa;★ identityNumber (unique)&#xa;+ fullName&#xa;+ majorCode&#xa;+ cohort&#xa;🔗 curriculum_id → curriculums&#xa;+ academicStatus&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="260" width="300" x="360" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="teachers" value="teachers&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ teacherCode (unique)&#xa;★ email (unique)&#xa;+ fullName&#xa;+ phone&#xa;+ department&#xa;+ specialization&#xa;+ degree&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="170" width="280" x="360" y="360" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== ACADEMIC (Green) ==================== -->
+        <mxCell id="faculties" value="faculties&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ facultyCode (unique)&#xa;+ facultyName&#xa;+ shortName&#xa;+ description&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="110" width="260" x="680" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="majors" value="majors&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ majorCode (unique)&#xa;+ majorName&#xa;🔗 faculty_id → faculties&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="260" x="680" y="210" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subjects" value="subjects&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ subjectCode (unique)&#xa;+ subjectName&#xa;+ credits&#xa;+ tuitionFee&#xa;+ majorCode&#xa;+ isCommon" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="120" width="260" x="680" y="310" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="semesters" value="semesters&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ code (unique)&#xa;+ name&#xa;+ semesterNum&#xa;+ academicYear&#xa;+ startDate&#xa;+ endDate&#xa;+ isCurrent" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="130" width="260" x="680" y="450" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="curriculums" value="curriculums&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ code (unique)&#xa;+ name&#xa;+ major&#xa;🔗 majorId → majors&#xa;+ academicYear&#xa;+ description&#xa;+ status&#xa;+ totalCredits" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="140" width="280" x="680" y="600" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="curriculumSemesters" value="curriculumSemesters&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 curriculum_id → curriculums&#xa;+ semesterOrder&#xa;+ name&#xa;+ credits" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="70" width="280" x="680" y="760" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="curriculumCourses" value="curriculumCourses&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 semester_id → curriculumSemesters&#xa;+ subjectCode&#xa;+ subjectName&#xa;+ credits&#xa;+ isRequired" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="280" x="680" y="850" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="registrationPeriods" value="registrationPeriods&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 semester_id → semesters&#xa;+ startDate&#xa;+ endDate&#xa;+ type&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="280" x="680" y="950" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== CLASS &amp; ENROLLMENT (Yellow) ==================== -->
+        <mxCell id="classSections" value="classSections&#xa;────────────────────────&#xa;🔑 _id: ObjectId&#xa;★ classCode (unique)&#xa;+ className&#xa;🔗 subject_id → subjects&#xa;🔗 teacher_id → teachers&#xa;🔗 room_id → rooms&#xa;🔗 timeslot_id → timeslots&#xa;+ semester&#xa;+ academicYear&#xa;+ maxCapacity&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="240" width="320" x="1000" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="classEnrollments" value="classEnrollments&#xa;────────────────────────&#xa;🔑 _id: ObjectId&#xa;★ classSection+student (unique)&#xa;🔗 student_id → students&#xa;🔗 classSection_id → classSections&#xa;+ status&#xa;+ enrolledAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="90" width="320" x="1000" y="340" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="waitlists" value="waitlists&#xa;────────────────────────&#xa;🔑 _id: ObjectId&#xa;★ student+subject+status (unique)&#xa;🔗 student_id → students&#xa;🔗 subject_id → subjects&#xa;+ targetSemester&#xa;+ targetAcademicYear&#xa;+ status&#xa;🔗 enrolledClassSection_id → classSections" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="130" width="320" x="1000" y="450" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== SCHEDULING (Red) ==================== -->
+        <mxCell id="rooms" value="rooms&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ roomCode (unique)&#xa;+ roomName&#xa;+ roomType&#xa;+ capacity" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="240" x="1360" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="timeslots" value="timeslots&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ groupName (unique)&#xa;+ name&#xa;+ startTime&#xa;+ endTime&#xa;+ startPeriod&#xa;+ endPeriod&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="120" width="260" x="1360" y="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="schedules" value="schedules&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 classSection_id → classSections&#xa;🔗 room_id → rooms&#xa;+ dayOfWeek&#xa;+ startPeriod&#xa;+ endPeriod&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="110" width="300" x="1360" y="320" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="exams" value="exams&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ examCode (unique)&#xa;🔗 classSection_id → classSections&#xa;🔗 subject_id → subjects&#xa;🔗 room_id → rooms&#xa;🔗 slot_id → timeslots&#xa;+ examDate&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="170" width="320" x="1360" y="450" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="studentExams" value="studentExams&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ exam+student (unique)&#xa;🔗 student_id → students&#xa;🔗 exam_id → exams&#xa;+ sbd&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="300" x="1360" y="640" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="devices" value="devices&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ deviceCode (unique)&#xa;+ deviceName&#xa;🔗 room_id → rooms&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="60" width="280" x="1360" y="740" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="attendances" value="attendances&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ classSection+slotId+student (unique)&#xa;🔗 classSection_id → classSections&#xa;🔗 student_id → students&#xa;+ status&#xa;+ recordedAt" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="90" width="320" x="1360" y="820" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== FINANCE (Gray) ==================== -->
+        <mxCell id="tuitionFees" value="tuitionFees&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 student_id → students&#xa;+ semesterCode&#xa;+ cohort&#xa;+ majorCode&#xa;+ semester&#xa;+ totalCredits&#xa;+ totalFee&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="150" width="300" x="1720" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="otherFees" value="otherFees&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 student_id → students&#xa;+ semesterCode&#xa;+ feeName&#xa;+ amount&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="300" x="1720" y="250" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="payments" value="payments&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 student_id → students&#xa;+ semesterCode&#xa;+ amount&#xa;+ paymentMethod&#xa;+ transactionId&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="100" width="300" x="1720" y="350" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== FEEDBACK &amp; REQUEST (Orange) ==================== -->
+        <mxCell id="feedbacks" value="feedbacks&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 classSection_id → classSections&#xa;🔗 submittedBy → students&#xa;+ rating&#xa;+ comment&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="90" width="300" x="2060" y="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feedbackTemplates" value="feedbackTemplates&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;+ title&#xa;+ questions&#xa;+ evaluationTarget&#xa;🔗 feedbackPeriod_id → feedbackPeriods&#xa;+ status" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="90" width="320" x="2060" y="190" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feedbackPeriods" value="feedbackPeriods&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;+ name&#xa;+ startDate&#xa;+ endDate&#xa;+ isActive" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="80" width="280" x="2060" y="300" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="feedbackSubmissions" value="feedbackSubmissions&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;★ feedbackTemplate+submittedBy&#xa;🔗 feedbackTemplate_id → feedbackTemplates&#xa;🔗 submittedBy → students&#xa;+ answers&#xa;+ evaluatedEntity&#xa;+ evaluationType" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="110" width="340" x="2060" y="400" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="requests" value="requests&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;🔗 student_id → students&#xa;+ type&#xa;+ title&#xa;+ description&#xa;+ status&#xa;+ processedBy&#xa;+ response" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ffe6cc;strokeColor=#d79a00;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="120" width="300" x="2060" y="530" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== SYSTEM (Dark Purple) ==================== -->
+        <mxCell id="systemSettings" value="systemSettings&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;+ key&#xa;+ value&#xa;+ type&#xa;+ description" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="70" width="260" x="2060" y="670" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="errorLogs" value="errorLogs&#xa;─────────────&#xa;🔑 _id: ObjectId&#xa;+ statusCode&#xa;+ message&#xa;+ path&#xa;+ method&#xa;+ errorType&#xa;+ stack&#xa;+ ip&#xa;+ userAgent" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=4;verticalAlign=top" vertex="1" parent="1">
+          <mxGeometry height="150" width="260" x="2060" y="760" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== RELATIONSHIPS (All Lines) ==================== -->
+        
+        <!-- Users to Students (1:1 via userId) -->
+        <mxCell id="line1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=2" edge="1" parent="1" source="users" target="students">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="340" y="205" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Users to Teachers (1:1 via userId) - Using same user table -->
+        <mxCell id="line2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=2" edge="1" parent="1" source="users" target="teachers">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="340" y="445" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Users to RefreshTokens (1:N) -->
+        <mxCell id="line3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="users" target="refreshTokens">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Users to PasswordResetOtps (1:N) -->
+        <mxCell id="line4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="users" target="passwordResetOtps">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Users to LoginEvents (1:N) -->
+        <mxCell id="line5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="users" target="loginEvents">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="180" y="1110" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Users to DeviceSessions (1:N) -->
+        <mxCell id="line6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="users" target="deviceSessions">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="180" y="1245" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Users to Wallets (1:1) -->
+        <mxCell id="line7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=2" edge="1" parent="1" source="users" target="wallets">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="180" y="1345" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Users to UserRoles (1:N) -->
+        <mxCell id="line8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d6b656;strokeWidth=1" edge="1" parent="1" source="users" target="userRoles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Roles to UserRoles (1:N) -->
+        <mxCell id="line9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="roles" target="userRoles">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Roles to RolePermissions (1:N) -->
+        <mxCell id="line10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="roles" target="rolePermissions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Permissions to RolePermissions (1:N) -->
+        <mxCell id="line11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#6c8ebf;strokeWidth=1" edge="1" parent="1" source="permissions" target="rolePermissions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Faculty to Majors (1:N) -->
+        <mxCell id="line12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=2" edge="1" parent="1" source="faculties" target="majors">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Majors to Curriculums (1:N) -->
+        <mxCell id="line13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=2" edge="1" parent="1" source="majors" target="curriculums">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="810" y="670" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Curriculums to CurriculumSemesters (1:N) -->
+        <mxCell id="line14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=1" edge="1" parent="1" source="curriculums" target="curriculumSemesters">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- CurriculumSemesters to CurriculumCourses (1:N) -->
+        <mxCell id="line15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=1" edge="1" parent="1" source="curriculumSemesters" target="curriculumCourses">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Students to ClassEnrollments (1:N) -->
+        <mxCell id="line16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d6b656;strokeWidth=2" edge="1" parent="1" source="students" target="classEnrollments">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="385" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to Waitlists (1:N) -->
+        <mxCell id="line17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=2" edge="1" parent="1" source="students" target="waitlists">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="515" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to TuitionFees (1:N) -->
+        <mxCell id="line18" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#666666;strokeWidth=2" edge="1" parent="1" source="students" target="tuitionFees">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="155" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to OtherFees (1:N) -->
+        <mxCell id="line19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#666666;strokeWidth=1" edge="1" parent="1" source="students" target="otherFees">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="290" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to Payments (1:N) -->
+        <mxCell id="line20" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#666666;strokeWidth=2" edge="1" parent="1" source="students" target="payments">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="400" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to StudentExams (1:N) -->
+        <mxCell id="line21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="students" target="studentExams">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="680" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to Attendances (1:N) -->
+        <mxCell id="line22" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="students" target="attendances">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="865" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to Requests (1:N) -->
+        <mxCell id="line23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=1" edge="1" parent="1" source="students" target="requests">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="590" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Students to Feedbacks (1:N) - submittedBy -->
+        <mxCell id="line23b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=1" edge="1" parent="1" source="students" target="feedbacks">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="125" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Subjects to ClassSections (1:N) -->
+        <mxCell id="line24" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=2" edge="1" parent="1" source="subjects" target="classSections">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="940" y="370" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Teachers to ClassSections (1:N) -->
+        <mxCell id="line25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#9673a6;strokeWidth=2" edge="1" parent="1" source="teachers" target="classSections">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="680" y="445" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassSections to ClassEnrollments (1:N) -->
+        <mxCell id="line26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d6b656;strokeWidth=2" edge="1" parent="1" source="classSections" target="classEnrollments">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- ClassSections to Schedules (1:N) -->
+        <mxCell id="line27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=2" edge="1" parent="1" source="classSections" target="schedules">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1320" y="200" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassSections to Exams (1:N) -->
+        <mxCell id="line28" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=2" edge="1" parent="1" source="classSections" target="exams">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1320" y="375" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassSections to Attendances (1:N) -->
+        <mxCell id="line29" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="classSections" target="attendances">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1320" y="875" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassSections to Feedbacks (1:N) -->
+        <mxCell id="line30" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=1" edge="1" parent="1" source="classSections" target="feedbacks">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1320" y="125" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Subjects to Waitlists (1:N) -->
+        <mxCell id="line31" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=1" edge="1" parent="1" source="subjects" target="waitlists">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1100" y="565" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Subjects to Exams (1:N) -->
+        <mxCell id="line32" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=1" edge="1" parent="1" source="subjects" target="exams">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="940" y="500" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Rooms to Schedules (1:N) -->
+        <mxCell id="line33" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="rooms" target="schedules">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Rooms to Exams (1:N) -->
+        <mxCell id="line34" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="rooms" target="exams">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1600" y="120" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Rooms to Devices (1:N) -->
+        <mxCell id="line35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="rooms" target="devices">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Timeslots to ClassSections (1:N) -->
+        <mxCell id="line36" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="timeslots" target="classSections">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1620" y="240" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Timeslots to Exams (1:N) -->
+        <mxCell id="line37" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=1" edge="1" parent="1" source="timeslots" target="exams">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1620" y="490" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Exams to StudentExams (1:N) -->
+        <mxCell id="line38" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#b85450;strokeWidth=2" edge="1" parent="1" source="exams" target="studentExams">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Semesters to RegistrationPeriods (1:N) -->
+        <mxCell id="line39" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#82b366;strokeWidth=2" edge="1" parent="1" source="semesters" target="registrationPeriods">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="940" y="515" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- FeedbackTemplates to FeedbackPeriods (1:N) -->
+        <mxCell id="line40" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=1" edge="1" parent="1" source="feedbackPeriods" target="feedbackTemplates">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="2200" y="280" /></Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- FeedbackTemplates to FeedbackSubmissions (1:N) -->
+        <mxCell id="line41" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#d79a00;strokeWidth=2" edge="1" parent="1" source="feedbackTemplates" target="feedbackSubmissions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Students to FeedbackSubmissions (1:N) -->
+        <mxCell id="line42" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERmany;endArrow=ERone;strokeColor=#9673a6;strokeWidth=1" edge="1" parent="1" source="students" target="feedbackSubmissions">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="660" y="455" /></Array>
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

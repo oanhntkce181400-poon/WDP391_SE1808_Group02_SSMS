@@ -33,6 +33,7 @@ import FeedbackManagementPage from "./pages/admin/FeedbackManagementPage";
 import FeedbackStatisticsPage from "./pages/admin/FeedbackStatisticsPage";
 import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
+import WaitlistPage from "./pages/student/WaitlistPage";
 
 export default function App() {
   return (
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="profile" element={<StudentProfilePage />} />
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
+        <Route path="waitlist" element={<WaitlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
         <Route path="finance" element={<TuitionPage />} />
       </Route>

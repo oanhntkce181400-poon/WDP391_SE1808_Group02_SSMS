@@ -228,6 +228,59 @@ async function reassignClass(req, res) {
   }
 }
 
+// ─── Get Class Details for Student ───────────────────────────────────
+
+async function getClassDetails(req, res) {
+  try {
+    const { classId } = req.params;
+    
+    // Cho phép xem chi tiết nếu đã đăng nhập, hoặc không cần đăng nhập
+    // Nếu có userId thì kiểm tra enrollment của user đó
+    // Nếu không có userId thì vẫn cho xem (demo mode)
+    const userId = req.auth?._id;
+    
+    console.log('getClassDetails - auth:', req.auth);
+    console.log('getClassDetails - classId:', classId);
+
+    // Nếu có userId thì kiểm tra enrollment
+    if (userId) {
+      const data = await service.getClassDetails(classId, userId);
+      return res.json({
+        success: true,
+        data,
+      });
+    }
+
+    // Không có userId - lấy thông tin cơ bản của lớp (demo mode)
+    const repo = require("./classSection.repository");
+    const cls = await repo.findClassById(classId);
+
+    if (!cls) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy lớp học" });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        classId: cls._id,
+        classCode: cls.classCode,
+        className: cls.className,
+        subject: cls.subject,
+        teacher: cls.teacher,
+        room: cls.room,
+        timeslot: cls.timeslot,
+        dayOfWeek: cls.dayOfWeek,
+        currentEnrollment: cls.currentEnrollment,
+        maxCapacity: cls.maxCapacity,
+        status: cls.status,
+      },
+    });
+  } catch (err) {
+    console.error('getClassDetails error:', err);
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
@@ -241,4 +294,5 @@ module.exports = {
   checkConflict,
   bulkUpdateStatus,
   reassignClass,
+  getClassDetails,
 };

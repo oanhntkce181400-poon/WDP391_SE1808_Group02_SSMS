@@ -46,6 +46,9 @@ router.get(
 );
 router.get("/:classId/enrollments", authMiddleware, ctrl.getClassEnrollments);
 
+// Class Details for Student - xem chi tiết lớp học phần (KHÔNG cần auth)
+router.get("/:classId/details", ctrl.getClassDetails);
+
 // Class Section CRUD - PHẢI ĐẶT SAU các route cụ thể
 router.get("/", authMiddleware, ctrl.getAll);
 router.get("/:classId", authMiddleware, ctrl.getById);

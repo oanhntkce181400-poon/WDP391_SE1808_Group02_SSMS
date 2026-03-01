@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import scheduleService from '../../services/scheduleService';
+import classService from '../../services/classService';
+import WaitlistModal from '../../components/features/WaitlistModal';
+import { X, BookOpen, Users, FileText, Calendar, MapPin, GraduationCap } from 'lucide-react';
 
 const TIME_SLOTS = [
   { label: 'Ca 1', startTime: '07:00', endTime: '09:15' },
@@ -81,6 +84,14 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // State cho modal chi tiết lớp học
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [classDetails, setClassDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // State cho modal Waitlist
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+
   useEffect(() => {
     fetchSchedule();
   }, [weekStart]);
@@ -119,6 +130,34 @@ export default function SchedulePage() {
   function goToCurrentWeek() {
     setWeekStart(toDateStr(getMondayOfWeek(new Date())));
   }
+
+  // Fetch chi tiết lớp học khi click vào slot
+  const fetchClassDetails = async (classId) => {
+    try {
+      setLoadingDetails(true);
+      const res = await classService.getClassDetails(classId);
+      setClassDetails(res.data.data);
+    } catch (err) {
+      console.error('Lỗi lấy chi tiết lớp:', err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Click vào slot trong TKB
+  const handleSlotClick = (schedule) => {
+    // API trả về classId, không phải classSection
+    if (schedule?.classId) {
+      setSelectedClass(schedule.classId);
+      fetchClassDetails(schedule.classId);
+    }
+  };
+
+  // Đóng modal
+  const closeClassDetails = () => {
+    setSelectedClass(null);
+    setClassDetails(null);
+  };
 
   // Gán màu: ưu tiên map cố định, fallback theo thứ tự
   const dynamicColorMap = {};
@@ -177,6 +216,12 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowWaitlistModal(true)}
+            className="flex items-center gap-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium shadow-sm"
+          >
+            ⏳ Đăng ký Waitlist
+          </button>
           <button className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-100">
             In lịch
           </button>
@@ -269,7 +314,9 @@ export default function SchedulePage() {
                         className="border border-slate-200 p-1 align-top h-28"
                       >
                         {schedule ? (
-                          <div className={`${clr.bg} rounded-lg p-2 h-full flex flex-col gap-0.5 cursor-default select-none`}>
+                          <div 
+                            onClick={() => handleSlotClick(schedule)}
+                            className={`${clr.bg} rounded-lg p-2 h-full flex flex-col gap-0.5 cursor-pointer hover:opacity-90 transition-opacity`}>
                             {/* Mã môn (badge) */}
                             <span className="text-[11px] font-bold bg-black/20 text-white rounded px-1.5 py-0.5 self-start leading-tight">
                               {schedule.subject.subjectCode}
@@ -323,6 +370,182 @@ export default function SchedulePage() {
           <p className="text-sm mt-1">Chuyển sang tuần khác để xem lịch học</p>
         </div>
       )}
+
+      {/* ── MODAL CHI TIẾT LỚP HỌC ── */}
+      {selectedClass && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-xl font-bold">
+                    {classDetails?.subject?.subjectName || 'Chi tiết lớp học'}
+                  </h2>
+                  <p className="text-indigo-100 mt-1">
+                    {classDetails?.subject?.subjectCode} - {classDetails?.classCode}
+                  </p>
+                </div>
+                <button
+                  onClick={closeClassDetails}
+                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              {loadingDetails ? (
+                <div className="text-center py-10 text-slate-400">
+                  <div className="animate-spin w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-3"></div>
+                  <p>Đang tải thông tin...</p>
+                </div>
+              ) : classDetails ? (
+                <div className="space-y-6">
+                  {/* Thông tin cơ bản */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                        <GraduationCap size={16} />
+                        <span>Giảng viên</span>
+                      </div>
+                      <p className="font-semibold text-slate-800">
+                        {classDetails.teacher?.fullName || 'Chưa có'}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                        <Users size={16} />
+                        <span>Sĩ số</span>
+                      </div>
+                      <p className="font-semibold text-slate-800">
+                        {classDetails.currentEnrollment} / {classDetails.maxCapacity}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Lịch học */}
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+                      <Calendar size={16} />
+                      <span className="font-medium">Lịch học</span>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                      {classDetails.schedules?.length > 0 ? (
+                        classDetails.schedules.map((sch, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600">
+                              Thứ {sch.dayOfWeek}, Tiết {sch.startPeriod}-{sch.endPeriod}
+                            </span>
+                            <span className="font-medium text-slate-800">
+                              {sch.room?.roomCode || classDetails.room?.roomCode || 'Chưa có phòng'}
+                            </span>
+                          </div>
+                        ))
+                      ) : classDetails.dayOfWeek ? (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">Thứ {classDetails.dayOfWeek}</span>
+                          <span className="font-medium text-slate-800">
+                            {classDetails.room?.roomCode || 'Chưa có phòng'}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm">Chưa có lịch</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Syllabus */}
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+                      <BookOpen size={16} />
+                      <span className="font-medium">Nội dung môn học (Syllabus)</span>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <p className="text-sm text-slate-600 whitespace-pre-line">
+                        {classDetails.syllabus || 'Chưa cập nhật'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tài liệu */}
+                  {classDetails.materials?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+                        <FileText size={16} />
+                        <span className="font-medium">Tài liệu học tập</span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                        {classDetails.materials.map((mat, idx) => (
+                          <a
+                            key={idx}
+                            href={mat.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                          >
+                            <FileText size={14} />
+                            {mat.title || 'Tài liệu'}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Danh sách bạn cùng lớp */}
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+                      <Users size={16} />
+                      <span className="font-medium">
+                        Danh sách bạn cùng lớp ({classDetails.classmates?.length || 0})
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4 max-h-48 overflow-y-auto">
+                      {classDetails.classmates?.length > 0 ? (
+                        <div className="space-y-2">
+                          {classDetails.classmates.map((mate, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm">
+                              <span className="text-slate-800">{mate.name}</span>
+                              <span className="text-slate-400 text-xs">{mate.studentId}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm">Chưa có bạn cùng lớp</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-10 text-slate-400">
+                  <p>Không thể tải thông tin lớp học</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={closeClassDetails}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Waitlist Modal */}
+      <WaitlistModal 
+        isOpen={showWaitlistModal}
+        onClose={() => setShowWaitlistModal(false)}
+        onSuccess={() => {
+          // Optionally refresh data or show success message
+        }}
+      />
     </div>
   );
 }

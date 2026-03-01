@@ -31,6 +31,9 @@ const classService = {
 
   // Reassign class - chuyển sinh viên giữa các lớp
   reassignClass: (data) => axiosClient.post('/classes/reassign', data),
+
+  // Get class details for student - xem chi tiết lớp học phần
+  getClassDetails: (classId) => axiosClient.get(`/classes/${classId}/details`),
 };
 
 export default classService;
