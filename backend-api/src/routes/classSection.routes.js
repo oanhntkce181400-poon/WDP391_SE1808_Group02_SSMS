@@ -9,6 +9,14 @@ const router = express.Router();
  * Public Routes (require authentication)
  */
 
+// UC22 - Search Available Classes
+// GET /api/classes/search - Search classes with filters
+router.get('/search', authMiddleware, classController.searchClasses);
+
+// UC39 - View Class List with Occupancy
+// GET /api/classes/list - Get class list with capacity details
+router.get('/list', authMiddleware, classController.getClassList);
+
 // GET /api/classes - Get all class sections
 router.get('/', authMiddleware, classController.getAllClassSections);
 

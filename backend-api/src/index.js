@@ -48,6 +48,8 @@ app.use("/api/tuition-fees", require("./routes/tuitionFee.routes"));
 app.use("/api/majors", require("./routes/major.routes"));
 app.use("/api/faculties", require("./routes/faculty.routes"));
 app.use("/api/error-logs", require("./routes/errorLog.routes"));
+app.use("/api/announcements", require("./routes/announcement.routes"));
+app.use("/api/file-proxy", require("./routes/fileProxy.routes"));
 app.use("/api/classes", require("./modules/classSection/classSection.routes"));
 app.use("/api/waitlist", require("./modules/waitlist/waitlist.routes"));
 app.use("/api/classes", require("./modules/schedule/schedule.routes"));
@@ -72,6 +74,7 @@ app.use(
   "/api/registration-periods",
   require("./routes/registrationPeriod.routes"),
 );
+app.use("/api/registrations", require("./routes/registration.routes"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {

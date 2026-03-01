@@ -5,6 +5,80 @@ const Teacher = require('../models/teacher.model');
 const Room = require('../models/room.model');
 const Timeslot = require('../models/timeslot.model');
 const Student = require('../models/student.model');
+const classSectionService = require('../services/classSection.service');
+
+/**
+ * UC22 - Search Available Classes
+ * GET /api/classes - Search classes with filters
+ * Query params: subject_id, semester, keyword, page, limit, sortBy, sortOrder
+ */
+const searchClasses = async (req, res) => {
+  try {
+    const { subject_id, semester, keyword, page, limit, sortBy, sortOrder } = req.query;
+
+    // Validate search criteria
+    const validation = classSectionService.validateSearchCriteria(req.query);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid search criteria',
+        errors: validation.errors,
+      });
+    }
+
+    // Build criteria object
+    const criteria = {
+      subject_id,
+      semester,
+      keyword,
+      page: page || 1,
+      limit: limit || 20,
+      sortBy: sortBy || 'createdAt',
+      sortOrder: sortOrder || 'desc',
+    };
+
+    // Get available classes
+    const result = await classSectionService.getAvailableClasses(criteria);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Classes retrieved successfully',
+      data: result.classes,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    console.error('Error searching classes:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to search classes',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * UC39 - Get Class List with Occupancy Info
+ * GET /api/classes/list - Get class list with capacity details
+ */
+const getClassList = async (req, res) => {
+  try {
+    const classes = await classSectionService.retrieveClassInformation();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Class list retrieved successfully',
+      data: classes,
+      total: classes.length,
+    });
+  } catch (error) {
+    console.error('Error getting class list:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get class list',
+      error: error.message,
+    });
+  }
+};
 
 /**
  * Create a new class section
@@ -503,6 +577,8 @@ const getMyClasses = async (req, res) => {
 };
 
 module.exports = {
+  searchClasses,
+  getClassList,
   createClassSection,
   getAllClassSections,
   getClassSectionById,

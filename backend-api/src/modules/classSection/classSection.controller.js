@@ -187,7 +187,6 @@ async function bulkUpdateStatus(req, res) {
     return handleError(res, err);
   }
 }
-
 async function reassignClass(req, res) {
   try {
     const { fromClassId, toClassId, studentIds, closeSourceClass } = req.body;
@@ -227,6 +226,31 @@ async function reassignClass(req, res) {
     return handleError(res, err);
   }
 }
+// ─── UC22 - Search Available Classes ────────────────────────────────
+
+async function searchClasses(req, res) {
+  try {
+    const { subject_id, semester, keyword, page, limit, sortBy, sortOrder } = req.query;
+    const result = await service.searchAvailableClasses({
+      subject_id,
+      semester,
+      keyword,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    });
+    return res.json({
+      success: true,
+      message: 'Classes retrieved successfully',
+      ...result,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+//<<<<<<< HEAD
 
 // ─── Get Class Details for Student ───────────────────────────────────
 
@@ -281,6 +305,31 @@ async function getClassDetails(req, res) {
   }
 }
 
+async function getClassList(req, res) {
+  try {
+    const classes = await service.getClassListWithCapacity();
+    return res.json({
+      success: true,
+      message: 'Class list retrieved successfully',
+      data: classes,
+      total: classes.length,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+//=======
+//>>>>>>> main
+async function selfEnroll(req, res) {
+  try {
+    const userId = req.user?.userId || req.user?._id;
+    const { classId } = req.params;
+    const data = await service.selfEnroll(userId, classId);
+    return res.status(201).json({ success: true, message: "Đăng ký lớp thành công", data });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
 module.exports = {
   getAll,
   getById,
@@ -288,11 +337,19 @@ module.exports = {
   update,
   remove,
   enrollStudent,
+  selfEnroll,
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
   checkConflict,
   bulkUpdateStatus,
   reassignClass,
+  searchClasses,
+  getClassList,
   getClassDetails,
+// <<<<<<< HEAD
+//   getClassDetails,
+// };
+// =======
 };
+//>>>>>>> main

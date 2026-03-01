@@ -29,11 +29,17 @@ const classService = {
   // Bulk update status
   bulkUpdateStatus: (ids, status) => axiosClient.patch('/classes/bulk-status', { ids, status }),
 
+   // Student tự đăng ký lớp
+   selfEnroll: (classId) => axiosClient.post(`/classes/${classId}/self-enroll`),
+   // UC22 - Search Available Classes
+   searchClasses: (params) => axiosClient.get('/classes/search', { params }),
+
+   // UC39 - View Class List with Capacity
+   getClassList: () => axiosClient.get('/classes/list'),
+   // Get class details for student - xem chi tiết lớp học phần
+  getClassDetails: (classId) => axiosClient.get(`/classes/${classId}/details`),
   // Reassign class - chuyển sinh viên giữa các lớp
   reassignClass: (data) => axiosClient.post('/classes/reassign', data),
-
-  // Get class details for student - xem chi tiết lớp học phần
-  getClassDetails: (classId) => axiosClient.get(`/classes/${classId}/details`),
 };
 
 export default classService;
