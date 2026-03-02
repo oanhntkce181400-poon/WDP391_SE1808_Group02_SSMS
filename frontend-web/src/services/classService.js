@@ -40,6 +40,9 @@ const classService = {
   getClassDetails: (classId) => axiosClient.get(`/classes/${classId}/details`),
   // Reassign class - chuyển sinh viên giữa các lớp
   reassignClass: (data) => axiosClient.post('/classes/reassign', data),
+
+  // Bulk create class sections from curriculum
+  bulkCreate: (classes) => axiosClient.post('/classes/bulk-create', { classes }),
 };
 
 export default classService;

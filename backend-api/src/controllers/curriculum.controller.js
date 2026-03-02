@@ -150,7 +150,23 @@ exports.getCurriculumWithDetails = async (req, res) => {
 // Get all semesters for a curriculum
 exports.getSemesters = async (req, res) => {
   try {
-    const semesters = await curriculumSemesterService.getSemestersByCurriculum(req.params.curriculumId);
+    const Curriculum = require('../models/curriculum.model');
+    const curriculum = await Curriculum.findById(req.params.curriculumId);
+    
+    if (!curriculum) {
+      return res.status(404).json({ success: false, message: 'Curriculum not found' });
+    }
+    
+    let semesters;
+    
+    // Check if using relational structure
+    if (curriculum.useRelationalStructure) {
+      semesters = await curriculumSemesterService.getSemestersByCurriculum(req.params.curriculumId);
+    } else {
+      // Return embedded semesters
+      semesters = curriculum.semesters || [];
+    }
+    
     res.json({
       success: true,
       data: semesters,
@@ -376,6 +392,23 @@ exports.getCurriculumSemesters = async (req, res) => {
     });
   } catch (error) {
     res.status(404).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Get subjects by semester from curriculum - for generating class sections
+exports.getSubjectsBySemester = async (req, res) => {
+  try {
+    const { id, semester } = req.params;
+    const subjects = await curriculumService.getSubjectsBySemester(id, semester);
+    res.json({
+      success: true,
+      data: subjects,
+    });
+  } catch (error) {
+    res.status(500).json({
       success: false,
       message: error.message,
     });

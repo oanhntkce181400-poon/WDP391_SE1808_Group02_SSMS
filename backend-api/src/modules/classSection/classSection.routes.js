@@ -66,4 +66,7 @@ router.post("/", authMiddleware, ADMIN_STAFF, ctrl.create);
 router.patch("/:classId", authMiddleware, ADMIN_STAFF, ctrl.update);
 router.delete("/:classId", authMiddleware, ADMIN_STAFF, ctrl.remove);
 
+// Bulk create class sections from curriculum
+router.post("/bulk-create", authMiddleware, ADMIN_STAFF, ctrl.bulkCreate);
+
 module.exports = router;

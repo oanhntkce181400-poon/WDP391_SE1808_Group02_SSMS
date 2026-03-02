@@ -15,11 +15,13 @@ import {
   AlertCircle,
   Calendar,
   CheckSquare,
+  GraduationCap,
 } from "lucide-react";
 import classService from "../../services/classService";
 import subjectService from "../../services/subjectService";
 import semesterService from "../../services/semesterService";
 import lecturerService from "../../services/lecturerService";
+import curriculumService from "../../services/curriculumService";
 import AssignScheduleModal from "../../components/features/AssignScheduleModal";
 import ReassignClassModal from "../../components/features/ReassignClassModal";
 
@@ -90,6 +92,7 @@ function Toast({ toast, onClose }) {
 
 /* ───── form initial state ───── */
 const EMPTY_FORM = {
+  sourceType: "all", // "all" = all subjects, "curriculum" = from curriculum
   classCode: "",
   className: "",
   subject: "",
@@ -98,6 +101,18 @@ const EMPTY_FORM = {
   academicYear: "",
   maxCapacity: "",
   status: "draft",
+  // Dates from semester
+  startDate: "",
+  endDate: "",
+  // Curriculum fields
+  curriculum: "",
+  curriculumSemester: "",
+};
+
+const getCurrentAcademicYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  return `${year}/${year + 1}`;
 };
 
 export default function ClassManagement() {
@@ -120,6 +135,12 @@ export default function ClassManagement() {
   // dropdowns
   const [subjects, setSubjects] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  // Curriculum dropdown data
+  const [curriculums, setCurriculums] = useState([]);
+  const [curriculumSemesters, setCurriculumSemesters] = useState([]);
+  const [curriculumSubjects, setCurriculumSubjects] = useState([]);
+  // Institutional semesters (Kỳ TV)
+  const [institutionalSemesters, setInstitutionalSemesters] = useState([]);
 
   // modals
   const [showCreate, setShowCreate] = useState(false);
@@ -187,7 +208,100 @@ export default function ClassManagement() {
       .getAll({ limit: 200 })
       .then((r) => setTeachers(r.data.data || []))
       .catch(() => {});
+    // Fetch curriculums for create form
+    curriculumService.getCurriculums({ limit: 100 })
+      .then(r => setCurriculums(r.data.data || []))
+      .catch(() => {});
   }, [fetchClasses]);
+
+  // Fetch curriculum semesters when curriculum changes in create form
+  useEffect(() => {
+    if (!showCreate || !formData.curriculum) {
+      setCurriculumSemesters([]);
+      setCurriculumSubjects([]);
+      return;
+    }
+
+    const selectedCur = curriculums.find(c => c._id === formData.curriculum);
+    if (selectedCur?.semesters && selectedCur.semesters.length > 0) {
+      setCurriculumSemesters(selectedCur.semesters);
+    } else {
+      curriculumService.getSemesters(formData.curriculum)
+        .then(r => setCurriculumSemesters(r?.data?.data || []))
+        .catch(() => setCurriculumSemesters([]));
+    }
+  }, [showCreate, formData.curriculum, curriculums]);
+
+  // Fetch subjects when curriculum semester changes
+  useEffect(() => {
+    if (!showCreate || !formData.curriculum || !formData.curriculumSemester) {
+      setCurriculumSubjects([]);
+      return;
+    }
+
+    const semesterData = curriculumSemesters.find(s => s._id === formData.curriculumSemester);
+
+    // Always use API to get subjects with populated subject data
+    // Use semesterOrder if available, otherwise use id, otherwise use semester (number)
+    const semesterParam = semesterData?.semesterOrder || semesterData?.id || semesterData?.semester || formData.curriculumSemester;
+    curriculumService.getSubjectsBySemester(formData.curriculum, semesterParam)
+      .then(r => {
+        if (r?.data?.data?.length > 0) {
+        }
+        setCurriculumSubjects(r?.data?.data || [])
+      })
+      .catch(() => setCurriculumSubjects([]));
+  }, [showCreate, formData.curriculum, formData.curriculumSemester, curriculumSemesters]);
+
+  // Fetch institutional semesters (Kỳ TV) when sourceType = "all"
+  useEffect(() => {
+    if (!showCreate || formData.sourceType !== "all") {
+      setInstitutionalSemesters([]);
+      return;
+    }
+
+    semesterService.getAll({ limit: 100 })
+      .then(r => {
+        setInstitutionalSemesters(r.data.data || []);
+      })
+      .catch(() => setInstitutionalSemesters([]));
+  }, [showCreate, formData.sourceType]);
+
+  // Auto-fill semester and academicYear when curriculum semester is selected
+  useEffect(() => {
+    if (!showCreate || formData.sourceType !== "curriculum" || !formData.curriculumSemester) return;
+
+    const selectedCur = curriculums.find(c => c._id === formData.curriculum);
+    if (selectedCur?.academicYear) {
+      setFormData(p => ({ ...p, academicYear: selectedCur.academicYear }));
+    }
+
+    // Find semester number from curriculumSemesters array
+    const selectedSem = curriculumSemesters.find(s => s._id === formData.curriculumSemester);
+    const semesterNum = selectedSem?.semesterOrder || selectedSem?.semester || 1;
+    setFormData(p => ({ ...p, semester: semesterNum }));
+  }, [showCreate, formData.curriculumSemester, formData.sourceType, curriculums, curriculumSemesters]);
+
+  // Auto-fill academicYear, startDate, endDate when institutional semester is selected
+  useEffect(() => {
+    if (!showCreate || formData.sourceType !== "all" || !formData.semester) return;
+
+    // Find the selected institutional semester to get academicYear and dates
+    const selectedSem = institutionalSemesters.find(s => s.semesterNum == formData.semester);
+    if (selectedSem) {
+      const updates = { academicYear: selectedSem.academicYear || "" };
+      
+      // Auto-fill dates from semester if available
+      if (selectedSem.startDate) {
+        updates.startDate = selectedSem.startDate.split('T')[0]; // Format YYYY-MM-DD
+      }
+      if (selectedSem.endDate) {
+        updates.endDate = selectedSem.endDate.split('T')[0]; // Format YYYY-MM-DD
+      }
+      
+      setFormData(p => ({ ...p, ...updates }));
+    }
+  }, [showCreate, formData.semester, formData.sourceType, institutionalSemesters]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -257,9 +371,11 @@ export default function ClassManagement() {
 
   /* ── Create ── */
   const openCreate = () => {
-    setFormData(EMPTY_FORM);
+    setFormData({ ...EMPTY_FORM, academicYear: getCurrentAcademicYear() });
     setConflictWarning(null);
     setConflictData(null);
+    setCurriculumSemesters([]);
+    setCurriculumSubjects([]);
     setShowCreate(true);
   };
 
@@ -267,20 +383,32 @@ export default function ClassManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      // Validate subject is a valid ObjectId
+      const subjectId = formData.subject;
+      if (!subjectId || subjectId.length !== 24 || !/^[a-fA-F0-9]+$/.test(subjectId)) {
+        showToast("Vui lòng chọn môn học hợp lệ", "error");
+        setSubmitting(false);
+        return;
+      }
+      
       await classService.createClass({
         classCode: formData.classCode,
         className: formData.className,
-        subject: formData.subject,
+        subject: subjectId,
         teacher: formData.teacher,
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
         status: formData.status,
+        // Dates from semester
+        startDate: formData.startDate || null,
+        endDate: formData.endDate || null,
       });
       showToast("Tạo lớp học thành công");
       setShowCreate(false);
       fetchClasses(1, search, statusFilter);
     } catch (err) {
+      console.log("Create class error:", err?.response?.data);
       showToast(
         err?.response?.data?.message || "Tạo lớp học thất bại",
         "error",
@@ -294,6 +422,7 @@ export default function ClassManagement() {
   const openEdit = (cls) => {
     setSelected(cls);
     setFormData({
+      sourceType: "all", // Edit always uses "all subjects" mode
       classCode: cls.classCode,
       className: cls.className,
       subject: cls.subject?._id || cls.subject || "",
@@ -302,7 +431,11 @@ export default function ClassManagement() {
       academicYear: cls.academicYear || "",
       maxCapacity: cls.maxCapacity || "",
       status: cls.status || "draft",
+      curriculum: "",
+      curriculumSemester: "",
     });
+    setCurriculumSemesters([]);
+    setCurriculumSubjects([]);
     setShowEdit(true);
   };
 
@@ -310,9 +443,17 @@ export default function ClassManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      // Validate subject is a valid ObjectId
+      const subjectId = formData.subject;
+      if (!subjectId || subjectId.length !== 24 || !/^[a-fA-F0-9]+$/.test(subjectId)) {
+        showToast("Vui lòng chọn môn học hợp lệ", "error");
+        setSubmitting(false);
+        return;
+      }
+
       await classService.updateClass(selected._id, {
         className: formData.className,
-        subject: formData.subject,
+        subject: subjectId,
         teacher: formData.teacher,
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
@@ -360,6 +501,23 @@ export default function ClassManagement() {
   /* ── Input change helper ── */
   const handleChange = (e) =>
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+
+  // Handle subject selection from curriculum - auto-fill className
+  const handleCurriculumSubjectChange = (subjectId) => {
+    const subject = curriculumSubjects.find(s => 
+      (s.subject?._id || s.subjectId || s.subject) === subjectId
+    );
+    
+    const subjectName = subject?.subject?.subjectName || subject?.subjectName || subject?.name || "";
+    const subjectCode = subject?.subject?.subjectCode || subject?.subjectCode || subject?.code || "";
+    
+    setFormData(p => ({
+      ...p,
+      subject: subjectId,
+      className: subjectName,
+      classCode: subjectCode ? `${subjectCode}-${p.academicYear?.replace("/", "") || "00"}-${p.semester || "1"}-${Date.now().toString(36).toUpperCase()}` : ""
+    }));
+  };
 
   /* ─────────── RENDER ─────────── */
   return (
@@ -664,6 +822,12 @@ export default function ClassManagement() {
           submitting={submitting}
           subjects={subjects}
           teachers={teachers}
+          curriculums={curriculums}
+          curriculumSemesters={curriculumSemesters}
+          curriculumSubjects={curriculumSubjects}
+          institutionalSemesters={institutionalSemesters}
+          handleCurriculumSubjectChange={handleCurriculumSubjectChange}
+          isEdit={showEdit}
         />
       )}
 
@@ -761,7 +925,16 @@ function ClassFormModal({
   submitting,
   subjects,
   teachers,
+  // Curriculum props
+  curriculums = [],
+  curriculumSemesters = [],
+  curriculumSubjects = [],
+  institutionalSemesters = [],
+  handleCurriculumSubjectChange,
+  isEdit = false,
 }) {
+  const isCreate = title.toLowerCase().includes("mới");
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -782,6 +955,115 @@ function ClassFormModal({
           onSubmit={onSubmit}
           className="overflow-y-auto px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
+          {/* Nguồn môn học - chỉ hiển thị khi tạo mới */}
+          {isCreate && (
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Nguồn môn học <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="sourceType"
+                    value="all"
+                    checked={formData.sourceType === "all"}
+                    onChange={onChange}
+                    className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-slate-700">Tất cả môn học</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="sourceType"
+                    value="curriculum"
+                    checked={formData.sourceType === "curriculum"}
+                    onChange={onChange}
+                    className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-slate-700">Từ khung CT</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Khung chương trình - chỉ hiển thị khi tạo mới và chọn nguồn từ CT */}
+          {isCreate && formData.sourceType === "curriculum" && (
+            <>
+              <div className="col-span-1 sm:col-span-2 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Khung chương trình <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="curriculum"
+                  value={formData.curriculum}
+                  onChange={onChange}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white mb-3"
+                >
+                  <option value="">-- Chọn khung chương trình --</option>
+                  {curriculums.map(c => (
+                    <option key={c._id} value={c._id}>
+                      {c.code} - {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                {formData.curriculum && (
+                  <>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Học kỳ trong CT <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="curriculumSemester"
+                      value={formData.curriculumSemester}
+                      onChange={onChange}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white mb-3"
+                    >
+                      <option value="">-- Chọn học kỳ --</option>
+                      {curriculumSemesters.map(s => (
+                        <option key={s._id} value={s._id}>
+                          {s.name || `Học kỳ ${s.semesterOrder}`}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                {formData.curriculum && formData.curriculumSemester && (
+                  <>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Môn học <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.subject}
+                      onChange={(e) => handleCurriculumSubjectChange(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="">-- Chọn môn học --</option>
+                      {curriculumSubjects.map((s, idx) => {
+                        // Ưu tiên lấy _id từ subject object, sau đó subjectId, cuối cùng mới là subject (có thể là string)
+                        const subjectId = (s.subject && typeof s.subject === 'object' && s.subject._id) 
+                          ? s.subject._id 
+                          : (s.subjectId || s._id || s.id || "");
+                        const subjectCode = s.subject?.subjectCode || s.subjectCode || s.code || "";
+                        const subjectName = s.subject?.subjectName || s.subjectName || s.name || "";
+                        return (
+                          <option key={idx} value={subjectId}>
+                            {subjectCode} — {subjectName}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {curriculumSubjects.length} môn học trong học kỳ này
+                    </p>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Mã lớp */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -812,26 +1094,60 @@ function ClassFormModal({
             />
           </div>
 
-          {/* Môn học */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Môn học <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="subject"
-              required
-              value={formData.subject}
-              onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
-            >
-              <option value="">-- Chọn môn học --</option>
-              {subjects.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {s.subjectCode} — {s.subjectName}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Học kỳ - chỉ hiển thị khi chọn "Tất cả môn học" */}
+          {isCreate && formData.sourceType === "all" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Học kỳ <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="semester"
+                required
+                value={formData.semester}
+                onChange={onChange}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+              >
+                <option value="">-- Chọn học kỳ --</option>
+                {institutionalSemesters.map((s) => (
+                  <option key={s._id} value={s.semesterNum}>
+                    {s.name} ({s.academicYear})
+                    {s.startDate && s.endDate && ` | ${new Date(s.startDate).toLocaleDateString('vi-VN')} → ${new Date(s.endDate).toLocaleDateString('vi-VN')}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Môn học - chỉ hiển thị khi chọn "Tất cả môn học" */}
+          {isCreate && formData.sourceType === "all" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Môn học <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="subject"
+                required
+                value={formData.subject}
+                onChange={onChange}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+              >
+                <option value="">-- Chọn môn học --</option>
+                {subjects.map((s) => (
+                  <option key={s._id} value={s._id}>
+                    {s.subjectCode} — {s.subjectName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Hiển thị thông tin môn học đã chọn từ CT */}
+          {isCreate && formData.sourceType === "curriculum" && formData.subject && (
+            <div className="col-span-1 sm:col-span-2 p-3 bg-green-50 rounded-xl border border-green-200">
+              <p className="text-sm text-green-700 font-medium">✓ Đã chọn môn học</p>
+              <p className="text-sm text-green-600">ID: {formData.subject}</p>
+            </div>
+          )}
 
           {/* Giảng viên */}
           <div>
@@ -854,7 +1170,8 @@ function ClassFormModal({
             </select>
           </div>
 
-          {/* Học kỳ */}
+          {/* Học kỳ - chỉ hiển thị khi chọn "Từ khung CT" (không hiển thị khi "Tất cả môn học") */}
+          {isCreate && formData.sourceType !== "all" && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Học kỳ <span className="text-red-500">*</span>
@@ -864,14 +1181,29 @@ function ClassFormModal({
               required
               value={formData.semester}
               onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+              disabled={isCreate && formData.sourceType === "curriculum"}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white disabled:bg-slate-100"
             >
               <option value="">-- Chọn học kỳ --</option>
-              <option value="1">Học kỳ 1</option>
-              <option value="2">Học kỳ 2</option>
-              <option value="3">Học kỳ 3 (hè)</option>
+              {formData.sourceType === "curriculum" ? (
+                curriculumSemesters.map(s => (
+                  <option key={s.id || s.semesterOrder || s._id} value={s.id || s.semesterOrder || s.semester}>
+                    {s.name || `Học kỳ ${s.id || s.semesterOrder || s.semester}`}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="1">Học kỳ 1</option>
+                  <option value="2">Học kỳ 2</option>
+                  <option value="3">Học kỳ 3 (hè)</option>
+                </>
+              )}
             </select>
+            {isCreate && formData.sourceType === "curriculum" && (
+              <p className="text-xs text-slate-500 mt-1">Được tự động điền từ học kỳ trong CT</p>
+            )}
           </div>
+          )}
 
           {/* Năm học */}
           <div>
@@ -883,10 +1215,48 @@ function ClassFormModal({
               required
               value={formData.academicYear}
               onChange={onChange}
+              disabled={isCreate && formData.sourceType === "curriculum"}
               placeholder="VD: 2024-2025"
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none disabled:bg-slate-100"
             />
+            {isCreate && formData.sourceType === "curriculum" && (
+              <p className="text-xs text-slate-500 mt-1">Được tự động điền từ khung CT</p>
+            )}
           </div>
+
+          {/* Ngày bắt đầu - chỉ hiển thị khi chọn "Tất cả môn học" */}
+          {isCreate && formData.sourceType === "all" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Ngày bắt đầu học phần
+              </label>
+              <input
+                name="startDate"
+                type="date"
+                value={formData.startDate}
+                readOnly
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 text-slate-500 cursor-not-allowed"
+              />
+              <p className="text-xs text-slate-500 mt-1">Được tự động điền từ Kỳ học</p>
+            </div>
+          )}
+
+          {/* Ngày kết thúc - chỉ hiển thị khi chọn "Tất cả môn học" */}
+          {isCreate && formData.sourceType === "all" && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Ngày kết thúc học phần
+              </label>
+              <input
+                name="endDate"
+                type="date"
+                value={formData.endDate}
+                readOnly
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 text-slate-500 cursor-not-allowed"
+              />
+              <p className="text-xs text-slate-500 mt-1">Được tự động điền từ Kỳ học</p>
+            </div>
+          )}
 
           {/* Sĩ số tối đa */}
           <div>
@@ -905,25 +1275,27 @@ function ClassFormModal({
             />
           </div>
 
-          {/* Trạng thái */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Trạng thái
-            </label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={onChange}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
-            >
-              <option value="draft">Bản nháp</option>
-              <option value="scheduled">Đã lên lịch</option>
-              <option value="published">Đang mở</option>
-              <option value="locked">Bị khóa</option>
-              <option value="completed">Đã kết thúc</option>
-              <option value="cancelled">Đã hủy</option>
-            </select>
-          </div>
+          {/* Trạng thái - chỉ hiển thị khi edit */}
+          {isEdit && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Trạng thái
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={onChange}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
+              >
+                <option value="draft">Bản nháp</option>
+                <option value="scheduled">Đã lên lịch</option>
+                <option value="published">Đang mở</option>
+                <option value="locked">Bị khóa</option>
+                <option value="completed">Đã kết thúc</option>
+                <option value="cancelled">Đã hủy</option>
+              </select>
+            </div>
+          )}
         </form>
 
         {/* Footer */}

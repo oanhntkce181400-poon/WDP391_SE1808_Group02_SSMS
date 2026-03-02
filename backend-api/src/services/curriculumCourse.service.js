@@ -7,7 +7,7 @@ class CurriculumCourseService {
   async getCoursesBySemester(semesterId) {
     try {
       const courses = await CurriculumCourse.find({ semester: semesterId })
-        .populate('subject', 'code name')
+        .populate('subject', 'subjectCode subjectName')
         .sort({ subjectCode: 1 })
         .lean();
       return courses;
@@ -20,7 +20,7 @@ class CurriculumCourseService {
   async getCourseById(id) {
     try {
       const course = await CurriculumCourse.findById(id)
-        .populate('subject', 'code name');
+        .populate('subject', 'subjectCode subjectName');
       if (!course) {
         throw new Error('CurriculumCourse not found');
       }
@@ -203,7 +203,7 @@ class CurriculumCourseService {
       const semesterIds = semesters.map(s => s._id);
 
       const courses = await CurriculumCourse.find({ semester: { $in: semesterIds } })
-        .populate('subject', 'code name')
+        .populate('subject', 'subjectCode subjectName')
         .populate({
           path: 'semester',
           select: 'name semesterOrder',

@@ -1,12 +1,33 @@
 const Semester = require("../../models/semester.model");
 
-async function findAll({ academicYear, isCurrent } = {}) {
+async function findAll(query = {}) {
+  const { academicYear, isCurrent, semesterType, isActive, page = 1, limit = 10 } = query;
   const filter = {};
   if (academicYear) filter.academicYear = academicYear;
   if (isCurrent !== undefined) filter.isCurrent = isCurrent;
-  return Semester.find(filter)
-    .sort({ academicYear: -1, semesterNum: 1 })
-    .lean();
+  if (semesterType) filter.semesterType = semesterType;
+  if (isActive !== undefined) filter.isActive = isActive;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  
+  const [data, total] = await Promise.all([
+    Semester.find(filter)
+      .sort({ academicYear: -1, semesterNum: 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean(),
+    Semester.countDocuments(filter)
+  ]);
+
+  return {
+    data,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    }
+  };
 }
 
 async function findById(id) {

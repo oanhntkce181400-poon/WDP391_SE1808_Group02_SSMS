@@ -95,6 +95,8 @@ const createClassSection = async (req, res) => {
       semester,
       academicYear,
       maxCapacity,
+      startDate,
+      endDate,
     } = req.body;
 
     // Validate required fields
@@ -103,15 +105,13 @@ const createClassSection = async (req, res) => {
       !className ||
       !subject ||
       !teacher ||
-      !room ||
-      !timeslot ||
       !semester ||
       !academicYear ||
       !maxCapacity
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields',
+        message: 'Missing required fields: classCode, className, subject, teacher, semester, academicYear, maxCapacity',
       });
     }
 
@@ -124,17 +124,26 @@ const createClassSection = async (req, res) => {
       });
     }
 
-    const newClass = new ClassSection({
+    // Build class object - room and timeslot are optional (assigned later via schedule)
+    const classData = {
       classCode,
       className,
       subject,
       teacher,
-      room,
-      timeslot,
       semester,
       academicYear,
       maxCapacity,
-    });
+      status: 'draft', // Default status
+      // Optional dates from semester
+      ...(startDate && { startDate: new Date(startDate) }),
+      ...(endDate && { endDate: new Date(endDate) }),
+    };
+
+    // Add room and timeslot if provided
+    if (room) classData.room = room;
+    if (timeslot) classData.timeslot = timeslot;
+
+    const newClass = new ClassSection(classData);
 
     await newClass.save();
 

@@ -29,11 +29,16 @@ const curriculumService = {
     return axiosClient.get(`/curriculums/${id}/semesters`);
   },
 
+  // Get subjects by semester from curriculum (for generating class sections)
+  getSubjectsBySemester(curriculumId, semester) {
+    return axiosClient.get(`/curriculums/${curriculumId}/semester/${semester}/subjects`);
+  },
+
   // ========== NEW RELATIONAL STRUCTURE APIs ==========
   
   // Semester APIs
   getSemesters(curriculumId) {
-    return axiosClient.get(`/curriculums/${curriculumId}/semesters/list`);
+    return axiosClient.get(`/curriculums/${curriculumId}/semesters`);
   },
   getSemesterWithCourses(semesterId) {
     return axiosClient.get(`/curriculums/semesters/${semesterId}`);

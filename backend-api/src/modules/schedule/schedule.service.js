@@ -220,12 +220,25 @@ async function getSchedulesByClassId(classSectionId) {
  * @param {Object} data - Dữ liệu cần kiểm tra
  */
 async function checkScheduleConflict(data) {
-  const { roomId, teacherId, dayOfWeek, startPeriod, endPeriod, classSectionId } = data;
+  const { roomId, teacherId, dayOfWeek, startPeriod, endPeriod, classSectionId, semester, academicYear } = data;
 
   const conflicts = {
     room: [],
     teacher: []
   };
+
+  // Nếu không truyền semester/academicYear, lấy từ classSection
+  let semesterValue = semester;
+  let academicYearValue = academicYear;
+
+  if ((!semesterValue || !academicYearValue) && classSectionId) {
+    const ClassSection = require('../classSection/classSection.repository');
+    const classSection = await ClassSection.findById(classSectionId).select('semester academicYear');
+    if (classSection) {
+      semesterValue = semesterValue || classSection.semester;
+      academicYearValue = academicYearValue || classSection.academicYear;
+    }
+  }
 
   // Check room conflict
   if (roomId) {
@@ -234,7 +247,9 @@ async function checkScheduleConflict(data) {
       dayOfWeek: parseInt(dayOfWeek, 10),
       startPeriod: parseInt(startPeriod, 10),
       endPeriod: parseInt(endPeriod, 10),
-      classSectionId
+      classSectionId,
+      semester: semesterValue,
+      academicYear: academicYearValue
     });
     conflicts.room = roomConflicts;
   }
@@ -246,7 +261,9 @@ async function checkScheduleConflict(data) {
       dayOfWeek: parseInt(dayOfWeek, 10),
       startPeriod: parseInt(startPeriod, 10),
       endPeriod: parseInt(endPeriod, 10),
-      classSectionId
+      classSectionId,
+      semester: semesterValue,
+      academicYear: academicYearValue
     });
     conflicts.teacher = teacherConflicts;
   }

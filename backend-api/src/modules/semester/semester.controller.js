@@ -14,8 +14,12 @@ function handleError(res, err) {
 
 async function getAll(req, res) {
   try {
-    const data = await service.listSemesters(req.query);
-    return res.json({ success: true, data, total: data.length });
+    const result = await service.listSemesters(req.query);
+    return res.json({ 
+      success: true, 
+      data: result.data, 
+      pagination: result.pagination 
+    });
   } catch (err) {
     return handleError(res, err);
   }

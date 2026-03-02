@@ -64,16 +64,56 @@ async function deleteSchedulesByClassId(classId) {
  * @param {Number} params.startPeriod - Tiết bắt đầu
  * @param {Number} params.endPeriod - Tiết kết thúc
  * @param {String} params.classSectionId - ID của lớp học phần (để loại trừ khi update)
+ * @param {Number} params.semester - Học kỳ
+ * @param {String} params.academicYear - Năm học
  * @returns {Array} - Danh sách các lịch trùng
  */
-async function checkRoomConflict({ roomId, dayOfWeek, startPeriod, endPeriod, classSectionId }) {
+async function checkRoomConflict({ roomId, dayOfWeek, startPeriod, endPeriod, classSectionId, semester, academicYear }) {
   const conflicts = [];
+
+  // Schedule status: 'active' hoặc 'cancelled'
+  const validScheduleStatuses = ['active'];
+  // ClassSection status: 'draft', 'scheduled', 'published', 'locked'
+  const validClassStatuses = ['draft', 'scheduled', 'published', 'locked'];
+
+  // Xây dựng điều kiện lọc theo semester và academicYear (nếu có)
+  let classSectionFilter = {};
+  if (semester && academicYear) {
+    classSectionFilter = {
+      semester: parseInt(semester, 10),
+      academicYear: academicYear,
+      status: { $in: validClassStatuses }
+    };
+    // Loại trừ class hiện tại nếu đang update
+    if (classSectionId) {
+      classSectionFilter._id = { $ne: classSectionId };
+    }
+  } else if (classSectionId) {
+    // Nếu không có semester/academicYear nhưng có classSectionId
+    // thì lấy semester/academicYear từ class hiện tại
+    const currentClass = await ClassSection.findById(classSectionId).select('semester academicYear');
+    if (currentClass) {
+      classSectionFilter = {
+        semester: currentClass.semester,
+        academicYear: currentClass.academicYear,
+        status: { $in: validClassStatuses },
+        _id: { $ne: classSectionId }
+      };
+    }
+  }
+
+  // Lấy danh sách classSections trong cùng kỳ/năm để kiểm tra
+  let classSectionIds = [];
+  if (Object.keys(classSectionFilter).length > 0) {
+    const classSections = await ClassSection.find(classSectionFilter).select('_id');
+    classSectionIds = classSections.map(cs => cs._id);
+  }
 
   // 1. Kiểm tra xung đột trong bảng schedules (dữ liệu mới)
   const scheduleQuery = {
     room: roomId,
     dayOfWeek: dayOfWeek,
-    status: "active",
+    status: { $in: validScheduleStatuses },
     $or: [
       // Case 1: new schedule starts during existing schedule
       {
@@ -93,9 +133,12 @@ async function checkRoomConflict({ roomId, dayOfWeek, startPeriod, endPeriod, cl
     ]
   };
 
-  // Exclude current classSection if provided
-  if (classSectionId) {
-    scheduleQuery.classSection = { $ne: classSectionId };
+  // Chỉ kiểm tra các lớp trong cùng kỳ/năm
+  if (classSectionIds.length > 0) {
+    scheduleQuery.classSection = { $in: classSectionIds };
+  } else if (semester && academicYear) {
+    // Nếu có semester nhưng không tìm thấy lớp nào trong kỳ đó
+    return conflicts;
   }
 
   const scheduleConflicts = await Schedule.find(scheduleQuery)
@@ -117,9 +160,15 @@ async function checkRoomConflict({ roomId, dayOfWeek, startPeriod, endPeriod, cl
   const classSectionQuery = {
     room: roomId,
     dayOfWeek: dayOfWeek,
-    status: "active",
+    status: { $in: validClassStatuses },
     timeslot: { $ne: null } // Chỉ check các lớp có timeslot
   };
+
+  // Thêm điều kiện semester/academicYear nếu có
+  if (semester && academicYear) {
+    classSectionQuery.semester = parseInt(semester, 10);
+    classSectionQuery.academicYear = academicYear;
+  }
 
   // Exclude current classSection if provided
   if (classSectionId) {
@@ -172,23 +221,52 @@ async function checkRoomConflict({ roomId, dayOfWeek, startPeriod, endPeriod, cl
  * @param {Number} params.startPeriod - Tiết bắt đầu
  * @param {Number} params.endPeriod - Tiết kết thúc
  * @param {String} params.classSectionId - ID của lớp học phần (để loại trừ khi update)
+ * @param {Number} params.semester - Học kỳ
+ * @param {String} params.academicYear - Năm học
  * @returns {Array} - Danh sách các lịch trùng
  */
-async function checkTeacherConflict({ teacherId, dayOfWeek, startPeriod, endPeriod, classSectionId }) {
+async function checkTeacherConflict({ teacherId, dayOfWeek, startPeriod, endPeriod, classSectionId, semester, academicYear }) {
   const conflicts = [];
 
-  // 1. Kiểm tra xung đột trong bảng schedules (dữ liệu mới)
-  const classSections = await ClassSection.find({
-    teacher: teacherId,
-    status: "active"
-  }).select("_id");
+  // Schedule status: 'active' hoặc 'cancelled'
+  const validScheduleStatuses = ['active'];
+  // ClassSection status: 'draft', 'scheduled', 'published', 'locked'
+  const validClassStatuses = ['draft', 'scheduled', 'published', 'locked'];
 
+  // Xây dựng điều kiện lọc classSections
+  let classSectionFilter = { teacher: teacherId };
+  
+  if (semester && academicYear) {
+    classSectionFilter.semester = parseInt(semester, 10);
+    classSectionFilter.academicYear = academicYear;
+    classSectionFilter.status = { $in: validClassStatuses };
+  } else if (classSectionId) {
+    // Nếu không có semester/academicYear nhưng có classSectionId
+    // thì lấy semester/academicYear từ class hiện tại
+    const currentClass = await ClassSection.findById(classSectionId).select('semester academicYear');
+    if (currentClass) {
+      classSectionFilter.semester = currentClass.semester;
+      classSectionFilter.academicYear = currentClass.academicYear;
+      classSectionFilter.status = { $in: validClassStatuses };
+    }
+  } else {
+    // Không có đủ thông tin để filter, chỉ kiểm tra theo teacher
+    classSectionFilter.status = { $in: validClassStatuses };
+  }
+
+  // Lấy danh sách classSections của giảng viên trong cùng kỳ/năm
+  const classSections = await ClassSection.find(classSectionFilter).select("_id");
   const classSectionIds = classSections.map(cs => cs._id);
+
+  // Nếu không tìm thấy class nào trong kỳ, không có conflict
+  if (classSectionIds.length === 0) {
+    return conflicts;
+  }
 
   const scheduleQuery = {
     classSection: { $in: classSectionIds },
     dayOfWeek: dayOfWeek,
-    status: "active",
+    status: { $in: validScheduleStatuses },
     $or: [
       // Case 1: new schedule starts during existing schedule
       {
@@ -208,9 +286,14 @@ async function checkTeacherConflict({ teacherId, dayOfWeek, startPeriod, endPeri
     ]
   };
 
-  // Exclude current classSection if provided
+  // Exclude current classSection if provided - sửa logic: thay vì ghi đè query
+  // ta lọc bỏ classId khỏi mảng
   if (classSectionId) {
-    scheduleQuery.classSection = { $ne: classSectionId };
+    const filteredIds = classSectionIds.filter(id => id.toString() !== classSectionId.toString());
+    if (filteredIds.length === 0) {
+      return conflicts; // Chỉ còn class hiện tại, không có conflict
+    }
+    scheduleQuery.classSection = { $in: filteredIds };
   }
 
   const scheduleConflicts = await Schedule.find(scheduleQuery)
@@ -231,9 +314,15 @@ async function checkTeacherConflict({ teacherId, dayOfWeek, startPeriod, endPeri
   const legacyQuery = {
     teacher: teacherId,
     dayOfWeek: dayOfWeek,
-    status: "active",
+    status: { $in: validClassStatuses },
     timeslot: { $ne: null } // Chỉ check các lớp có timeslot
   };
+
+  // Thêm điều kiện semester/academicYear nếu có
+  if (semester && academicYear) {
+    legacyQuery.semester = parseInt(semester, 10);
+    legacyQuery.academicYear = academicYear;
+  }
 
   // Exclude current classSection if provided
   if (classSectionId) {

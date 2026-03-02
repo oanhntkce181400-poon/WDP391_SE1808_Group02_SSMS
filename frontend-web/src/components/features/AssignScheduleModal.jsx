@@ -3,6 +3,7 @@ import { X, AlertCircle, CheckCircle, Trash2, Calendar, Clock, MapPin, Users } f
 import scheduleService from "../../services/scheduleService";
 import roomService from "../../services/roomService";
 import timeslotService from "../../services/timeslotService";
+import classService from "../../services/classService";
 
 const DAYS_OF_WEEK = [
   { value: 1, label: "Thứ 2" },
@@ -44,6 +45,12 @@ export default function AssignScheduleModal({
   const [formData, setFormData] = useState(EMPTY_SCHEDULE_FORM);
   const [conflictWarning, setConflictWarning] = useState(null);
   const [checkingConflict, setCheckingConflict] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState({
+    room: [],    // Danh sách room bị conflict
+    teacher: [],  // Danh sách teacher bị conflict
+  });
+  const [selectedRoomCapacity, setSelectedRoomCapacity] = useState(null); // Sức chứa phòng đã chọn
+  const [capacityWarning, setCapacityWarning] = useState(null); // Cảnh báo sức chứa
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -79,6 +86,7 @@ export default function AssignScheduleModal({
   useEffect(() => {
     if (!formData.room_id || !formData.day_of_week || !formData.start_period || !formData.end_period) {
       setConflictWarning(null);
+      setConflictInfo({ room: [], teacher: [] });
       return;
     }
 
@@ -91,9 +99,18 @@ export default function AssignScheduleModal({
           day_of_week: formData.day_of_week,
           start_period: formData.start_period,
           end_period: formData.end_period,
+          semester: classSection.semester,
+          academic_year: classSection.academicYear
         });
 
         const result = response.data;
+        
+        // Lưu thông tin conflict để highlight dropdown
+        setConflictInfo({
+          room: result.conflicts?.room || [],
+          teacher: result.conflicts?.teacher || [],
+        });
+        
         if (result.hasConflict) {
           let message = "⚠️ Xung đột lịch học! ";
           if (result.conflicts?.room?.length > 0) {
@@ -109,17 +126,49 @@ export default function AssignScheduleModal({
       } catch (err) {
         console.error("Error checking conflict:", err);
         setConflictWarning(null);
+        setConflictInfo({ room: [], teacher: [] });
       } finally {
         setCheckingConflict(false);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [formData.room_id, formData.day_of_week, formData.start_period, formData.end_period, classSection]);
+  }, [formData.room_id, formData.day_of_week, formData.start_period, formData.end_period, classSection, classSection.semester, classSection.academicYear]);
 
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Khi chọn phòng, auto-fill maxCapacity = sức chứa phòng
+    if (name === 'room_id' && value) {
+      const selectedRoom = rooms.find(r => r._id === value);
+      if (selectedRoom) {
+        setSelectedRoomCapacity(selectedRoom.capacity);
+        
+        // Kiểm tra nếu maxCapacity hiện tại > sức chứa phòng thì cập nhật
+        const currentMaxCapacity = classSection.maxCapacity || 0;
+        if (currentMaxCapacity > selectedRoom.capacity) {
+          // Cập nhật maxCapacity của lớp học phần = sức chứa phòng
+          try {
+            await classService.updateClassSection(classSection._id, {
+              maxCapacity: selectedRoom.capacity
+            });
+            setCapacityWarning(`⚠️ Đã cập nhật sĩ số tối đa: ${currentMaxCapacity} → ${selectedRoom.capacity} (sức chứa phòng)`);
+            // Refresh class section data
+            if (onSuccess) onSuccess();
+          } catch (err) {
+            console.error("Error updating maxCapacity:", err);
+            setCapacityWarning(`⚠️ Cảnh báo: Sĩ số tối đa (${currentMaxCapacity}) > Sức chứa phòng (${selectedRoom.capacity})`);
+          }
+        } else if (currentMaxCapacity < selectedRoom.capacity) {
+          // Gợi ý tăng maxCapacity lên bằng sức chứa
+          setCapacityWarning(`💡 Gợi ý: Có thể tăng sĩ số tối đa lên ${selectedRoom.capacity} (sức chứa phòng)`);
+        }
+      }
+    } else if (name === 'room_id' && !value) {
+      setSelectedRoomCapacity(null);
+      setCapacityWarning(null);
+    }
   };
 
   // Xử lý khi chọn Timeslot - auto-fill startPeriod và endPeriod
@@ -148,6 +197,12 @@ export default function AssignScheduleModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Kiểm tra sức chứa phòng trước khi lưu
+    if (formData.room_id && selectedRoomCapacity && classSection.maxCapacity > selectedRoomCapacity) {
+      setError(`Không thể lưu: Sĩ số tối đa (${classSection.maxCapacity}) > Sức chứa phòng (${selectedRoomCapacity})`);
+      return;
+    }
+
     if (conflictWarning) {
       setError("Vui lòng chọn lịch khác để tránh xung đột!");
       return;
@@ -240,22 +295,25 @@ export default function AssignScheduleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Gán phòng và lịch học</h2>
-            <p className="text-sm text-slate-500 mt-1">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 overflow-hidden">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-slate-900 truncate">Gán phòng và lịch học</h2>
+            <p className="text-sm text-slate-500 mt-1 truncate">
               {classSection.classCode} - {classSection.subject?.subjectName || classSection.className}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg flex-shrink-0">
             <X size={20} />
           </button>
         </div>
 
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+
         {/* Status */}
-        <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600">Trạng thái:</span>
             {getStatusBadge(classSection.status)}
@@ -282,15 +340,25 @@ export default function AssignScheduleModal({
         </div>
 
         {/* Class Info */}
-        <div className="px-6 py-3 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div className="px-6 py-3 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm flex-shrink-0">
           <div className="flex items-center gap-2">
             <Users size={16} className="text-slate-400" />
             <span className="text-slate-600">Sĩ số:</span>
             <span className="font-medium">{classSection.currentEnrollment}/{classSection.maxCapacity}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-600">Giảng viên:</span>
-            <span className="font-medium">{classSection.teacher?.fullName || "Chưa phân công"}</span>
+          <div className={`flex flex-col gap-1 ${conflictInfo.teacher.length > 0 ? 'text-red-600' : ''}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">Giảng viên:</span>
+              <span className="font-medium">{classSection.teacher?.fullName || "Chưa phân công"}</span>
+              {conflictInfo.teacher.length > 0 && <span className="text-red-500">⚠️</span>}
+            </div>
+            {conflictInfo.teacher.length > 0 && (
+              <div className="text-xs text-red-500 pl-4">
+                {conflictInfo.teacher.map((c, idx) => (
+                  <div key={idx}>• {c.classSection?.subject?.subjectCode || c.classSection?.classCode} (T{c.dayOfWeek}, T{c.startPeriod}-{c.endPeriod})</div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <MapPin size={16} className="text-slate-400" />
@@ -301,7 +369,7 @@ export default function AssignScheduleModal({
 
         {/* Error/Success Messages */}
         {(error || success) && (
-          <div className="px-6 py-3">
+          <div className="px-6 py-3 flex-shrink-0">
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-sm">
                 <AlertCircle size={16} />
@@ -318,8 +386,22 @@ export default function AssignScheduleModal({
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-4 border-b border-slate-100">
+        <form onSubmit={handleSubmit} className="px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Thêm lịch học mới</h3>
+          
+          {/* Thông tin lớp học phần */}
+          <div className="mb-4 p-3 bg-slate-50 rounded-lg flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-1">
+              <Users className="w-4 h-4 text-slate-500" />
+              <span className="text-slate-600">Sĩ số tối đa:</span>
+              <span className="font-semibold text-indigo-600">{classSection.maxCapacity}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-600">Đã đăng ký:</span>
+              <span className="font-semibold">{classSection.currentEnrollment || 0}</span>
+              <span className="text-slate-400">/ {classSection.maxCapacity}</span>
+            </div>
+          </div>
           
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {/* Phòng học */}
@@ -332,15 +414,32 @@ export default function AssignScheduleModal({
                 value={formData.room_id}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
+                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
+                  conflictInfo.room.length > 0 && formData.room_id ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+                }`}
               >
                 <option value="">-- Chọn phòng --</option>
                 {rooms.map((r) => (
-                  <option key={r._id} value={r._id}>
+                  <option 
+                    key={r._id} 
+                    value={r._id}
+                    className={conflictInfo.room.some(c => c.room?._id === r._id) ? 'bg-red-100 font-medium' : ''}
+                  >
                     {r.roomCode} - {r.roomName} (CS: {r.capacity})
+                    {conflictInfo.room.some(c => c.room?._id === r._id) ? ' ⚠️ Đã có lớp' : ''}
                   </option>
                 ))}
               </select>
+              {conflictInfo.room.length > 0 && (
+                <p className="text-xs text-red-500 mt-1">
+                  ⚠️ {conflictInfo.room.length} phòng bị xung đột
+                </p>
+              )}
+              {capacityWarning && (
+                <p className={`text-xs mt-1 ${capacityWarning.includes('Đã cập nhật') ? 'text-green-600' : 'text-amber-600'}`}>
+                  {capacityWarning}
+                </p>
+              )}
             </div>
 
             {/* Ca học (Timeslot) */}
@@ -373,11 +472,16 @@ export default function AssignScheduleModal({
                 value={formData.day_of_week}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
+                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
+                  conflictWarning ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+                }`}
               >
                 <option value="">-- Chọn thứ --</option>
                 {DAYS_OF_WEEK.map((d) => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                    {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.day_of_week === d.value ? ' ⚠️' : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -392,11 +496,16 @@ export default function AssignScheduleModal({
                 value={formData.start_period}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
+                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
+                  conflictWarning ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+                }`}
               >
                 <option value="">-- Chọn tiết --</option>
                 {PERIODS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                    {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.start_period === p.value ? ' ⚠️' : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -411,11 +520,16 @@ export default function AssignScheduleModal({
                 value={formData.end_period}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
+                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
+                  conflictWarning ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+                }`}
               >
                 <option value="">-- Chọn tiết --</option>
                 {PERIODS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                    {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.end_period === p.value ? ' ⚠️' : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -484,8 +598,8 @@ export default function AssignScheduleModal({
         </form>
 
         {/* Existing Schedules */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Lịch học hiện tại</h3>
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-[200px]">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3 sticky top-0 bg-white py-2">Lịch học hiện tại</h3>
           
           {loading ? (
             <div className="flex items-center justify-center py-8 text-slate-400">
@@ -545,9 +659,10 @@ export default function AssignScheduleModal({
             </div>
           )}
         </div>
+        </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"

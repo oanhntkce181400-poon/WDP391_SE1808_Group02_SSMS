@@ -124,7 +124,7 @@ async function deleteSchedule(req, res) {
 async function checkConflict(req, res) {
   try {
     const { classId } = req.params;
-    const { room_id, teacher_id, day_of_week, start_period, end_period } = req.body;
+    const { room_id, teacher_id, day_of_week, start_period, end_period, semester, academic_year } = req.body;
 
     if (!room_id || !day_of_week || !start_period || !end_period) {
       return res.status(400).json({
@@ -133,13 +133,19 @@ async function checkConflict(req, res) {
       });
     }
 
+    // Nếu không truyền semester/academicYear, lấy từ classSection
+    let semesterValue = semester ? parseInt(semester, 10) : null;
+    let academicYearValue = academic_year || null;
+
     const conflicts = await service.checkScheduleConflict({
       roomId: room_id,
       teacherId: teacher_id,
       dayOfWeek: parseInt(day_of_week, 10),
       startPeriod: parseInt(start_period, 10),
       endPeriod: parseInt(end_period, 10),
-      classSectionId: classId
+      classSectionId: classId,
+      semester: semesterValue,
+      academicYear: academicYearValue
     });
 
     const hasConflict = conflicts.room.length > 0 || conflicts.teacher.length > 0;

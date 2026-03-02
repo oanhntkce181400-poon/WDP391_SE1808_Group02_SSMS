@@ -9,8 +9,7 @@ const REQUIRED_CLASS_FIELDS = [
   "className",
   "subject",
   "teacher",
-  "room",
-  "timeslot",
+  // "room" and "timeslot" are optional - assigned later via schedule
   "semester",
   "academicYear",
   "maxCapacity",
@@ -338,11 +337,14 @@ async function reassignClass({ fromClassId, toClassId, studentIds, closeSourceCl
 // ─── Check Schedule Conflict ───────────────────────────────────
 
 async function checkScheduleConflict({ teacherId, roomId, timeslotId, dayOfWeek, semester, academicYear, excludeClassId }) {
+  // Các status hợp lệ để kiểm tra conflict
+  const validStatuses = ['draft', 'scheduled', 'published', 'locked'];
+
   // Build query to find conflicts
   const query = {
     semester,
     academicYear,
-    status: "active",
+    status: { $in: validStatuses },
     $or: [
       // Conflict: Same teacher at same timeslot and dayOfWeek
       {
@@ -678,6 +680,50 @@ async function getClassDetails(classId, userId) {
     maxCapacity: cls.maxCapacity,
   };
 }
+
+// ─── Bulk Create Class Sections from Curriculum ───────────────────────────────────
+
+async function bulkCreateClassSections(classDataList, createdBy) {
+  const Subject = require("../../models/subject.model");
+  const results = { success: [], failed: [] };
+
+  for (const classData of classDataList) {
+    try {
+      const { subjectId, semester, academicYear, maxCapacity = 50 } = classData;
+      const subject = await Subject.findById(subjectId);
+      if (!subject) {
+        results.failed.push({ subjectId, error: "Subject not found" });
+        continue;
+      }
+
+      const subjectCode = subject.subjectCode;
+      const classCode = `${subjectCode}-${academicYear?.replace("/", "")}-${semester}-${Date.now().toString(36).toUpperCase()}`;
+
+      const newClass = await repo.createClass({
+        classCode,
+        className: subject.subjectName,
+        subject: subjectId,
+        semester: parseInt(semester, 10),
+        academicYear,
+        maxCapacity,
+        currentEnrollment: 0,
+        status: "draft",
+        createdBy,
+      });
+
+      results.success.push({
+        classId: newClass._id,
+        classCode: newClass.classCode,
+        subjectName: subject.subjectName,
+      });
+    } catch (error) {
+      results.failed.push({ subjectId: classData.subjectId, error: error.message });
+    }
+  }
+  return results;
+}
+
+// Export all functions
 module.exports = {
   listClasses,
   getClassById,
@@ -695,4 +741,5 @@ module.exports = {
   searchAvailableClasses,
   getClassListWithCapacity,
   getClassDetails,
+  bulkCreateClassSections,
 };

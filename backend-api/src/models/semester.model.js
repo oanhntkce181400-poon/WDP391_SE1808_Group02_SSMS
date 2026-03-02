@@ -12,19 +12,25 @@ const semesterSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Tên hiển thị, VD: "Kỳ 1 - 2025/2026"
+    // Tên hiển thị, VD: "Kỳ 1 - 2025/2026" hoặc "Kỳ học lại - 2025/2026"
     name: {
       type: String,
       required: true,
       trim: true,
     },
 
-    // Số thứ tự học kỳ trong năm: 1, 2, 3
+    // Loại học kỳ: regular (chính), summer (hè), repeat (học lại), supplementary (phụ)
+    semesterType: {
+      type: String,
+      enum: ['regular', 'summer', 'repeat', 'supplementary'],
+      default: 'regular',
+    },
+
+    // Số thứ tự học kỳ trong năm: 1, 2, 3, 4, 5...
     semesterNum: {
       type: Number,
       required: true,
       min: 1,
-      max: 3,
     },
 
     // Năm học, VD: "2025-2026"
@@ -38,11 +44,20 @@ const semesterSchema = new mongoose.Schema(
     startDate: { type: Date },
     endDate:   { type: Date },
 
+    // Mô tả thêm
+    description: { type: String },
+
     // Học kỳ hiện tại không? Chỉ có 1 bản ghi có isCurrent = true
     isCurrent: {
       type: Boolean,
       default: false,
       index: true,
+    },
+
+    // Trạng thái: active, inactive
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   { timestamps: true },

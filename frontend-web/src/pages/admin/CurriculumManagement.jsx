@@ -7,6 +7,7 @@ import filterIcon from '../../assets/filter.png';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 import deleteIcon from '../../assets/delete.png';
+import editIcon from '../../assets/edit.png';
 import copyIcon from '../../assets/file.png';
 import subjectService from '../../services/subjectService';
 import curriculumService from '../../services/curriculumService';
@@ -75,14 +76,28 @@ export default function CurriculumManagement() {
       name: 'Học kỳ 1',
       credits: 0,
       courses: [],
+      startDate: '',
+      endDate: '',
     },
     {
       id: 2,
       name: 'Học kỳ 2',
       credits: 0,
       courses: [],
+      startDate: '',
+      endDate: '',
     },
   ]);
+
+  // State for semester edit modal
+  const [showEditSemesterModal, setShowEditSemesterModal] = useState(false);
+  const [showDeleteSemesterModal, setShowDeleteSemesterModal] = useState(false);
+  const [selectedSemesterForEdit, setSelectedSemesterForEdit] = useState(null);
+  const [semesterFormData, setSemesterFormData] = useState({
+    name: '',
+    startDate: '',
+    endDate: '',
+  });
 
   const [draggedSubject, setDraggedSubject] = useState(null);
   const [draggedCourse, setDraggedCourse] = useState(null);
@@ -190,7 +205,13 @@ export default function CurriculumManagement() {
           
           // Set semesters from database if available
           if (curriculumData.semesters && curriculumData.semesters.length > 0) {
-            setSemesters(curriculumData.semesters);
+            // Ensure each semester has startDate and endDate fields
+            const semestersWithDates = (curriculumData.semesters || []).map(sem => ({
+              ...sem,
+              startDate: sem.startDate || '',
+              endDate: sem.endDate || '',
+            }));
+            setSemesters(semestersWithDates);
           }
         } catch (error) {
           console.error('Error fetching curriculum:', error);
@@ -505,15 +526,68 @@ export default function CurriculumManagement() {
   };
 
   const handleAddNewSemester = () => {
-    const newId = Math.max(...semesters.map((s) => s.id)) + 1;
+    const newId = Math.max(...semesters.map((s) => s.id), 0) + 1;
     const newSemester = {
       id: newId,
       name: `Học kỳ ${semesters.length + 1}`,
       credits: 0,
       courses: [],
+      startDate: '',
+      endDate: '',
     };
     setSemesters([...semesters, newSemester]);
     setHasChanges(true);
+  };
+
+  // Open edit semester modal
+  const handleOpenEditSemester = (semester) => {
+    setSelectedSemesterForEdit(semester);
+    setSemesterFormData({
+      name: semester.name || '',
+      startDate: semester.startDate ? semester.startDate.split('T')[0] : '',
+      endDate: semester.endDate ? semester.endDate.split('T')[0] : '',
+    });
+    setShowEditSemesterModal(true);
+  };
+
+  // Save semester edits
+  const handleSaveSemester = () => {
+    if (!selectedSemesterForEdit) return;
+    
+    setSemesters((prev) =>
+      prev.map((sem) =>
+        sem.id === selectedSemesterForEdit.id
+          ? {
+              ...sem,
+              name: semesterFormData.name,
+              startDate: semesterFormData.startDate,
+              endDate: semesterFormData.endDate,
+            }
+          : sem
+      )
+    );
+    setShowEditSemesterModal(false);
+    setSelectedSemesterForEdit(null);
+    setSemesterFormData({ name: '', startDate: '', endDate: '' });
+    setHasChanges(true);
+    showToast('Cập nhật học kỳ thành công!', 'success');
+  };
+
+  // Open delete semester modal
+  const handleOpenDeleteSemester = (semester) => {
+    setSelectedSemesterForEdit(semester);
+    setShowDeleteSemesterModal(true);
+  };
+
+  // Delete semester
+  const handleDeleteSemester = () => {
+    if (!selectedSemesterForEdit) return;
+    
+    setSemesters((prev) => prev.filter((sem) => sem.id !== selectedSemesterForEdit.id));
+    setShowDeleteSemesterModal(false);
+    setSelectedSemesterForEdit(null);
+    setHasChanges(true);
+    showToast('Xóa học kỳ thành công!', 'success');
   };
 
   const handleSaveCurriculum = async () => {
@@ -545,6 +619,8 @@ export default function CurriculumManagement() {
           id: sem.id,
           name: sem.name,
           credits: sem.credits,
+          startDate: sem.startDate || null,
+          endDate: sem.endDate || null,
           courses: sem.courses
         })),
       };
@@ -783,8 +859,15 @@ export default function CurriculumManagement() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Hiển thị Năm bắt đầu - Năm kết thúc */}
                   <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {currentCurriculum?.academicYear || '2024/2025'} •
+                    {(() => {
+                      const years = currentCurriculum?.academicYear?.split('-') || currentCurriculum?.academicYear?.split('/');
+                      if (years && years.length >= 2) {
+                        return `${years[0]} - ${years[1]} •`;
+                      }
+                      return `${currentCurriculum?.academicYear || '2024/2025'} •`;
+                    })()}
                   </span>
                   {/* Major Display - Fixed, not editable */}
                   <span className="inline-flex items-center gap-2 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
@@ -892,10 +975,30 @@ export default function CurriculumManagement() {
                       <p className="text-xs text-slate-500">
                         {semester.credits} Tín chỉ • {semester.courses.length} Môn
                       </p>
+                      {(semester.startDate || semester.endDate) && (
+                        <p className="text-[10px] text-primary mt-1">
+                          {semester.startDate ? new Date(semester.startDate).toLocaleDateString('vi-VN') : '...'} 
+                          {' - '}
+                          {semester.endDate ? new Date(semester.endDate).toLocaleDateString('vi-VN') : '...'}
+                        </p>
+                      )}
                     </div>
-                    <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
-                      <img src={nextIcon} alt="Tùy chọn" className="w-5 h-5 rotate-90" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button 
+                        className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                        onClick={() => handleOpenEditSemester(semester)}
+                        title="Sửa thông tin học kỳ"
+                      >
+                        <img src={editIcon} alt="Sửa" className="w-4 h-4" />
+                      </button>
+                      <button 
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        onClick={() => handleOpenDeleteSemester(semester)}
+                        title="Xóa học kỳ"
+                      >
+                        <img src={deleteIcon} alt="Xóa" className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Courses Drop Zone */}
@@ -1123,6 +1226,122 @@ export default function CurriculumManagement() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Edit Semester Modal */}
+      {showEditSemesterModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[300]">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Chỉnh sửa học kỳ</h3>
+              <p className="text-sm text-slate-500 mt-1">Cập nhật thông tin cho {selectedSemesterForEdit?.name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Tên học kỳ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={semesterFormData.name}
+                  onChange={(e) => setSemesterFormData({ ...semesterFormData, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="Học kỳ 1"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Ngày bắt đầu
+                  </label>
+                  <input
+                    type="date"
+                    value={semesterFormData.startDate}
+                    onChange={(e) => setSemesterFormData({ ...semesterFormData, startDate: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Ngày kết thúc
+                  </label>
+                  <input
+                    type="date"
+                    value={semesterFormData.endDate}
+                    onChange={(e) => setSemesterFormData({ ...semesterFormData, endDate: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowEditSemesterModal(false);
+                  setSelectedSemesterForEdit(null);
+                }}
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveSemester}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Semester Confirmation Modal */}
+      {showDeleteSemesterModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[300]">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Xóa học kỳ</h3>
+                  <p className="text-sm text-slate-500">Hành động này không thể hoàn tác</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-600 dark:text-slate-400">
+                Bạn có chắc chắn muốn xóa <strong className="text-slate-900 dark:text-white">{selectedSemesterForEdit?.name}</strong>?
+              </p>
+              {selectedSemesterForEdit?.courses?.length > 0 && (
+                <p className="text-amber-600 text-sm mt-2">
+                  ⚠️ Học kỳ này có {selectedSemesterForEdit.courses.length} môn học. Vui lòng xóa các môn trước khi xóa học kỳ.
+                </p>
+              )}
+            </div>
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteSemesterModal(false);
+                  setSelectedSemesterForEdit(null);
+                }}
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleDeleteSemester}
+                disabled={selectedSemesterForEdit?.courses?.length > 0}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

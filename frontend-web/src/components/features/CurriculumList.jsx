@@ -30,7 +30,9 @@ export default function CurriculumList() {
     name: '',
     major: '',
     majorId: '', // Store ObjectId of Major
-    academicYear: '2024/2025',
+    academicYear: '',
+    startYear: '',
+    endYear: '',
     description: '',
     status: 'active',
   });
@@ -86,7 +88,9 @@ export default function CurriculumList() {
       name: '',
       major: '',
       majorId: '',
-      academicYear: '2024/2025',
+      academicYear: '',
+      startYear: '',
+      endYear: '',
       description: '',
       status: 'active',
     });
@@ -96,12 +100,19 @@ export default function CurriculumList() {
   const handleOpenEditModal = (curriculum) => {
     setModalMode('edit');
     setSelectedCurriculum(curriculum);
+    // Parse academicYear to extract start and end years
+    const years = curriculum.academicYear?.split('-') || curriculum.academicYear?.split('/');
+    const startYear = years?.[0] || '';
+    const endYear = years?.[1] || '';
+    
     setFormData({
       code: curriculum.code || curriculum.curriculumCode || '',
       name: curriculum.name || curriculum.title || '',
       major: curriculum.major || '',
       majorId: curriculum.majorId || '',
       academicYear: curriculum.academicYear || '',
+      startYear,
+      endYear,
       description: curriculum.description || '',
       status: curriculum.status || 'active',
     });
@@ -388,18 +399,53 @@ export default function CurriculumList() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 dark:text-white mb-1.5">
-                  Năm học <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.academicYear}
-                  onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-1 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
-                  placeholder="VD: 2024/2025"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-white mb-1.5">
+                    Năm bắt đầu <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    value={formData.startYear || ''}
+                    onChange={(e) => {
+                      const startYear = e.target.value;
+                      const endYear = formData.endYear || (startYear ? parseInt(startYear) + 4 : '');
+                      setFormData({ 
+                        ...formData, 
+                        startYear, 
+                        endYear: String(endYear),
+                        academicYear: startYear && endYear ? `${startYear}-${endYear}` : ''
+                      });
+                    }}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-1 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
+                    placeholder="VD: 2024"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-white mb-1.5">
+                    Năm kết thúc <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    value={formData.endYear || ''}
+                    onChange={(e) => {
+                      const endYear = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        endYear,
+                        academicYear: formData.startYear && endYear ? `${formData.startYear}-${endYear}` : ''
+                      });
+                    }}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-1 focus:ring-primary focus:border-primary text-slate-900 dark:text-white"
+                    placeholder="VD: 2028"
+                    required
+                  />
+                </div>
               </div>
 
               <div>

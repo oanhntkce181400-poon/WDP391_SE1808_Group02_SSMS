@@ -28,6 +28,9 @@ router.delete('/:id', curriculumController.deleteCurriculum);
 // Get curriculum semesters (old embedded structure)
 router.get('/:id/semesters', curriculumController.getCurriculumSemesters);
 
+// Get subjects by semester from curriculum (for generating class sections)
+router.get('/:id/semester/:semester/subjects', curriculumController.getSubjectsBySemester);
+
 // Update curriculum semesters (old embedded structure)
 router.put('/:id/semesters', curriculumController.updateCurriculumSemesters);
 

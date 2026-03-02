@@ -330,6 +330,28 @@ async function selfEnroll(req, res) {
     return handleError(res, err);
   }
 }
+
+// Tạo nhiều lớp học phần từ curriculum
+async function bulkCreate(req, res) {
+  try {
+    const { classes } = req.body; // Array of { subjectId, semester, academicYear, maxCapacity }
+    const userId = req.user?.userId || req.user?._id;
+    
+    if (!classes || !Array.isArray(classes) || classes.length === 0) {
+      return res.status(400).json({ success: false, message: "Danh sách môn học không hợp lệ" });
+    }
+
+    const results = await service.bulkCreateClassSections(classes, userId);
+    
+    return res.json({
+      success: true,
+      message: `Tạo thành công ${results.success.length} lớp, thất bại ${results.failed.length} lớp`,
+      data: results
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
 module.exports = {
   getAll,
   getById,
@@ -338,6 +360,7 @@ module.exports = {
   remove,
   enrollStudent,
   selfEnroll,
+  bulkCreate,
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,

@@ -60,18 +60,22 @@ export default function Header() {
     { label: "Người dùng", href: "/admin/users" },
     { label: "Đơn từ", href: "/admin/requests" },
     { label: "Điểm danh", href: "/admin/attendance" },
-    { label: "Đánh giá", href: "/admin/feedback-management" },
-    { label: "Thống kê Đánh giá", href: "/admin/feedback-statistics" },
+    // { label: "Đánh giá", href: "/admin/feedback-management" },
+    // { label: "Thống kê Đánh giá", href: "/admin/feedback-statistics" },
   ];
 
   // Các mục ít dùng hơn, thu vào dropdown "Thêm ▾"
   const moreNav = [
     { label: "Xếp lịch", href: "/admin/exam-scheduling" },
     { label: "Khoa", href: "/admin/faculties" },
+    { label: "Kỳ học", href: "/admin/semesters" },
     { label: "Chuyên ngành", href: "/admin/majors" },
     { label: "Giảng viên", href: "/admin/lecturers" },
     { label: "Giờ học", href: "/admin/timeslots" },
     { label: "Học phí", href: "/admin/tuition-fees" },
+    { label: "─────────────", href: null }, // Đường kẻ phân cách
+    { label: "Đánh giá", href: "/admin/feedback" },
+    { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
     { label: "─────────────", href: null }, // Đường kẻ phân cách
     { label: "Cài đặt", href: "/admin/settings" },
     { label: "Nhật ký lỗi", href: "/admin/error-logs" },
@@ -226,7 +230,7 @@ export default function Header() {
             alt="Thông báo"
             className="w-5 lg:w-6 h-5 lg:h-6"
           />
-          <span className="absolute top-0.5 right-0.5 size-2 bg-red-500 rounded-full border-2 border-[#1A237E]"></span>
+         <span className="absolute top-0.5 right-0.5 size-2 bg-red-500 rounded-full border-2 border-[#1A237E]"></span>
         </button>
         <div ref={menuRef} className="relative">
           <button
