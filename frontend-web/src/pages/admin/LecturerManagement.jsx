@@ -787,7 +787,7 @@ function LecturerFormModal({
                 <option value="">-- Chọn bộ môn --</option>
                 {departments.map((d) => (
                   <option key={d._id} value={d.majorName}>
-                    {d.majorName}
+                    {d.majorName} ({d.majorCode})
                   </option>
                 ))}
               </select>
@@ -956,7 +956,7 @@ function FilterSidebar({ filters, onApply, onClose, departments = [] }) {
               <option value="">Tất cả</option>
               {departments.map((d) => (
                 <option key={d._id} value={d.majorName}>
-                  {d.majorName}
+                  {d.majorName} ({d.majorCode})
                 </option>
               ))}
             </select>

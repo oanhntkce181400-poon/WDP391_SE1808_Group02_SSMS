@@ -119,6 +119,16 @@ export default function SubjectDetail({ isOpen, onClose, subject }) {
               <p className="text-slate-900 dark:text-white font-semibold">{subject.credits} tín chỉ</p>
             </div>
 
+            {/* Suggested Semester */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Học kỳ đề xuất
+              </label>
+              <p className="text-slate-900 dark:text-white font-semibold">
+                {subject.suggestedSemester ? `Học kỳ ${subject.suggestedSemester}` : 'Chưa đặt'}
+              </p>
+            </div>
+
             {/* Department */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -127,6 +137,39 @@ export default function SubjectDetail({ isOpen, onClose, subject }) {
               <p className="text-slate-900 dark:text-white font-semibold">
                 {subject.facultyCode || subject.managedByFaculty || 'Chưa phân công'}
               </p>
+            </div>
+
+            {/* Teachers */}
+            <div className="col-span-2 flex flex-col gap-1">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Giáo viên phụ trách
+              </label>
+              {Array.isArray(subject.teachers) && subject.teachers.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {subject.teachers.map((t) => {
+                    const key = t._id || t.id || t.teacherCode || t.email || String(t);
+                    const name = t.fullName || t.teacherCode || String(t);
+                    const dept = t.department;
+                    return (
+                      <span
+                        key={key}
+                        className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+                      >
+                        {name}
+                        {dept && (
+                          <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-300">
+                            • {dept}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 dark:text-slate-400 text-sm italic mt-1">
+                  Chưa gán giáo viên cho môn học này.
+                </p>
+              )}
             </div>
 
             {/* Major Requirements */}

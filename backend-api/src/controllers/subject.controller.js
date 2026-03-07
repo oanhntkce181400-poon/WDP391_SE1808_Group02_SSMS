@@ -139,3 +139,37 @@ exports.updatePrerequisites = async (req, res) => {
   }
 };
 
+// Get subjects by teacher
+exports.getSubjectsByTeacher = async (req, res) => {
+  try {
+    const subjects = await subjectService.getSubjectsByTeacher(req.params.teacherId);
+    res.json({
+      success: true,
+      data: subjects,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// Update teachers for a subject
+exports.updateTeachers = async (req, res) => {
+  try {
+    const { teachers } = req.body;
+    const subject = await subjectService.updateTeachers(req.params.id, teachers);
+    res.json({
+      success: true,
+      message: 'Teachers updated successfully',
+      data: subject,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+

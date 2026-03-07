@@ -83,6 +83,9 @@ export default function SubjectList({
                 Học phí
               </th>
               <th className="px-6 py-4 text-slate-700 dark:text-slate-200 text-[13px] font-bold uppercase tracking-wider">
+                Giáo viên
+              </th>
+              <th className="px-6 py-4 text-slate-700 dark:text-slate-200 text-[13px] font-bold uppercase tracking-wider">
                 Khoa quản lý
               </th>
               <th className="px-6 py-4 text-slate-500 dark:text-slate-400 text-[13px] font-bold uppercase tracking-wider text-right">
@@ -93,7 +96,7 @@ export default function SubjectList({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {loading ? (
               <tr>
-                <td colSpan="6" className="px-6 py-12 text-center">
+                <td colSpan="7" className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#1A237E] border-t-transparent"></div>
                     <span className="text-slate-500 dark:text-slate-400 text-sm">Đang tải dữ liệu...</span>
@@ -102,7 +105,7 @@ export default function SubjectList({
               </tr>
             ) : subjects.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-12 text-center">
+                <td colSpan="7" className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <img src={searchOffIcon} alt="Không tìm thấy" className="w-12 h-12 opacity-50" />
                     <span className="text-slate-500 dark:text-slate-400 text-sm">
@@ -138,12 +141,45 @@ export default function SubjectList({
                   <td className="px-6 py-5 text-sm">
                     <div className="flex flex-col">
                       <span className="text-slate-900 dark:text-white font-semibold">
-                        {subject.tuitionFee ? subject.tuitionFee.toLocaleString('vi-VN') : (subject.credits * 630000).toLocaleString('vi-VN')} VNĐ
+                        {subject.tuitionFee ? subject.tuitionFee.toLocaleString('vi-VN') : (subject.credits * 100).toLocaleString('vi-VN')} VNĐ
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">
-                        {subject.credits * 630000 === subject.tuitionFee || !subject.tuitionFee ? `${(subject.credits * 630000 / 1000000).toFixed(1)}tr` : 'Tùy chỉnh'}
+                        {subject.credits * 100 === subject.tuitionFee || !subject.tuitionFee ? `${(subject.credits * 100 / 1000000).toFixed(1)}tr` : 'Tùy chỉnh'}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-6 py-5 text-sm text-slate-600 dark:text-slate-300">
+                    {Array.isArray(subject.teachers) && subject.teachers.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {subject.teachers.slice(0, 2).map((t) => {
+                          const key = t._id || t.id || t.teacherCode || t.email || String(t);
+                          const name = t.fullName || t.teacherCode || String(t);
+                          const dept = t.department;
+                          return (
+                            <span
+                              key={key}
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100"
+                            >
+                              {name}
+                              {dept && (
+                                <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-300">
+                                  • {dept}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                        {subject.teachers.length > 2 && (
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            +{subject.teachers.length - 2} giáo viên khác
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs italic text-slate-400 dark:text-slate-500">
+                        Chưa gán
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-5 text-slate-500 text-sm dark:text-slate-400">
                     {subject.facultyCode 

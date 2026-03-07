@@ -32,13 +32,13 @@ const seedTuitionFees = async () => {
 
     const cohorts = ['K20', 'K21', 'K22'];
     const majors = ['SE', 'AI', 'GD', 'IB'];
-    const academicYears = ['2023-2024', '2024-2025'];
+    const academicYears = ['2023-2024', '2024-2025', '2025-2026'];
     
     const tuitionFees = [];
 
     for (const cohort of cohorts) {
       for (const major of majors) {
-        for (let sem = 1; sem <= 8; sem++) {
+        for (let sem = 1; sem <= 9; sem++) {
           const numSubjects = Math.floor(Math.random() * 3) + 5;
           const semesterSubjects = [];
           const usedSubjects = new Set();
@@ -57,7 +57,7 @@ const seedTuitionFees = async () => {
             if (attempts >= 20) break;
             usedSubjects.add(subject._id.toString());
 
-            const fee = subject.tuitionFee || subject.credits * 630000;
+            const fee = subject.tuitionFee || subject.credits * 100;
             totalCredits += subject.credits;
             baseTuitionFee += fee;
 
@@ -116,7 +116,7 @@ const seedTuitionFees = async () => {
           tuitionFees.push({
             semester: `Kỳ ${sem}`,
             cohort,
-            academicYear: sem <= 4 ? academicYears[0] : academicYears[1],
+            academicYear: sem <= 4 ? academicYears[0] : sem <= 8 ? academicYears[1] : academicYears[2],
             majorCode: major,
             subjects: semesterSubjects,
             totalCredits,
@@ -147,7 +147,7 @@ const seedTuitionFees = async () => {
     console.log(`✅ Hoàn thành! Tổng cộng ${result.length} học phí`);
     console.log(`   - ${cohorts.length} khóa (${cohorts.join(', ')})`);
     console.log(`   - ${majors.length} ngành (${majors.join(', ')})`);
-    console.log(`   - 8 kỳ/ngành`);
+    console.log(`   - 9 kỳ/ngành`);
     console.log('='.repeat(60) + '\n');
 
   } catch (error) {

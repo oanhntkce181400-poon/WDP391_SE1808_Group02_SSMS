@@ -337,7 +337,7 @@ export default function ClassRegistrationPage() {
                           <DollarSign className="h-4 w-4 flex-shrink-0" />
                           <span className="text-xs">
                             {cls.subject.credits} tín chỉ -{' '}
-                            {((cls.subject.tuitionFee || 630000) * cls.subject.credits).toLocaleString('vi-VN')} VNĐ
+                            {((cls.subject.tuitionFee || 100) * cls.subject.credits).toLocaleString('vi-VN')} VNĐ
                           </span>
                         </div>
                       )}

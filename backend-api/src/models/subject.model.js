@@ -23,6 +23,14 @@ const subjectSchema = new mongoose.Schema(
     majorRequirements: [majorRequirementSchema], // Danh sách chuyên ngành áp dụng với yêu cầu (bắt buộc/tự chọn)
     description: { type: String, trim: true }, // Mô tả môn học
     prerequisites: [prerequisiteSchema],
+    // Giáo viên phụ trách môn học (hỗ trợ xếp lịch giảng dạy)
+    teachers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Teacher'
+    }],
+    
+    // Học kỳ đề xuất (dùng để gợi ý khi thiết lập khung chương trình)
+    suggestedSemester: { type: Number, min: 1, max: 9, default: 1 },
   },
   { timestamps: true },
 );

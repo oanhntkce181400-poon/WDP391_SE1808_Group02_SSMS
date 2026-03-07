@@ -19,6 +19,12 @@ const paymentSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Mã đơn hàng PayOS
+    orderCode: {
+      type: String,
+      index: true,
+    },
+
     // Số tiền đã nộp (VNĐ)
     amount: {
       type: Number,
@@ -44,6 +50,13 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       enum: ['cash', 'bank_transfer', 'online', 'other'],
       default: 'bank_transfer',
+    },
+
+    // Trạng thái thanh toán
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'failed', 'cancelled'],
+      default: 'completed',
     },
   },
   { timestamps: true },

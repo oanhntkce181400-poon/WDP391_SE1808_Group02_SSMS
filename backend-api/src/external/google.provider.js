@@ -9,7 +9,8 @@ try {
 function getGoogleClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
-    throw new Error('Missing GOOGLE_CLIENT_ID in environment variables.');
+    console.warn('GOOGLE_CLIENT_ID not configured - Google login will be disabled.');
+    return null;
   }
 
   if (!OAuth2Client) {
@@ -27,6 +28,10 @@ async function verifyGoogleIdToken(idToken) {
   }
 
   const client = getGoogleClient();
+  if (!client) {
+    throw new Error('Google login is not configured. Please set GOOGLE_CLIENT_ID in environment variables.');
+  }
+
   const ticket = await client.verifyIdToken({
     idToken,
     audience: process.env.GOOGLE_CLIENT_ID,

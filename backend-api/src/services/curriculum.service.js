@@ -80,6 +80,28 @@ const curriculumService = {
     try {
       const curriculum = new Curriculum(data);
       await curriculum.save();
+
+      // Tự động khởi tạo sẵn các học kỳ cho khung chương trình mới (cấu trúc relational)
+      const DEFAULT_SEMESTER_COUNT = 9;
+      const CurriculumSemester = require('../models/curriculumSemester.model');
+
+      const semestersToInsert = [];
+      for (let i = 1; i <= DEFAULT_SEMESTER_COUNT; i++) {
+        semestersToInsert.push({
+          curriculum: curriculum._id,
+          name: `Học kỳ ${i}`,
+          semesterOrder: i,
+          credits: 0,
+        });
+      }
+
+      if (semestersToInsert.length > 0) {
+        await CurriculumSemester.insertMany(semestersToInsert);
+        // Đánh dấu curriculum đang sử dụng cấu trúc relational
+        curriculum.useRelationalStructure = true;
+        await curriculum.save();
+      }
+
       return curriculum;
     } catch (error) {
       throw error;
@@ -147,8 +169,8 @@ const curriculumService = {
               curriculum: id,
               semester: semesterDoc._id,
               subject: c._id || c.subjectId, // Could be subject ID or embedded
-              code: c.code,
-              name: c.name,
+              subjectCode: c.subjectCode || c.code,
+              subjectName: c.subjectName || c.name,
               credits: c.credits,
               hasPrerequisite: c.hasPrerequisite || false
             }));

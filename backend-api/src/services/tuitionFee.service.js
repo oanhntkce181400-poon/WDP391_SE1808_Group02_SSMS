@@ -51,7 +51,7 @@ exports.createTuitionFee = async (data) => {
   
   const semesterSubjects = subjects.map(subject => {
     totalCredits += subject.credits;
-    const fee = subject.tuitionFee || subject.credits * 630000;
+    const fee = subject.tuitionFee || subject.credits * 100; // 100 VND per credit
     baseTuitionFee += fee;
     
     return {

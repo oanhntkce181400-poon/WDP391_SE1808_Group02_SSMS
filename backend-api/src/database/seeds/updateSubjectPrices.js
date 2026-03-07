@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const Subject = require('../../models/subject.model');
 
 // Giá 1 tín chỉ
-const PRICE_PER_CREDIT = 630000; // 630,000 VNĐ
+const PRICE_PER_CREDIT = 100; // 100 VNĐ
 
 // Kết nối MongoDB Atlas
 const connectDB = async () => {

@@ -137,7 +137,7 @@ const validateWallet = async (studentId, classId) => {
     const subject = classSection.subject;
 
     // 3. Tính tổng phí = credits * tuitionFee (giá mỗi tín chỉ)
-    const totalFee = subject.credits * (subject.tuitionFee || 630000); // Default 630,000 VNĐ/tín chỉ
+    const totalFee = subject.credits * (subject.tuitionFee || 100); // Default 100 VNĐ/tín chỉ
 
     // 4. Lấy thông tin wallet của student
     const wallet = await Wallet.findOne({ userId: student.userId }).exec();
@@ -159,7 +159,7 @@ const validateWallet = async (studentId, classId) => {
       currentBalance: wallet.balance,
       totalFee,
       credits: subject.credits,
-      pricePerCredit: subject.tuitionFee || 630000,
+      pricePerCredit: subject.tuitionFee || 100,
     };
   } catch (error) {
     console.error('Error validating wallet:', error);

@@ -499,8 +499,17 @@ export default function ClassManagement() {
   };
 
   /* ── Input change helper ── */
-  const handleChange = (e) =>
-    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      // Khi đổi môn học thì reset giảng viên để tránh giữ GV không phù hợp
+      if (name === "subject") {
+        next.teacher = "";
+      }
+      return next;
+    });
+  };
 
   // Handle subject selection from curriculum - auto-fill className
   const handleCurriculumSubjectChange = (subjectId) => {
@@ -935,6 +944,34 @@ function ClassFormModal({
 }) {
   const isCreate = title.toLowerCase().includes("mới");
   
+  // Lọc danh sách giảng viên theo môn học đã chọn
+  let teacherOptions = teachers || [];
+  if (Array.isArray(subjects) && formData.subject) {
+    const subjectDoc = subjects.find(
+      (s) => String(s._id) === String(formData.subject),
+    );
+    if (subjectDoc && Array.isArray(subjectDoc.teachers) && subjectDoc.teachers.length > 0) {
+      const allowedIds = new Set(
+        subjectDoc.teachers.map((t) => String(t._id || t.id)),
+      );
+      teacherOptions = teacherOptions.filter((t) =>
+        allowedIds.has(String(t._id)),
+      );
+      // Đảm bảo vẫn hiển thị giảng viên hiện đang được chọn (kể cả khi không nằm trong danh sách được gán)
+      if (
+        formData.teacher &&
+        !teacherOptions.some((t) => String(t._id) === String(formData.teacher))
+      ) {
+        const current = teachers.find(
+          (t) => String(t._id) === String(formData.teacher),
+        );
+        if (current) {
+          teacherOptions = [...teacherOptions, current];
+        }
+      }
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -1162,12 +1199,17 @@ function ClassFormModal({
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 focus:border-transparent outline-none bg-white"
             >
               <option value="">-- Chọn giảng viên --</option>
-              {teachers.map((t) => (
+              {teacherOptions.map((t) => (
                 <option key={t._id} value={t._id}>
                   {t.teacherCode} — {t.fullName}
                 </option>
               ))}
             </select>
+            {formData.subject && (
+              <p className="mt-1 text-xs text-slate-500">
+                Chỉ hiển thị các giảng viên đã được gán vào môn học này (nếu có).
+              </p>
+            )}
           </div>
 
           {/* Học kỳ - chỉ hiển thị khi chọn "Từ khung CT" (không hiển thị khi "Tất cả môn học") */}

@@ -52,7 +52,7 @@ async function run() {
   // ─── 2. Tạo TuitionFee rule cho khóa K18 ────────────────────
   console.log('\n💰 Creating TuitionFee rule for cohort K18...');
 
-  const pricePerCredit = 630_000; // 630.000đ / tín chỉ
+  const pricePerCredit = 100; // 100đ / tín chỉ
   const totalCredits   = 20;      // Giả sử SV đăng ký 20 tín chỉ
   const baseTuitionFee = pricePerCredit * totalCredits; // 12.600.000đ
 

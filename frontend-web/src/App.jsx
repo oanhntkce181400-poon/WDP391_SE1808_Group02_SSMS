@@ -39,6 +39,11 @@ import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
 import AnnouncementManagement from "./pages/admin/AnnouncementManagement";
 import WaitlistPage from "./pages/student/WaitlistPage";
+import PaymentPage from "./pages/student/PaymentPage";
+import PaymentResultPage from "./pages/student/PaymentResultPage";
+import MyTransactionsPage from "./pages/student/MyTransactionsPage";
+import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
+import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 export default function App() {
   return (
     <Routes>
@@ -90,6 +95,8 @@ export default function App() {
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
         <Route path="announcements" element={<AnnouncementManagement />} />
+        <Route path="transactions" element={<AdminTransactionsPage />} />
+        <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
       </Route>
 
       {/* Student routes with layout */}
@@ -110,6 +117,9 @@ export default function App() {
         <Route path="waitlist" element={<WaitlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
         <Route path="finance" element={<TuitionPage />} />
+        <Route path="payment" element={<PaymentPage />} />
+        <Route path="payment/result" element={<PaymentResultPage />} />
+        <Route path="transactions" element={<MyTransactionsPage />} />
       </Route>
 
       {/* Legacy dashboard route - redirect to admin */}

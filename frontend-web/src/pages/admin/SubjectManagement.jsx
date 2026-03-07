@@ -79,13 +79,15 @@ export default function SubjectManagement() {
           code: item.subjectCode,
           name: item.subjectName,
           credits: item.credits,
-          tuitionFee: item.tuitionFee || item.credits * 630000,
+          tuitionFee: item.tuitionFee || item.credits * 100,
           facultyCode: item.facultyCode, // Faculty code
           majorCode: item.majorCode,
           majorCodes: item.majorCodes || [],
           majorRequirements: item.majorRequirements || [],
           isCommon: item.isCommon || false,
           description: item.description,
+          teachers: item.teachers || [], // Danh sách giáo viên đã gán
+          suggestedSemester: item.suggestedSemester || 1, // Học kỳ đề xuất
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
         }));
@@ -273,6 +275,8 @@ export default function SubjectManagement() {
       majorCodes: subject.majorCodes || [],
       majorRequirements: subject.majorRequirements || [],
       isCommon: subject.isCommon || false,
+      teachers: subject.teachers || [],
+      suggestedSemester: subject.suggestedSemester || 1,
       createdAt: subject.createdAt,
       updatedAt: subject.updatedAt,
     };
@@ -287,6 +291,7 @@ export default function SubjectManagement() {
       code: subject.code || subject.subjectCode,
       name: subject.name || subject.subjectName,
       credits: subject.credits,
+      suggestedSemester: subject.suggestedSemester || 1,
     };
     setSelectedSubject(transformedSubject);
     setIsDeleteModalOpen(true);
@@ -307,6 +312,8 @@ export default function SubjectManagement() {
       majorCodes: subject.majorCodes || [],
       majorRequirements: subject.majorRequirements || [],
       isCommon: subject.isCommon || false,
+      teachers: subject.teachers || [],
+      suggestedSemester: subject.suggestedSemester || 1,
       createdAt: subject.createdAt,
       updatedAt: subject.updatedAt,
     };
@@ -324,6 +331,7 @@ export default function SubjectManagement() {
       name: subject.name || subject.subjectName,
       credits: subject.credits,
       department: subject.department || subject.majorCode,
+      suggestedSemester: subject.suggestedSemester || 1,
     };
     setSelectedSubject(transformedSubject);
     // Redirect to prerequisites page with subject ID
@@ -342,6 +350,8 @@ export default function SubjectManagement() {
         description: formData.description,
         facultyCode: formData.managedByFaculty || formData.facultyCode, // Khoa quản lý
         majorRequirements: formData.majorRequirements || [], // Array of { majorCode, isRequired }
+        teachers: formData.teachers || [], // Array of teacher IDs
+        suggestedSemester: formData.suggestedSemester || 1, // Học kỳ đề xuất
       };
 
       if (selectedSubject) {

@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
@@ -13,7 +13,9 @@ const Room = require('../../models/room.model');
 const Device = require('../../models/device.model');
 const Subject = require('../../models/subject.model');
 const Curriculum = require('../../models/curriculum.model');
+const CurriculumSemester = require('../../models/curriculumSemester.model');
 const Major = require('../../models/major.model');
+const Faculty = require('../../models/faculty.model');
 const TuitionFee = require('../../models/tuitionFee.model');
 
 const faker = fakerVI;
@@ -25,6 +27,12 @@ const MAJORS = [
   { code: 'BA', name: 'Kinh tế' },
   { code: 'CA', name: 'Thiết kế đồ họa' },
   { code: 'SE', name: 'Kỹ thuật phần mềm' },
+];
+
+const FACULTIES = [
+  { facultyCode: 'CNTT', facultyName: 'Công nghệ thông tin' },
+  { facultyCode: 'KT', facultyName: 'Kinh tế' },
+  { facultyCode: 'TDH', facultyName: 'Thiết kế và Mỹ thuật' },
 ];
 
 // Danh sach khoa (cohort) duoc seed
@@ -216,7 +224,7 @@ async function seedCurriculums(subjects) {
       // Tạo dữ liệu semesters
       const semesters = [];
       let subjectIndex = 0;
-      for (let semId = 1; semId <= 8; semId++) {
+      for (let semId = 1; semId <= 9; semId++) {
         const semesterCourses = [];
         const coursesInSem = Math.min(faker.number.int({ min: 3, max: 6 }), pickedSubjects.length - subjectIndex);
         
@@ -286,7 +294,7 @@ async function seedTuitionFees(curriculums, subjects) {
       for (const course of semester.courses) {
         const subject = subjects.find(s => s.subjectCode === course.code);
         if (subject) {
-          const fee = subject.tuitionFee || subject.credits * 630000;
+          const fee = subject.tuitionFee || subject.credits * 100;
           totalCredits += course.credits;
           baseTuitionFee += fee;
           
@@ -346,14 +354,36 @@ async function seedSubjects() {
   return Subject.insertMany(subjects);
 }
 
+async function seedFaculties() {
+  await Faculty.deleteMany({});
+  return Faculty.insertMany(
+    FACULTIES.map((faculty) => ({
+      facultyCode: faculty.facultyCode,
+      facultyName: faculty.facultyName,
+      isActive: true,
+    }))
+  );
+}
+
 async function seedMajors() {
   await Major.deleteMany({});
+  
+  // Lấy danh sách faculties để gán cho majors
+  const faculties = await Faculty.find({});
+  const facultyMap = {
+    'CE': faculties[0]?._id,
+    'SE': faculties[0]?._id,
+    'BA': faculties[1]?._id,
+    'CA': faculties[2]?._id,
+  };
+  
   return Major.insertMany(
     MAJORS.map((major) => ({
       majorCode: major.code,
       majorName: major.name,
+      faculty: facultyMap[major.code] || faculties[0]?._id,
       isActive: true,
-    })),
+    }))
   );
 }
 
@@ -548,6 +578,7 @@ async function seed() {
     TuitionFee.deleteMany({}),
   ]);
 
+  await seedFaculties();
   await seedMajors();
   const subjects = await seedSubjects();
   const curriculums = await seedCurriculums(subjects);

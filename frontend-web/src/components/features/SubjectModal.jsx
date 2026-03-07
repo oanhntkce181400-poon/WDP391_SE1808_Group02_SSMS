@@ -4,10 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import closeIcon from '../../assets/close.png';
 import facultyService from '../../services/facultyService';
 import majorService from '../../services/majorService';
+import lecturerService from '../../services/lecturerService';
 
 export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loading }) {
   const [faculties, setFaculties] = useState([]);
   const [majors, setMajors] = useState([]);
+  const [lecturers, setLecturers] = useState([]);
+  const [loadingLecturers, setLoadingLecturers] = useState(false);
   const [loadingFaculties, setLoadingFaculties] = useState(false);
   const [loadingMajors, setLoadingMajors] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -21,10 +24,14 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
     name: '',
     credits: '',
     description: '',
+    suggestedSemester: 1,
   });
 
   // Step 3: Major requirements (multiple selection with required/optional)
   const [majorRequirements, setMajorRequirements] = useState([]);
+
+  // Step 4: Teachers (lecturers who teach this subject)
+  const [selectedTeachers, setSelectedTeachers] = useState([]);
 
   const [errors, setErrors] = useState({});
   const [isFacultyDropdownOpen, setIsFacultyDropdownOpen] = useState(false);
@@ -52,6 +59,20 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
   useEffect(() => {
     const fetchData = async () => {
       if (!isOpen) return;
+
+      // Fetch all lecturers (teachers)
+      try {
+        setLoadingLecturers(true);
+        const lecturerRes = await lecturerService.getAll({ status: 'active', limit: 100 });
+        // Handle different response structures
+        const lecturerData = lecturerRes?.data?.data || lecturerRes?.data || lecturerRes || [];
+        setLecturers(lecturerData);
+      } catch (e) {
+        console.error('Error fetching lecturers:', e);
+        setLecturers([]);
+      } finally {
+        setLoadingLecturers(false);
+      }
       
       // Fetch faculties
       try {
@@ -128,6 +149,7 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
         name: subject.name || subject.subjectName || '',
         credits: subject.credits || '',
         description: subject.description || '',
+        suggestedSemester: subject.suggestedSemester || 1,
       });
 
       // Step 3: Major requirements
@@ -144,6 +166,14 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
       } else {
         setMajorRequirements([]);
       }
+
+      // Step 4: Teachers
+      if (subject.teachers && subject.teachers.length > 0) {
+        const teacherIds = subject.teachers.map(t => typeof t === 'string' ? t : t._id);
+        setSelectedTeachers(teacherIds);
+      } else {
+        setSelectedTeachers([]);
+      }
     } else {
       // Reset form for new subject
       setSelectedFaculty('');
@@ -152,8 +182,10 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
         name: '',
         credits: '',
         description: '',
+        suggestedSemester: 1,
       });
       setMajorRequirements([]);
+      setSelectedTeachers([]);
     }
     setErrors({});
     setIsFacultyDropdownOpen(false);
@@ -162,14 +194,12 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
 
   const validateStep = (step) => {
     const newErrors = {};
-    
+
     if (step === 1) {
-      // Validate faculty selection
       if (!selectedFaculty.trim()) {
         newErrors.selectedFaculty = 'Vui lòng chọn khoa';
       }
     } else if (step === 2) {
-      // Validate subject info
       if (!formData.code.trim()) {
         newErrors.code = 'Mã môn học là bắt buộc';
       }
@@ -179,21 +209,42 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
       if (!formData.credits || formData.credits < 1) {
         newErrors.credits = 'Số tín chỉ phải lớn hơn 0';
       }
-    } else if (step === 3) {
-      // Validate major requirements - at least one major should be selected if available majors exist
-      const availableMajors = selectedFaculty ? getMajorsByFaculty(selectedFaculty) : [];
-      if (availableMajors.length > 0 && majorRequirements.length === 0) {
-        newErrors.majorRequirements = 'Vui lòng chọn ít nhất một chuyên ngành';
-      }
     }
-    
+    // Steps 3 and 4 are optional
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(prev => prev + 1);
+  // Map faculty code to department codes for filtering lecturers
+  // Bộ môn (department) hiện lưu mã: CNTT, QTKD, KT, TCNH, NN
+  const facultyToDeptCodesMap = {
+    'CNTT': ['CNTT'],
+    'QTKD': ['QTKD'],
+    'KT': ['KT'],
+    'TCNH': ['TCNH'],
+    'NN': ['NN'],
+    'DLKS': ['DLKS'],
+  };
+
+  // Filter lecturers based on selected faculty (Step 1)
+  // Department field stores: CNTT, QTKD, KT, TCNH, NN (department codes)
+  const filteredLecturers = selectedFaculty
+    ? lecturers.filter(lecturer => {
+        const deptCodes = facultyToDeptCodesMap[selectedFaculty] || [];
+        return deptCodes.includes(lecturer.department);
+      })
+    : lecturers;
+
+  const handleNextStep = (e) => {
+    // Prevent form submission if called from button click inside form
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+    
+    const isValid = validateStep(currentStep);
+    if (isValid) {
+      setCurrentStep(currentStep + 1);
     }
   };
 
@@ -221,8 +272,11 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
         name: formData.name,
         credits: parseInt(formData.credits, 10),
         description: formData.description,
+        suggestedSemester: parseInt(formData.suggestedSemester, 10),
         // Step 3: Major Requirements
         majorRequirements: majorRequirements,
+        // Step 4: Teachers
+        teachers: selectedTeachers,
       };
       onSubmit(submitData);
     }
@@ -283,6 +337,25 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
     return major ? major.isRequired : true;
   };
 
+  // Check if a teacher is selected
+  const isTeacherSelected = (teacherId) => {
+    // Ensure both are strings for comparison to handle ObjectId vs string
+    return selectedTeachers.map(String).includes(String(teacherId));
+  };
+
+  // Handle teacher toggle
+  const handleTeacherToggle = (teacherId) => {
+    const teacherIdStr = String(teacherId);
+    setSelectedTeachers(prev => {
+      const currentTeachersStr = prev.map(String);
+      if (currentTeachersStr.includes(teacherIdStr)) {
+        return prev.filter(id => String(id) !== teacherIdStr);
+      } else {
+        return [...prev, teacherId];
+      }
+    });
+  };
+
   if (!isOpen) return null;
 
   const isEditing = !!subject;
@@ -292,6 +365,7 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
     { num: 1, label: 'Chọn khoa' },
     { num: 2, label: 'Thông tin môn' },
     { num: 3, label: 'Chuyên ngành' },
+    { num: 4, label: 'Giáo viên' },
   ];
 
   return (
@@ -531,6 +605,27 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
                     onChange={handleChange}
                   />
                 </div>
+
+                {/* Suggested Semester */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="suggestedSemester">
+                    Học kỳ đề xuất
+                  </label>
+                  <select
+                    id="suggestedSemester"
+                    name="suggestedSemester"
+                    value={formData.suggestedSemester}
+                    onChange={handleChange}
+                    className="form-input rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm"
+                  >
+                    {[...Array(9)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>Học kỳ {i + 1}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Gợi ý vị trí học kỳ trong khung chương trình đào tạo
+                  </p>
+                </div>
               </div>
             )}
 
@@ -640,6 +735,106 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
                 )}
               </div>
             )}
+
+            {/* Step 4: Select Teachers (Lecturers) */}
+            {currentStep === 4 && (
+              <div className="flex flex-col gap-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="text-sm font-bold text-blue-900 dark:text-blue-200 mb-2">
+                    Bước 4: Chọn giáo viên phụ trách
+                  </h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Chọn giáo viên phụ trách môn học này. Giáo viên được chọn sẽ có thể xem và quản lý lớp học phần của môn học.
+                  </p>
+                </div>
+
+                {loadingLecturers ? (
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#1A237E] border-t-transparent mx-auto mb-2" />
+                    <p className="text-sm">Đang tải danh sách giáo viên...</p>
+                  </div>
+                ) : lecturers.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <p className="text-sm">Không có giáo viên nào trong hệ thống.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                    {filteredLecturers.map((lecturer) => {
+                      const isSelected = isTeacherSelected(lecturer._id);
+                      
+                      return (
+                        <div
+                          key={lecturer._id}
+                          className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                            isSelected 
+                              ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                          }`}
+                        >
+                          <label className="flex items-center gap-3 cursor-pointer flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleTeacherToggle(lecturer._id)}
+                              className="w-4 h-4 text-[#1A237E] border-slate-300 rounded focus:ring-[#1A237E]"
+                            />
+                            <div className="flex items-center gap-3">
+                              {lecturer.avatarUrl ? (
+                                <img 
+                                  src={lecturer.avatarUrl} 
+                                  alt={lecturer.fullName}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-[#1A237E] text-white flex items-center justify-center font-bold text-sm">
+                                  {lecturer.fullName?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                              )}
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                  {lecturer.fullName}
+                                </span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">
+                                  {lecturer.teacherCode} • {lecturer.department}
+                                </span>
+                              </div>
+                            </div>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {selectedTeachers.length > 0 && (
+                  <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
+                      Đã chọn ({selectedTeachers.length} giáo viên):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTeachers.map(teacherId => {
+                        const teacher = lecturers.find(l => l._id === teacherId);
+                        return teacher ? (
+                          <span
+                            key={teacherId}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                          >
+                            {teacher.fullName}
+                            <button
+                              type="button"
+                              onClick={() => handleTeacherToggle(teacherId)}
+                              className="ml-1 hover:text-blue-900 dark:hover:text-blue-200"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Modal Footer */}
@@ -664,7 +859,7 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
               >
                 Hủy bỏ
               </button>
-              {currentStep < 3 ? (
+              {currentStep < 4 ? (
                 <button
                   type="button"
                   className="px-6 py-2.5 rounded-lg bg-[#1A237E] text-white text-sm font-bold hover:bg-[#0D147A] transition-all shadow-md"

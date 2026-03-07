@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import financeService from '../../services/financeService';
+import { useNavigate } from 'react-router-dom';
 
 function formatMoney(amount) {
   if (amount === null || amount === undefined) return '—';
@@ -24,6 +25,7 @@ export default function TuitionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError]       = useState('');
   const [selectedSemester, setSelectedSemester] = useState(''); 
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadSummary();
@@ -57,11 +59,21 @@ export default function TuitionPage() {
       <div className="mx-auto max-w-3xl">
 
         {/* ── TIÊU ĐỀ TRANG ── */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-800">Học phí</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Xem tổng quan học phí và lịch sử nộp tiền của bạn.
-          </p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Học phí</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Xem tổng quan học phí và lịch sử nộp tiền của bạn.
+            </p>
+          </div>
+          {summary && summary.remainingDebt > 0 && (
+            <button
+              onClick={() => navigate('/student/payment')}
+              className="rounded-lg bg-[#5D5FEF] px-4 py-2 text-sm font-medium text-white hover:bg-[#4a4dcf]"
+            >
+              Thanh toán ngay
+            </button>
+          )}
         </div>
 
         {/* ── ĐANG TẢI ── */}

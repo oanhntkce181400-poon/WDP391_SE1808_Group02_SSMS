@@ -14,5 +14,9 @@ router.delete('/:id', subjectController.deleteSubject);
 router.get('/:id/prerequisites', subjectController.getPrerequisites);
 router.put('/:id/prerequisites', subjectController.updatePrerequisites);
 
+// Routes for Teachers
+router.get('/teacher/:teacherId', subjectController.getSubjectsByTeacher);
+router.put('/:id/teachers', subjectController.updateTeachers);
+
 module.exports = router;
 

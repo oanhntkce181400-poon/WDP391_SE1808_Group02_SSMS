@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const { faker } = require('@faker-js/faker');
 const Subject = require('../../models/subject.model');
 
-const PRICE_PER_CREDIT = 630000;
+const PRICE_PER_CREDIT = 100;
 
 const DEPARTMENTS = ['AI', 'GD', 'IB', 'SE', 'IA', 'MC', 'SA', 'CS', 'IT'];
 

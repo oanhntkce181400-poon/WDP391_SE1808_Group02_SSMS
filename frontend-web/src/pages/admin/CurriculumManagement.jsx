@@ -142,6 +142,7 @@ export default function CurriculumManagement() {
           _id: item._id,
           id: item._id,
           department: item.majorCodes || item.majorCode || [],
+          suggestedSemester: item.suggestedSemester || 1,
         }));
 
         setAvailableSubjects(transformedSubjects);
@@ -205,13 +206,31 @@ export default function CurriculumManagement() {
           
           // Set semesters from database if available
           if (curriculumData.semesters && curriculumData.semesters.length > 0) {
-            // Ensure each semester has startDate and endDate fields
-            const semestersWithDates = (curriculumData.semesters || []).map(sem => ({
-              ...sem,
-              startDate: sem.startDate || '',
-              endDate: sem.endDate || '',
-            }));
-            setSemesters(semestersWithDates);
+            // Normalize to plain JS objects so each semester/courses list độc lập
+            const normalizedSemesters = (curriculumData.semesters || []).map((sem, index) => {
+              const plainCourses = Array.isArray(sem.courses)
+                ? sem.courses.map((c) => ({
+                    code: c.code || c.subjectCode,
+                    _id: c._id || c.subject?._id, // Preserve Subject ID for relational mapping
+                    name: c.name || c.subjectName,
+                    credits: c.credits || c.subject?.credits || 0,
+                    hasPrerequisite: !!c.hasPrerequisite,
+                  }))
+                : [];
+
+              const semId = sem.id || sem.semesterOrder || index + 1;
+
+              return {
+                id: semId,
+                name: sem.name || `Học kỳ ${semId}`,
+                credits: sem.credits || 0,
+                courses: plainCourses,
+                startDate: sem.startDate || '',
+                endDate: sem.endDate || '',
+              };
+            });
+
+            setSemesters(normalizedSemesters);
           }
         } catch (error) {
           console.error('Error fetching curriculum:', error);
@@ -349,7 +368,7 @@ export default function CurriculumManagement() {
       
       return passes;
     }
-  );
+  ).sort((a, b) => (a.suggestedSemester || 1) - (b.suggestedSemester || 1));
   
   console.log('Available subjects count:', availableSubjects.length);
   console.log('Filtered subjects count:', filteredSubjects.length);
@@ -450,6 +469,7 @@ export default function CurriculumManagement() {
 
       const newCourse = {
         code: draggedCode,
+        _id: draggedSubject._id, // Pass Subject ID for relational mapping
         name: draggedSubject.name,
         credits: draggedSubject.credits,
         hasPrerequisite: false,
@@ -621,10 +641,17 @@ export default function CurriculumManagement() {
           credits: sem.credits,
           startDate: sem.startDate || null,
           endDate: sem.endDate || null,
-          courses: sem.courses
+          courses: sem.courses.map(c => ({
+            _id: c._id,
+            subjectCode: c.code,
+            subjectName: c.name,
+            credits: c.credits,
+            hasPrerequisite: c.hasPrerequisite
+          }))
         })),
       };
 
+      console.log('Saving curriculum data:', JSON.stringify(curriculumData, null, 2));
       const response = await curriculumService.updateCurriculum(curriculumId, curriculumData);
       setCurrentCurriculum(response.data?.data);
       showToast('Lưu khung chương trình thành công!', 'success');
@@ -709,7 +736,14 @@ export default function CurriculumManagement() {
                     >
                       {subject.code}
                     </span>
-                    <span className="text-[10px] font-medium text-slate-500">{subject.credits} Tín chỉ</span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[10px] font-medium text-slate-500">
+                        {subject.credits} Tín chỉ
+                      </span>
+                      <span className="text-[10px] text-primary font-semibold">
+                        Kỳ {subject.suggestedSemester || 1}
+                      </span>
+                    </div>
                   </div>
                   <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">{subject.name}</h4>
                 </div>

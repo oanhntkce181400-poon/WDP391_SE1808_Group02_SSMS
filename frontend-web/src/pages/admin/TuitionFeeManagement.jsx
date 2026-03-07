@@ -17,7 +17,7 @@ export default function TuitionFeeManagement() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   // Price per credit (Giá mỗi tín chỉ)
-  const PRICE_PER_CREDIT = 630000; // 630,000 VND per credit
+  const PRICE_PER_CREDIT = 100; // 100 VND per credit
 
   // Major mapping - sử dụng mã ngành
   const majorOptions = [

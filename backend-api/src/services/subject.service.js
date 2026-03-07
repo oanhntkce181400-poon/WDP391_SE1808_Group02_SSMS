@@ -8,13 +8,17 @@ class SubjectService {
         subjectCode: data.code || data.subjectCode,
         subjectName: data.name || data.subjectName,
         credits: data.credits,
-        tuitionFee: data.tuitionFee || data.credits * 630000,
+        tuitionFee: data.tuitionFee || data.credits * 100,
         majorCode: data.majorCode || null,
         majorCodes: data.majorCodes || data.department || [],
         isCommon: data.isCommon || false,
         facultyCode: data.facultyCode || data.managedByFaculty || null, // New: Khoa quản lý
         majorRequirements: data.majorRequirements || [],
         description: data.description || '',
+        teachers: data.teachers || [], // Danh sách giáo viên phụ trách
+        suggestedSemester: typeof data.suggestedSemester === 'number'
+          ? data.suggestedSemester
+          : parseInt(data.suggestedSemester, 10) || 1,
       });
       await subject.save();
       return subject;
@@ -36,6 +40,7 @@ class SubjectService {
         : {};
 
       const subjects = await Subject.find(query)
+        .populate('teachers', 'teacherCode fullName email department')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit);
@@ -56,7 +61,7 @@ class SubjectService {
   // Get single subject by ID
   async getSubjectById(id) {
     try {
-      const subject = await Subject.findById(id);
+      const subject = await Subject.findById(id).populate('teachers', 'teacherCode fullName email department');
       if (!subject) {
         throw new Error('Subject not found');
       }
@@ -73,13 +78,17 @@ class SubjectService {
         subjectCode: data.code || data.subjectCode,
         subjectName: data.name || data.subjectName,
         credits: data.credits,
-        tuitionFee: data.tuitionFee || data.credits * 630000,
+        tuitionFee: data.tuitionFee || data.credits * 100,
         majorCode: data.majorCode || null,
         majorCodes: data.majorCodes || data.department || [],
         isCommon: data.isCommon || false,
         facultyCode: data.facultyCode || data.managedByFaculty || null,
         majorRequirements: data.majorRequirements || [],
         description: data.description || '',
+        teachers: data.teachers || [], // Danh sách giáo viên phụ trách
+        suggestedSemester: typeof data.suggestedSemester === 'number'
+          ? data.suggestedSemester
+          : parseInt(data.suggestedSemester, 10) || 1,
       };
 
       const subject = await Subject.findByIdAndUpdate(id, updateData, {
@@ -118,7 +127,9 @@ class SubjectService {
           { subjectCode: { $regex: keyword, $options: 'i' } },
           { subjectName: { $regex: keyword, $options: 'i' } },
         ],
-      }).limit(20);
+      })
+        .populate('teachers', 'teacherCode fullName email department')
+        .limit(20);
       return subjects;
     } catch (error) {
       throw error;
@@ -133,6 +144,36 @@ class SubjectService {
         { prerequisites: prerequisites },
         { new: true, runValidators: true }
       );
+
+      if (!subject) {
+        throw new Error('Subject not found');
+      }
+
+      return subject;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get subjects by teacher
+  async getSubjectsByTeacher(teacherId) {
+    try {
+      const subjects = await Subject.find({ teachers: teacherId })
+        .populate('teachers', 'teacherCode fullName email department');
+      return subjects;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Update teachers for a subject
+  async updateTeachers(id, teachers) {
+    try {
+      const subject = await Subject.findByIdAndUpdate(
+        id,
+        { teachers: teachers },
+        { new: true, runValidators: true }
+      ).populate('teachers', 'teacherCode fullName email department');
 
       if (!subject) {
         throw new Error('Subject not found');

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/wdp301';
 const DB_NAME   = process.env.MONGODB_DB_NAME || 'wdp301';
-const PRICE_PER_CREDIT = 630_000;
+const PRICE_PER_CREDIT = 100;
 
 const FPT_SUBJECTS = {
   WDP301: { name: 'Web Design & Prototyping',                 credits: 4 },

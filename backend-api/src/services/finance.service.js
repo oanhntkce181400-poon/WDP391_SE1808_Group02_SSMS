@@ -192,7 +192,7 @@ async function getMyTuitionSummary(userId, semesterId) {
 
   const tuitionRule = await findPricePerCredit(student.cohort, semester);
 
-  const pricePerCredit = tuitionRule ? tuitionRule.price : 630_000;
+  const pricePerCredit = tuitionRule ? tuitionRule.price : 100;
   const fallbackCredits = tuitionRule ? tuitionRule.fallbackCredits : 22;
 
   if (registeredCredits === 0 && fallbackCredits > 0) {
@@ -228,8 +228,217 @@ async function getMyTuitionSummary(userId, semesterId) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// confirmPayment: Xác nhận thanh toán PayOS và lưu vào DB
+// Input: userId, orderCode, amount, status
+// Output: Payment object vừa tạo
+// ─────────────────────────────────────────────────────────────
+async function confirmPayment({ userId, orderCode, amount, status }) {
+  if (status !== 'PAID') {
+    const err = new Error('Thanh toán chưa hoàn tất');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const student = await findStudentByUserId(userId);
+  const semester = await getCurrentSemester();
+
+  // Kiểm tra xem đã có payment với orderCode này chưa
+  const existingPayment = await Payment.findOne({ orderCode }).lean();
+  if (existingPayment) {
+    return existingPayment; // Đã xử lý rồi
+  }
+
+  // Tạo bản ghi thanh toán mới
+  const payment = await Payment.create({
+    student: student._id,
+    semesterCode: semester.code,
+    amount: amount,
+    paidAt: new Date(),
+    method: 'online',
+    note: `PayOS - OrderCode: ${orderCode}`,
+    orderCode: orderCode,
+  });
+
+  return payment;
+}
+
+// ─────────────────────────────────────────────────────────────
+// getPaymentHistory: Lấy lịch sử thanh toán của sinh viên
+// Input: userId, semesterId (optional)
+// Output: Array các Payment
+// ─────────────────────────────────────────────────────────────
+async function getPaymentHistory(userId, semesterId) {
+  const student = await findStudentByUserId(userId);
+  
+  const query = { student: student._id };
+  
+  if (semesterId) {
+    const semester = await findSemesterById(semesterId);
+    if (semester) {
+      query.semesterCode = semester.code;
+    }
+  }
+
+  const payments = await Payment.find(query)
+    .sort({ paidAt: -1 })
+    .lean();
+
+  return payments;
+}
+
+// ─────────────────────────────────────────────────────────────
+// getAllStudentsPaymentSummary: Tổng hợp thanh toán của tất cả sinh viên (admin)
+// Input: semesterId, majorCode, graduationYear
+// Output: { summary: {...}, students: [...] }
+// ─────────────────────────────────────────────────────────────
+async function getAllStudentsPaymentSummary(semesterId, majorCode, graduationYear) {
+  const semester = await resolveSemester(semesterId);
+  
+  // Build student query - lấy tất cả sinh viên
+  const studentQuery = {};
+  if (majorCode) {
+    studentQuery.majorCode = majorCode;
+  }
+  if (graduationYear) {
+    studentQuery.graduationYear = graduationYear;
+  }
+  
+  const students = await Student.find(studentQuery).lean();
+  
+  // Get all payments for this semester
+  const payments = await Payment.find({ semesterCode: semester.code })
+    .lean();
+  
+  // Group payments by student
+  const paymentsByStudent = {};
+  for (const payment of payments) {
+    const studentId = payment.student.toString();
+    if (!paymentsByStudent[studentId]) {
+      paymentsByStudent[studentId] = 0;
+    }
+    paymentsByStudent[studentId] += payment.amount || 0;
+  }
+  
+  // Get tuition fee rule for the semester
+  const tuitionRule = await TuitionFee.findOne({
+    cohort: { $in: students.map(s => s.cohort) },
+    academicYear: semester.academicYear,
+    status: 'active',
+  }).lean();
+  
+  const pricePerCredit = tuitionRule ? Math.round(tuitionRule.baseTuitionFee / tuitionRule.totalCredits) : 100;
+  const fallbackCredits = tuitionRule ? tuitionRule.totalCredits : 22;
+  
+  // Get all enrollments for this semester
+  const enrollments = await ClassEnrollment.find({
+    status: { $in: ['enrolled', 'completed'] },
+  })
+    .populate({
+      path: 'classSection',
+      match: {
+        semester: semester.semesterNum,
+        academicYear: semester.academicYear,
+      },
+      populate: {
+        path: 'subject',
+        select: 'credits',
+      },
+    })
+    .lean();
+  
+  // Group enrollments by student and calculate tuition
+  const enrollmentsByStudent = {};
+  for (const enrollment of enrollments) {
+    const studentId = enrollment.student.toString();
+    const section = enrollment.classSection;
+    if (section && section.subject) {
+      if (!enrollmentsByStudent[studentId]) {
+        enrollmentsByStudent[studentId] = { credits: 0, tuition: 0 };
+      }
+      const credits = section.subject.credits || 0;
+      enrollmentsByStudent[studentId].credits += credits;
+      enrollmentsByStudent[studentId].tuition += credits * pricePerCredit;
+    }
+  }
+  
+  // Get other fees
+  const otherFees = await OtherFee.find({ semesterCode: semester.code }).lean();
+  const otherFeesByStudent = {};
+  for (const fee of otherFees) {
+    const studentId = fee.student.toString();
+    if (!otherFeesByStudent[studentId]) {
+      otherFeesByStudent[studentId] = 0;
+    }
+    otherFeesByStudent[studentId] += fee.amount || 0;
+  }
+  
+  // Build student payment summary
+  const studentSummaries = [];
+  let totalStudents = 0;
+  let totalTuition = 0;
+  let totalPaid = 0;
+  let totalDebt = 0;
+  let totalPaidStudents = 0;
+  
+  for (const student of students) {
+    const studentId = student._id.toString();
+    const enrolled = enrollmentsByStudent[studentId] || { credits: 0, tuition: 0 };
+    
+    // Use fallback credits if no enrollment
+    const credits = enrolled.credits > 0 ? enrolled.credits : fallbackCredits;
+    const tuition = enrolled.tuition > 0 ? enrolled.tuition : (credits * pricePerCredit);
+    const otherFeesTotal = otherFeesByStudent[studentId] || 0;
+    const totalAmount = tuition + otherFeesTotal;
+    const paidAmount = paymentsByStudent[studentId] || 0;
+    const remainingDebt = Math.max(0, totalAmount - paidAmount);
+    const isPaid = remainingDebt === 0;
+    
+    totalStudents++;
+    totalTuition += totalAmount;
+    totalPaid += paidAmount;
+    totalDebt += remainingDebt;
+    if (isPaid) totalPaidStudents++;
+    
+    studentSummaries.push({
+      studentId: student._id,
+      studentCode: student.studentCode,
+      fullName: student.fullName,
+      email: student.email,
+      majorCode: student.majorCode,
+      cohort: student.cohort,
+      graduationYear: student.graduationYear,
+      credits: credits,
+      tuitionFee: tuition,
+      otherFees: otherFeesTotal,
+      totalAmount: totalAmount,
+      paidAmount: paidAmount,
+      remainingDebt: remainingDebt,
+      isPaid: isPaid,
+    });
+  }
+  
+  const summary = {
+    semesterCode: semester.code,
+    semesterName: semester.name,
+    academicYear: semester.academicYear,
+    totalStudents: totalStudents,
+    totalPaidStudents: totalPaidStudents,
+    totalUnpaidStudents: totalStudents - totalPaidStudents,
+    totalTuition: totalTuition,
+    totalPaid: totalPaid,
+    totalDebt: totalDebt,
+    pricePerCredit: pricePerCredit,
+  };
+  
+  return { summary, students: studentSummaries };
+}
+
 module.exports = {
   getMyTuitionSummary,
   resolveSemester,
   findStudentByUserId,
+  confirmPayment,
+  getPaymentHistory,
+  getAllStudentsPaymentSummary,
 };
