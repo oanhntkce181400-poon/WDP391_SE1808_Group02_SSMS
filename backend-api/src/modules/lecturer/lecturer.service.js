@@ -24,6 +24,43 @@ function formatLecturer(doc) {
   };
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+async function ensureTeacherUserAccount(teacher, actorId) {
+  if (teacher.userId) {
+    return { created: false, userId: teacher.userId };
+  }
+
+  const normalizedEmail = normalizeEmail(teacher.email);
+  if (!normalizedEmail) {
+    return { created: false, userId: null };
+  }
+
+  let user = await repo.findUserByEmail(normalizedEmail);
+  if (!user) {
+    const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    user = await repo.createUser({
+      email: normalizedEmail,
+      password: hashedPassword,
+      fullName: teacher.fullName,
+      authProvider: "local",
+      role: "staff",
+      status: teacher.isActive === false ? "inactive" : "active",
+      isActive: teacher.isActive !== false,
+      mustChangePassword: true,
+      avatarUrl: teacher.avatarUrl || undefined,
+      createdBy: actorId,
+    });
+    teacher.userId = user._id;
+    return { created: true, userId: user._id };
+  }
+
+  teacher.userId = user._id;
+  return { created: false, userId: user._id };
+}
+
 async function listLecturers(query = {}) {
   const { name, dept, status, degree, gender, page = 1, limit = 12 } = query;
 
@@ -78,7 +115,9 @@ async function createLecturer(body, file, auth) {
     gender,
   } = body;
 
-  if (!teacherCode || !fullName || !email || !department) {
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!teacherCode || !fullName || !normalizedEmail || !department) {
     throw new Error(
       "required: teacherCode, fullName, email, and department are required",
     );
@@ -87,10 +126,10 @@ async function createLecturer(body, file, auth) {
   // Check duplicates
   const [existingTeacher, existingUser] = await Promise.all([
     repo.findTeacherByCode(teacherCode),
-    repo.findUserByEmail(email),
+    repo.findUserByEmail(normalizedEmail),
   ]);
   if (existingTeacher) throw new Error("Teacher code already exists");
-  const existingTeacherEmail = await repo.findTeacherByEmail(email);
+  const existingTeacherEmail = await repo.findTeacherByEmail(normalizedEmail);
   if (existingTeacherEmail)
     throw new Error("Email already exists in teacher profiles");
   if (existingUser) throw new Error("Email already registered as a user");
@@ -112,7 +151,7 @@ async function createLecturer(body, file, auth) {
   try {
     const user = await repo.createUser(
       {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         fullName,
         authProvider: "local",
@@ -120,7 +159,7 @@ async function createLecturer(body, file, auth) {
         status: "active",
         mustChangePassword: true,
         avatarUrl,
-        createdBy: auth?.id,
+        createdBy: auth?.sub || auth?.id,
       },
       session,
     );
@@ -129,7 +168,7 @@ async function createLecturer(body, file, auth) {
       {
         teacherCode,
         fullName,
-        email,
+        email: normalizedEmail,
         department,
         phone: phone || undefined,
         specialization: specialization || undefined,
@@ -157,9 +196,14 @@ async function createLecturer(body, file, auth) {
   }
 }
 
-async function updateLecturer(id, body, file) {
+async function updateLecturer(id, body, file, auth) {
   const teacher = await repo.findTeacherDocById(id);
   if (!teacher) throw new Error("Lecturer not found");
+
+  const accountProvision = await ensureTeacherUserAccount(
+    teacher,
+    auth?.sub || auth?.id || null,
+  );
 
   const {
     fullName,
@@ -204,7 +248,11 @@ async function updateLecturer(id, body, file) {
 
   await repo.saveLecturerDoc(teacher);
   const populated = await repo.findLecturerById(teacher._id);
-  return formatLecturer(populated);
+  const result = formatLecturer(populated);
+  if (accountProvision.created) {
+    result._defaultPasswordHint = `Default password: ${DEFAULT_PASSWORD} (must change on first login)`;
+  }
+  return result;
 }
 
 async function deleteLecturer(id) {

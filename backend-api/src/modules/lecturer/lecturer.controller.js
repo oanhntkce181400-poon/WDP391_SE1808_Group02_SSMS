@@ -59,6 +59,7 @@ async function update(req, res) {
       req.params.id,
       req.body || {},
       req.file,
+      req.auth,
     );
     return res.json({
       success: true,

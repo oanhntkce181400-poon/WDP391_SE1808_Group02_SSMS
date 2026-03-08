@@ -94,6 +94,7 @@ async function createClassSection(body = {}) {
     maxCapacity: Number(body.maxCapacity),
     status: status,
     dayOfWeek: body.dayOfWeek,
+    curriculum: body.curriculum || undefined,
   });
 
   // 🔥 GỌI WAITLIST AUTO-ASSIGN KHI TẠO LỚP THÀNH CÔNG VÀ STATUS LÀ PUBLISHED

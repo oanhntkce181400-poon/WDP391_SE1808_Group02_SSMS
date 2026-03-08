@@ -40,6 +40,7 @@ const COHORTS = [16, 17, 18, 19, 20];
 
 const DOMAIN = 'fpt.edu.vn';
 const PASSWORD_SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS || 10);
+const DEFAULT_TEACHER_PASSWORD = process.env.DEFAULT_TEACHER_PASSWORD || 'Teacher@123';
 const BCRYPT_REGEX = /^\$2[aby]\$/;
 
 function normalizeText(text) {
@@ -436,15 +437,37 @@ async function seedDevices(rooms) {
 
 async function seedTeachers() {
   const teachers = [];
+  const teacherPasswordHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, PASSWORD_SALT_ROUNDS);
+
   for (let i = 0; i < 100; i += 1) {
     const fullName = faker.person.fullName();
     const department = randomFrom(MAJORS).name;
     const teacherCode = `GV${String(i + 1).padStart(4, '0')}`;
+    const email = buildTeacherEmail(fullName, i + 1).toLowerCase();
+
+    const user = await User.findOneAndUpdate(
+      { email },
+      {
+        $setOnInsert: {
+          email,
+          password: teacherPasswordHash,
+          fullName,
+          role: 'staff',
+          authProvider: 'local',
+          status: 'active',
+          isActive: true,
+          mustChangePassword: true,
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+
     teachers.push({
       teacherCode,
       fullName,
-      email: buildTeacherEmail(fullName, i + 1),
+      email,
       department,
+      userId: user._id,
     });
   }
   return Teacher.insertMany(teachers);

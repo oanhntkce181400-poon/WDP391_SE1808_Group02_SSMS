@@ -4,6 +4,10 @@ const DeviceSession = require('../../models/deviceSession.model');
 const LoginEvent = require('../../models/loginEvent.model');
 const PasswordResetOtp = require('../../models/passwordResetOtp.model');
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function findUserByGoogleId(googleId) {
   if (!googleId) return null;
   return User.findOne({ googleId });
@@ -11,7 +15,14 @@ async function findUserByGoogleId(googleId) {
 
 async function findUserByEmail(email) {
   if (!email) return null;
-  return User.findOne({ email: email.toLowerCase().trim() });
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const exactMatch = await User.findOne({ email: normalizedEmail });
+  if (exactMatch) return exactMatch;
+
+  // Backward-compatible fallback for legacy mixed-case emails in DB.
+  const caseInsensitivePattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i');
+  return User.findOne({ email: { $regex: caseInsensitivePattern } });
 }
 
 async function createUser(data) {

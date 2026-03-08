@@ -9,6 +9,14 @@ function toObjectId(id) {
   return typeof id === "string" ? new mongoose.Types.ObjectId(id) : id;
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /* ── Teacher queries ─────────────────── */
 
 async function countLecturers(filter) {
@@ -35,7 +43,14 @@ async function findTeacherByCode(teacherCode) {
 }
 
 async function findTeacherByEmail(email) {
-  return Teacher.findOne({ email }).lean();
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const exact = await Teacher.findOne({ email: normalizedEmail }).lean();
+  if (exact) return exact;
+
+  const pattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i");
+  return Teacher.findOne({ email: { $regex: pattern } }).lean();
 }
 
 async function createTeacher(data, session) {
@@ -70,7 +85,14 @@ async function findTeacherDocById(id) {
 /* ── User queries ────────────────────── */
 
 async function findUserByEmail(email) {
-  return User.findOne({ email }).lean();
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const exact = await User.findOne({ email: normalizedEmail }).lean();
+  if (exact) return exact;
+
+  const pattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i");
+  return User.findOne({ email: { $regex: pattern } }).lean();
 }
 
 async function createUser(data, session) {
