@@ -86,15 +86,93 @@ async function suggestClassSection(majorCode, cohort) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// HELPER: Tạo email tự động theo format FPT
+// Format: firstname + lastname_initials + studentCode@fpt.edu.vn
+// VD: Nguyễn Văn Minh + SE241234 => minhNVSE241234@fpt.edu.vn
+// ─────────────────────────────────────────────────────────────
+function generateEmail(fullName, studentCode) {
+  // Loại bỏ dấu tiếng Việt
+  const removeVietnameseTones = (str) => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
+  // Tách họ tên thành mảng
+  const nameParts = fullName.trim().split(/\s+/);
+  
+  if (nameParts.length === 0) return '';
+  
+  // Lấy tên (phần cuối)
+  const firstName = nameParts[nameParts.length - 1];
+  
+  // Lấy họ và tên đệm (các phần trước tên)
+  const lastNameParts = nameParts.slice(0, -1);
+  
+  // Tạo initials từ họ và tên đệm
+  const initials = lastNameParts.map(part => part.charAt(0).toUpperCase()).join('');
+  
+  // Loại bỏ dấu và chuyển thành chữ thường cho firstname
+  const firstNameNormalized = removeVietnameseTones(firstName).toLowerCase();
+  
+  // Tạo email
+  return `${firstNameNormalized}${initials}${studentCode}@fpt.edu.vn`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// HELPER: Tạo mật khẩu ngẫu nhiên mạnh
+// ─────────────────────────────────────────────────────────────
+function generateRandomPassword(length = 12) {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*';
+  const allChars = uppercase + lowercase + numbers + special;
+  
+  let password = '';
+  // Đảm bảo có ít nhất 1 ký tự mỗi loại
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Thêm các ký tự ngẫu nhiên còn lại
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Xáo trộn password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// HELPER: Tính Khóa từ Năm nhập học
+// Lấy 2 số cuối, nếu là 00 thì lấy 2 số đầu
+// VD: 2026 -> '26', 2000 -> '20', 2100 -> '21'
+// ─────────────────────────────────────────────────────────────
+function calculateCohort(enrollmentYear) {
+  const yearStr = String(enrollmentYear);
+  const lastTwo = yearStr.slice(-2);
+  
+  // Nếu 2 số cuối là '00', lấy 2 số đầu
+  if (lastTwo === '00') {
+    return yearStr.slice(0, 2);
+  }
+  
+  // Ngược lại, lấy 2 số cuối
+  return lastTwo;
+}
+
+// ─────────────────────────────────────────────────────────────
 // 1. TẠO SINH VIÊN MỚI
 // Logic: Tạo Student -> Tạo User Account -> Tạo Wallet
 // ─────────────────────────────────────────────────────────────
 async function createStudent(payload, createdById) {
   const {
     fullName,
-    email,
     majorCode,
-    cohort,
     identityNumber,
     dateOfBirth,
     phoneNumber,
@@ -103,25 +181,13 @@ async function createStudent(payload, createdById) {
     enrollmentYear,
   } = payload;
 
+  // Tự động tính Khóa từ Năm nhập học
+  const cohort = payload.cohort || calculateCohort(enrollmentYear);
+
   // Validate major exists
   const major = await Major.findOne({ majorCode, isActive: true });
   if (!major) {
     const error = new Error('Ngành học không tồn tại hoặc đã bị vô hiệu hóa');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  // Check email đã tồn tại trong User hoặc Student chưa
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    const error = new Error('Email đã được sử dụng');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const existingStudent = await Student.findOne({ email });
-  if (existingStudent) {
-    const error = new Error('Email đã được sử dụng');
     error.statusCode = 400;
     throw error;
   }
@@ -144,11 +210,32 @@ async function createStudent(payload, createdById) {
   // Tạo mã sinh viên tự động
   const studentCode = await generateStudentCode(majorCode, enrollmentYear || cohort);
   
+  // Tạo email tự động theo format FPT
+  const email = generateEmail(fullName, studentCode);
+  
+  // Generate random password cho email
+  const emailPassword = generateRandomPassword(12);
+  
+  // Check email đã tồn tại trong User hoặc Student chưa (trường hợp hiếm gặp)
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    const error = new Error('Email tự động tạo ra đã tồn tại, vui lòng thử lại');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existingStudent = await Student.findOne({ email });
+  if (existingStudent) {
+    const error = new Error('Email tự động tạo ra đã tồn tại, vui lòng thử lại');
+    error.statusCode = 400;
+    throw error;
+  }
+  
   // Gợi ý lớp sinh hoạt
   const classSection = await suggestClassSection(majorCode, cohort);
 
   // 1. Tạo User Account
-  const defaultPassword = sanitizedIdentityNumber || '123456'; // Mật khẩu mặc định = CCCD hoặc 123456
+  const defaultPassword = sanitizedIdentityNumber || '123456'; // Mật khẩu hệ thống = CCCD hoặc 123456
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
   const newUser = await User.create({
@@ -197,11 +284,12 @@ async function createStudent(payload, createdById) {
   });
 
   // TODO: Gửi email thông báo cho sinh viên
-  // await sendWelcomeEmail(email, fullName, studentCode, defaultPassword);
+  // await sendWelcomeEmail(email, fullName, studentCode, defaultPassword, emailPassword);
   
   return {
     ...newStudent.toObject(),
-    defaultPassword, // Trả về password để admin có thể thông báo cho sinh viên
+    defaultPassword, // Mật khẩu hệ thống
+    emailPassword,   // Mật khẩu email (để admin thông báo cho sinh viên)
   };
 }
 

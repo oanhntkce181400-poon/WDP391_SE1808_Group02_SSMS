@@ -31,6 +31,82 @@ const GENDER_LABELS = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// HELPER FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+function generateRandomPassword(length = 12) {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*';
+  const allChars = uppercase + lowercase + numbers + special;
+  
+  let password = '';
+  // Đảm bảo có ít nhất 1 ký tự mỗi loại
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Thêm các ký tự ngẫu nhiên còn lại
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Xáo trộn password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// Hàm tạo email theo format: firstname + lastname_initials + studentcode@fpt.edu.vn
+// Ví dụ: Nguyễn Văn Minh + SE12345 => minhNVSE12345@fpt.edu.vn
+function generateEmail(fullName, studentCode) {
+  // Loại bỏ dấu tiếng Việt
+  const removeVietnameseTones = (str) => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
+  };
+
+  // Tách họ tên thành mảng
+  const nameParts = fullName.trim().split(/\s+/);
+  
+  if (nameParts.length === 0) return '';
+  
+  // Lấy tên (phần cuối)
+  const firstName = nameParts[nameParts.length - 1];
+  
+  // Lấy họ và tên đệm (các phần trước tên)
+  const lastNameParts = nameParts.slice(0, -1);
+  
+  // Tạo initials từ họ và tên đệm
+  const initials = lastNameParts.map(part => part.charAt(0).toUpperCase()).join('');
+  
+  // Loại bỏ dấu và chuyển thành chữ thường cho firstname
+  const firstNameNormalized = removeVietnameseTones(firstName).toLowerCase();
+  
+  // Tạo email
+  return `${firstNameNormalized}${initials}${studentCode}@fpt.edu.vn`;
+}
+
+// Hàm tính Khóa từ Năm nhập học
+// Lấy 2 số cuối, nếu là 00 thì lấy 2 số đầu
+// VD: 2026 -> '26', 2000 -> '20', 2100 -> '21'
+function calculateCohort(enrollmentYear) {
+  const yearStr = String(enrollmentYear);
+  const lastTwo = yearStr.slice(-2);
+  
+  // Nếu 2 số cuối là '00', lấy 2 số đầu
+  if (lastTwo === '00') {
+    return yearStr.slice(0, 2);
+  }
+  
+  // Ngược lại, lấy 2 số cuối
+  return lastTwo;
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
 export default function StudentManagementPage() {
@@ -65,12 +141,13 @@ export default function StudentManagementPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showSuccessInfoModal, setShowSuccessInfoModal] = useState(false);
+  const [createdStudentInfo, setCreatedStudentInfo] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Form data
   const [formData, setFormData] = useState({
     fullName: '',
-    email: '',
     majorCode: '',
     cohort: '',
     identityNumber: '',
@@ -156,7 +233,6 @@ export default function StudentManagementPage() {
   function resetForm() {
     setFormData({
       fullName: '',
-      email: '',
       majorCode: '',
       cohort: '',
       identityNumber: '',
@@ -171,8 +247,16 @@ export default function StudentManagementPage() {
   async function handleCreate() {
     try {
       const res = await studentService.createStudent(formData);
-      showSuccess(`Tạo sinh viên thành công! MSSV: ${res.data.data.studentCode}, Mật khẩu: ${res.data.data.defaultPassword}`);
+      // Hiển thị thông tin tài khoản vừa tạo
+      setCreatedStudentInfo({
+        fullName: res.data.data.fullName,
+        studentCode: res.data.data.studentCode,
+        email: res.data.data.email,
+        emailPassword: res.data.data.emailPassword || generateRandomPassword(12),
+        systemPassword: res.data.data.defaultPassword,
+      });
       setShowCreateModal(false);
+      setShowSuccessInfoModal(true);
       resetForm();
       loadStudents();
     } catch (err) {
@@ -295,39 +379,8 @@ export default function StudentManagementPage() {
               />
             </div>
 
-            {/* Major filter */}
-            <select
-              value={selectedMajor}
-              onChange={(e) => {
-                setSelectedMajor(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Tất cả ngành</option>
-              {majors.map((m) => (
-                <option key={m.majorCode} value={m.majorCode}>
-                  {m.majorName}
-                </option>
-              ))}
-            </select>
-
-            {/* Cohort filter */}
-            <select
-              value={selectedCohort}
-              onChange={(e) => {
-                setSelectedCohort(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Tất cả khóa</option>
-              {cohorts.map((c) => (
-                <option key={c} value={c}>
-                  K{c}
-                </option>
-              ))}
-            </select>
+            {/* Major filter - Hidden */}
+            {/* Cohort filter - Hidden */}
 
             {/* Status filter */}
             <select
@@ -399,10 +452,7 @@ export default function StudentManagementPage() {
                         Số điện thoại
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                        Ngành
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                        Khóa
+                        Mật khẩu
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                         Lớp SH
@@ -436,11 +486,10 @@ export default function StudentManagementPage() {
                         <td className="px-4 py-3 text-sm text-slate-600">
                           {student.phoneNumber || '-'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {student.majorCode}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          K{student.cohort}
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          <span className="font-mono text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200" title="Mật khẩu mặc định = CCCD/CMND hoặc 123456">
+                            {student.identityNumber || '123456'}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">
                           {student.classSection || '-'}
@@ -590,6 +639,17 @@ export default function StudentManagementPage() {
           }}
         />
       )}
+
+      {/* SUCCESS INFO MODAL */}
+      {showSuccessInfoModal && createdStudentInfo && (
+        <SuccessInfoModal
+          info={createdStudentInfo}
+          onClose={() => {
+            setShowSuccessInfoModal(false);
+            setCreatedStudentInfo(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -632,19 +692,15 @@ function StudentFormModal({
               />
             </div>
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
+            {/* Email - Auto generated */}
+            {!isEdit && (
+              <div className="md:col-span-2">
+                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu sẽ được tự động tạo theo định dạng: 
+                  <span className="font-mono text-indigo-600"> tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                </div>
+              </div>
+            )}
 
             {/* Identity Number */}
             <div>
@@ -685,23 +741,7 @@ function StudentFormModal({
               </select>
             </div>
 
-            {/* Cohort */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Khóa <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={formData.cohort}
-                onChange={(e) => setFormData({ ...formData, cohort: e.target.value })}
-                placeholder="VD: 18, 19, 20"
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
-                required
-              />
-            </div>
+            {/* Cohort - Hidden, auto-calculated from enrollmentYear */}
 
             {/* Date of Birth */}
             <div>
@@ -762,14 +802,23 @@ function StudentFormModal({
               <input
                 type="number"
                 value={formData.enrollmentYear}
-                onChange={(e) => setFormData({ ...formData, enrollmentYear: e.target.value })}
-                placeholder="VD: 2020"
+                onChange={(e) => {
+                  const year = e.target.value;
+                  const cohort = year ? calculateCohort(year) : '';
+                  setFormData({ ...formData, enrollmentYear: year, cohort: cohort });
+                }}
+                placeholder="VD: 2026"
                 className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
                   isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
                 }`}
                 disabled={isEdit}
                 required
               />
+              {formData.enrollmentYear && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Khóa sẽ tự động: K{calculateCohort(formData.enrollmentYear)}
+                </p>
+              )}
             </div>
 
             {/* Address */}
@@ -830,6 +879,12 @@ function StudentDetailModal({ student, onClose }) {
                 <InfoRow label="Họ và tên" value={student.fullName} />
                 <InfoRow label="Email" value={student.email} />
                 <InfoRow label="CCCD/CMND" value={student.identityNumber || '-'} />
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-800">🔑 Thông tin đăng nhập:</p>
+                  <p className="text-sm text-amber-700 mt-1">• Email: <span className="font-mono">{student.email}</span></p>
+                  <p className="text-sm text-amber-700">• Mật khẩu: <span className="font-mono">{student.identityNumber || '123456'}</span></p>
+                  <p className="text-xs text-amber-600 mt-2">⚠️ Mật khẩu mặc định = CCCD/CMND (nếu có) hoặc "123456"</p>
+                </div>
                 <InfoRow
                   label="Ngày sinh"
                   value={student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString('vi-VN') : '-'}
@@ -939,6 +994,129 @@ function InfoRow({ label, value }) {
     <div className="flex">
       <span className="font-medium text-slate-700 w-1/3">{label}:</span>
       <span className="text-slate-600 w-2/3">{value}</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// SUCCESS INFO MODAL - Hiển thị thông tin tài khoản sau khi tạo
+// ─────────────────────────────────────────────────────────────
+function SuccessInfoModal({ info, onClose }) {
+  const [copied, setCopied] = useState('');
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text);
+    setCopied(field);
+    setTimeout(() => setCopied(''), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div className="px-6 py-4 border-b border-slate-200 bg-green-600">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            ✅ Tạo sinh viên thành công!
+          </h2>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 font-medium">
+              ⚠️ Lưu ý: Hãy lưu lại thông tin này! Không thể xem lại sau.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Họ tên */}
+            <div>
+              <label className="text-sm font-semibold text-slate-600">Họ và tên</label>
+              <div className="mt-1 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <p className="font-medium text-slate-800">{info.fullName}</p>
+              </div>
+            </div>
+
+            {/* MSSV */}
+            <div>
+              <label className="text-sm font-semibold text-slate-600">Mã số sinh viên</label>
+              <div className="mt-1 flex gap-2">
+                <div className="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="font-mono font-medium text-slate-800">{info.studentCode}</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(info.studentCode, 'studentCode')}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg"
+                  title="Copy"
+                >
+                  {copied === 'studentCode' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+
+            {/* Email - Dùng để đăng nhập */}
+            <div>
+              <label className="text-sm font-semibold text-slate-600">📧 Email đăng nhập</label>
+              <div className="mt-1 flex gap-2">
+                <div className="flex-1 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="font-mono text-sm text-blue-800">{info.email}</p>
+                  <p className="text-xs text-blue-600 mt-1">Dùng email này để đăng nhập hệ thống</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(info.email, 'email')}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg"
+                  title="Copy"
+                >
+                  {copied === 'email' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+
+            {/* Mật khẩu hệ thống - Dùng để đăng nhập */}
+            <div>
+              <label className="text-sm font-semibold text-slate-600">🔑 Mật khẩu đăng nhập hệ thống</label>
+              <div className="mt-1 flex gap-2">
+                <div className="flex-1 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="font-mono text-sm text-green-800">{info.systemPassword}</p>
+                  <p className="text-xs text-green-600 mt-1">⚠️ Dùng mật khẩu này để đăng nhập hệ thống</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(info.systemPassword, 'systemPassword')}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg"
+                  title="Copy"
+                >
+                  {copied === 'systemPassword' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+
+            {/* Mật khẩu Email - Chỉ để tham khảo */}
+            <div>
+              <label className="text-sm font-semibold text-slate-600">📧 Mật khẩu Email (tham khảo)</label>
+              <div className="mt-1 flex gap-2">
+                <div className="flex-1 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <p className="font-mono text-sm text-purple-800">{info.emailPassword}</p>
+                  <p className="text-xs text-purple-600 mt-1">Dùng để đăng nhập email FPT</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(info.emailPassword, 'emailPassword')}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg"
+                  title="Copy"
+                >
+                  {copied === 'emailPassword' ? '✓' : '📋'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              Đã lưu, đóng
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
