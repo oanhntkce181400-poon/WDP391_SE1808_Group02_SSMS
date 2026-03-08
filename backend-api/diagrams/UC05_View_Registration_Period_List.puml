@@ -1,0 +1,85 @@
+@startuml
+title UC05 - View Registration Period List - Display Registration Periods
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant RegPeriodRouter as "RegistrationPeriodRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant RegPeriodController as "RegistrationPeriodController"
+participant RegPeriodService as "RegistrationPeriodService"
+participant RegPeriodModel as "RegistrationPeriodModel"
+participant UserModel as "UserModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) navigate to Registration Period page
+activate Screen
+
+Screen -> APIClient: (2) GET /api/registration-periods
+activate APIClient
+APIClient -> RegPeriodRouter: (3) forward GET request
+activate RegPeriodRouter
+
+RegPeriodRouter -> AuthMiddleware: (4) verify access token
+activate AuthMiddleware
+AuthMiddleware --> RegPeriodRouter: (4.1) token valid, user authenticated
+deactivate AuthMiddleware
+
+RegPeriodRouter -> RBACMiddleware: (5) check permission
+activate RBACMiddleware
+RBACMiddleware --> RegPeriodRouter: (5.1) permission granted
+deactivate RBACMiddleware
+
+RegPeriodRouter -> RegPeriodController: (6) getRegistrationPeriods()
+activate RegPeriodController
+RegPeriodController -> RegPeriodService: (7) getAllPeriods()
+activate RegPeriodService
+
+RegPeriodService -> RegPeriodModel: (8) find().sort({ startDate: -1 })
+activate RegPeriodModel
+RegPeriodModel -> DB: (9) db query with sort
+activate DB
+DB --> RegPeriodModel: (10) return period documents
+deactivate DB
+RegPeriodModel --> RegPeriodService: (11) return periods array
+deactivate RegPeriodModel
+
+RegPeriodService -> RegPeriodService: (11.1) auto-update status based on dates
+note right
+  For each period:
+  - If now < startDate → status = 'upcoming'
+  - If startDate <= now <= endDate → status = 'active'
+  - If now > endDate → status = 'closed'
+end note
+
+RegPeriodService -> UserModel: (11.2) populate createdBy field
+activate UserModel
+UserModel -> DB: (11.3) get creator info
+activate DB
+DB --> UserModel: (11.4) return users
+deactivate DB
+UserModel --> RegPeriodService: (11.5) creator names populated
+deactivate UserModel
+
+RegPeriodService -> RegPeriodService: (12) format response
+RegPeriodService --> RegPeriodController: (13) return { periods, count }
+deactivate RegPeriodService
+
+RegPeriodController --> RegPeriodRouter: (14) 200 OK with data
+deactivate RegPeriodController
+RegPeriodRouter --> APIClient: (15) 200 OK JSON response
+deactivate RegPeriodRouter
+APIClient --> Screen: (16) render period list
+activate Screen
+Screen -> Screen: (16.1) highlight active periods
+Screen -> Screen: (16.2) format dates display
+Screen --> PrimaryActor: (17) display periods with status
+deactivate Screen
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

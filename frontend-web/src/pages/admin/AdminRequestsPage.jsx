@@ -4,6 +4,7 @@
 // Tác giả: Group02 - WDP391
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import requestService from '../../services/requestService';
 
 // ─────────────────────────────────────────────────────────────
@@ -41,6 +42,8 @@ const FILTER_OPTIONS = [
 // COMPONENT CHÍNH
 // ─────────────────────────────────────────────────────────────
 export default function AdminRequestsPage() {
+  const navigate = useNavigate();
+  
   // ── STATE ──────────────────────────────────────────────────
 
   // Danh sách đơn từ backend
@@ -145,16 +148,27 @@ export default function AdminRequestsPage() {
         )}
 
         {/* ── TIÊU ĐỀ TRANG ── */}
-        <div className="mb-6">
-          <nav className="mb-1 flex items-center gap-1.5 text-xs text-slate-400">
-            <span>Quản lý</span>
-            <span>›</span>
-            <span className="text-slate-600 font-medium">Đơn từ sinh viên</span>
-          </nav>
-          <h1 className="text-2xl font-bold text-slate-800">Quản lý Đơn từ</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Xem, duyệt và xử lý các đơn từ mà sinh viên đã gửi.
-          </p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <nav className="mb-1 flex items-center gap-1.5 text-xs text-slate-400">
+              <span>Quản lý</span>
+              <span>›</span>
+              <span className="text-slate-600 font-medium">Đơn từ sinh viên</span>
+            </nav>
+            <h1 className="text-2xl font-bold text-slate-800">Quản lý Đơn từ</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Xem, duyệt và xử lý các đơn từ mà sinh viên đã gửi.
+            </p>
+          </div>
+          
+          {/* Nút tạo kỳ đăng ký */}
+          <button
+            onClick={() => navigate('/admin/registration-periods')}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
+          >
+            <span className="text-lg">+</span>
+            <span>Tạo kỳ đăng ký</span>
+          </button>
         </div>
 
         {/* ── THANH CÔNG CỤ: Lọc + Tìm kiếm ── */}
@@ -608,3 +622,4 @@ function ReviewModal({ action, requestType, onConfirm, onClose }) {
     </div>
   );
 }
+

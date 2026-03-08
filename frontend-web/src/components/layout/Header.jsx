@@ -58,6 +58,7 @@ export default function Header() {
     { label: "Phòng học", href: "/admin/rooms" },
     { label: "Khung chương trình", href: "/admin/curriculum-list" },
     { label: "Người dùng", href: "/admin/users" },
+    { label: "Sinh viên", href: "/admin/students" },
     { label: "Đơn từ", href: "/admin/requests" },
     { label: "Điểm danh", href: "/admin/attendance" },
     // { label: "Đánh giá", href: "/admin/feedback-management" },
@@ -74,7 +75,8 @@ export default function Header() {
     { label: "Giờ học", href: "/admin/timeslots" },
     { label: "Học phí", href: "/admin/tuition-fees" },
     { label: "─────────────", href: null }, // Đường kẻ phân cách
-    { label: "Đánh giá", href: "/admin/feedback" },
+    { label: "Kỳ đăng ký đơn từ", href: "/admin/registration-periods" },
+    { label: "Đánh giá", href: "/admin/feedback-management" },
     { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
     { label: "─────────────", href: null }, // Đường kẻ phân cách
     { label: "Cài đặt", href: "/admin/settings" },

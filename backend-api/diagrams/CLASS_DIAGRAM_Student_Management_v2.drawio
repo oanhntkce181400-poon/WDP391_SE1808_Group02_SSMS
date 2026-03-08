@@ -1,0 +1,191 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="StudentManagementCD" name="Student Management">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="&lt;i&gt;a. Class Diagram&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="200" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- StudentRouter -->
+        <mxCell id="StudentRouter" value="&lt;b&gt;StudentRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentRouter-route" value="POST /api/students/:id&#xa;GET /api/students&#xa;PUT /api/students/:id&#xa;DELETE /api/students/:id" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="StudentRouter">
+          <mxGeometry y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- StudentController -->
+        <mxCell id="StudentController" value="&lt;b&gt;StudentController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="80" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentController-methods" value="+getStudents(query): Response&#xa;+createStudent(payload): Response&#xa;+updateStudent(id, payload): Response&#xa;+deleteStudent(id): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="StudentController">
+          <mxGeometry y="30" width="230" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- StudentService -->
+        <mxCell id="StudentService" value="&lt;b&gt;StudentService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="80" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentService-methods" value="+getStudents(query): Student[]&#xa;+searchAndFilter(criteria): Student[]&#xa;+createStudent(data, userId): Student&#xa;+updateStudent(id, data, userId): Student&#xa;+deleteStudent(id, userId): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="StudentService">
+          <mxGeometry y="30" width="280" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- StudentRepository -->
+        <mxCell id="StudentRepository" value="&lt;b&gt;StudentRepository&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="230" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentRepository-methods" value="+findAll(filter): Student[]&#xa;+findById(id): Student&#xa;+create(data): Student&#xa;+update(id, data): Student&#xa;+softDelete(id): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="StudentRepository">
+          <mxGeometry y="30" width="280" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Student Entity -->
+        <mxCell id="Student" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="230" width="180" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="Student-fields" value="-id: string&#xa;-studentCode: string&#xa;-userId: string&#xa;-majorCode: string&#xa;-fullName: string&#xa;-email: string&#xa;-phone: string&#xa;-cohort: number&#xa;-academicStatus: string&#xa;-isActive: boolean&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="Student">
+          <mxGeometry y="30" width="180" height="150" as="geometry" />
+        </mxCell>
+        
+        <!-- User Entity -->
+        <mxCell id="User" value="&lt;b&gt;User&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="230" width="180" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="User-fields" value="-id: string&#xa;-username: string&#xa;-email: string&#xa;-passwordHash: string&#xa;-role: string&#xa;-status: string&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="User">
+          <mxGeometry y="30" width="180" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- CreateStudentPayload DTO -->
+        <mxCell id="CreatePayload" value="&lt;b&gt;CreateStudentPayload&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="420" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="CreatePayload-fields" value="+studentCode: string&#xa;+fullName: string&#xa;+email: string&#xa;+majorCode: string&#xa;+cohort: number&#xa;+identityNumber: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="CreatePayload">
+          <mxGeometry y="30" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- UpdateStudentPayload DTO -->
+        <mxCell id="UpdatePayload" value="&lt;b&gt;UpdateStudentPayload&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="460" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="UpdatePayload-fields" value="+fullName?: string&#xa;+email?: string&#xa;+phone?: string&#xa;+academicStatus?: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="UpdatePayload">
+          <mxGeometry y="30" width="180" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Major Entity -->
+        <mxCell id="Major" value="&lt;b&gt;Major&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="380" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Major-fields" value="-id: string&#xa;-majorCode: string&#xa;-majorName: string&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="Major">
+          <mxGeometry y="30" width="160" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- SearchFilterDto -->
+        <mxCell id="SearchDto" value="&lt;b&gt;SearchFilterDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="680" y="520" width="160" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="SearchDto-fields" value="+keyword?: string&#xa;+majorCode?: string&#xa;+cohort?: number&#xa;+status?: string&#xa;+page: number&#xa;+limit: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="SearchDto">
+          <mxGeometry y="30" width="160" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Relationships -->
+        
+        <!-- Router -> Controller -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="StudentRouter-route" target="StudentController-methods">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="280" y="125" as="sourcePoint" />
+            <mxPoint x="360" y="125" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller -> Service -->
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="StudentController-methods" target="StudentService-methods">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="590" y="125" as="sourcePoint" />
+            <mxPoint x="680" y="125" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Service -> Repository -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="StudentService" target="StudentRepository">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="820" y="170" as="sourcePoint" />
+            <mxPoint x="820" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Repository -> Student -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="StudentRepository-methods" target="Student-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="680" y="275" as="sourcePoint" />
+            <mxPoint x="540" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Student -> User -->
+        <mxCell id="rel5" value="" style="endArrow=diamondThin;endFill=0;endSize=16;html=1;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Student-fields" target="User-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="360" y="268" as="sourcePoint" />
+            <mxPoint x="260" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel5-label" value="userId" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="rel5">
+          <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+            <mxPoint y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Student -> Major -->
+        <mxCell id="rel6" value="" style="endArrow=diamondThin;endFill=0;endSize=16;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Student-fields" target="Major-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="540" y="342" as="sourcePoint" />
+            <mxPoint x="680" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel6-label" value="majorCode" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="rel6">
+          <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+            <mxPoint y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller uses CreatePayload -->
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="StudentController-methods" target="CreatePayload">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="360" y="130" as="sourcePoint" />
+            <mxPoint x="170" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller uses UpdatePayload -->
+        <mxCell id="rel8" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="StudentController" target="UpdatePayload">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="475" y="150" as="sourcePoint" />
+            <mxPoint x="450" y="460" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Service uses SearchDto -->
+        <mxCell id="rel9" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="StudentService" target="SearchDto">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="890" y="170" as="sourcePoint" />
+            <mxPoint x="760" y="520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Note about uses middleware -->
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware,&#xa;ValidationMiddleware&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="80" y="190" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="StudentRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="170" as="sourcePoint" />
+            <mxPoint x="150" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

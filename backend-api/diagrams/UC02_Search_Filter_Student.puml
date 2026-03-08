@@ -1,0 +1,87 @@
+@startuml
+title UC02 - Search/Filter Student - Dynamic Search with Filters
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant StudentRouter as "StudentRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant ValidationMiddleware as "ValidationMiddleware"
+participant StudentController as "StudentController"
+participant StudentService as "StudentService"
+participant StudentModel as "StudentModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) enter search keyword "Nguyen"
+activate Screen
+
+Screen -> Screen: (1.1) debounce 500ms
+Screen -> APIClient: (2) GET /api/students/search?keyword=Nguyen&major=SE&cohort=18&status=enrolled
+activate APIClient
+APIClient -> StudentRouter: (3) forward GET search request
+activate StudentRouter
+
+StudentRouter -> AuthMiddleware: (4) verify access token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (4.1) token valid
+deactivate AuthMiddleware
+
+StudentRouter -> ValidationMiddleware: (5) validate search params
+activate ValidationMiddleware
+ValidationMiddleware -> ValidationMiddleware: (5.1) check keyword length >= 2
+ValidationMiddleware -> ValidationMiddleware: (5.2) validate filter values
+ValidationMiddleware --> StudentRouter: (5.3) return validated query
+deactivate ValidationMiddleware
+
+StudentRouter -> StudentController: (6) searchStudents(query)
+activate StudentController
+StudentController -> StudentService: (7) searchAndFilter({ keyword, major, cohort, status })
+activate StudentService
+
+StudentService -> StudentService: (7.1) build search criteria
+note right
+  Build MongoDB query:
+  {
+    $or: [
+      { studentCode: /Nguyen/i },
+      { fullName: /Nguyen/i },
+      { email: /Nguyen/i }
+    ],
+    majorCode: 'SE',
+    cohort: 18,
+    academicStatus: 'enrolled',
+    isActive: true
+  }
+end note
+
+StudentService -> StudentModel: (8) find(searchCriteria)
+activate StudentModel
+StudentModel -> DB: (9) db query with regex search
+activate DB
+DB --> StudentModel: (10) return matching students
+deactivate DB
+StudentModel --> StudentService: (11) return filtered results
+deactivate StudentModel
+
+StudentService -> StudentService: (11.1) count results
+StudentService -> StudentService: (11.2) apply pagination
+StudentService -> StudentService: (11.3) format response
+StudentService --> StudentController: (12) return { students, count, filters }
+deactivate StudentService
+
+StudentController --> StudentRouter: (13) 200 OK with filtered data
+deactivate StudentController
+StudentRouter --> APIClient: (14) 200 OK JSON response
+deactivate StudentRouter
+APIClient --> Screen: (15) render filtered results
+activate Screen
+Screen -> Screen: (15.1) display active filter chips
+Screen --> PrimaryActor: (16) show "Found 15 students"
+deactivate Screen
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

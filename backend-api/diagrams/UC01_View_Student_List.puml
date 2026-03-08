@@ -1,0 +1,76 @@
+@startuml
+title UC01 - View Student List - Retrieve and Display Students
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant StudentRouter as "StudentRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant StudentController as "StudentController"
+participant StudentService as "StudentService"
+participant StudentModel as "StudentModel"
+participant MajorModel as "MajorModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) navigate to Student Management page
+activate Screen
+
+Screen -> APIClient: (2) GET /api/students?page=1&limit=20
+activate APIClient
+APIClient -> StudentRouter: (3) forward GET request
+activate StudentRouter
+
+StudentRouter -> AuthMiddleware: (4) verify access token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (4.1) token valid, user authenticated
+deactivate AuthMiddleware
+
+StudentRouter -> RBACMiddleware: (5) check permission (view students)
+activate RBACMiddleware
+RBACMiddleware --> StudentRouter: (5.1) permission granted
+deactivate RBACMiddleware
+
+StudentRouter -> StudentController: (6) getStudents(query)
+activate StudentController
+StudentController -> StudentService: (7) getStudents({ page, limit })
+activate StudentService
+
+StudentService -> StudentModel: (8) find({ isActive: true })
+activate StudentModel
+StudentModel -> DB: (9) db query with pagination
+activate DB
+DB --> StudentModel: (10) return student rows
+deactivate DB
+StudentModel --> StudentService: (11) return students array
+deactivate StudentModel
+
+StudentService -> StudentService: (11.1) count total students
+StudentService -> MajorModel: (11.2) populate major names
+activate MajorModel
+MajorModel -> DB: (11.3) get major details
+activate DB
+DB --> MajorModel: (11.4) return majors
+deactivate DB
+MajorModel --> StudentService: (11.5) return major data
+deactivate MajorModel
+
+StudentService -> StudentService: (12) format response with pagination
+StudentService --> StudentController: (13) return { students, total, page, totalPages }
+deactivate StudentService
+
+StudentController --> StudentRouter: (14) 200 OK with data
+deactivate StudentController
+StudentRouter --> APIClient: (15) 200 OK JSON response
+deactivate StudentRouter
+APIClient --> Screen: (16) render student table
+activate Screen
+Screen --> PrimaryActor: (17) display student list with pagination
+deactivate Screen
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

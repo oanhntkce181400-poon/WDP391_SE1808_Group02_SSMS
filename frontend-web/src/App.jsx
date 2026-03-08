@@ -44,6 +44,8 @@ import PaymentResultPage from "./pages/student/PaymentResultPage";
 import MyTransactionsPage from "./pages/student/MyTransactionsPage";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
 import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
+import StudentManagementPage from "./pages/admin/StudentManagementPage";
+import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 export default function App() {
   return (
     <Routes>
@@ -94,7 +96,9 @@ export default function App() {
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="classes" element={<ClassManagement />} />
         <Route path="lecturers" element={<LecturerManagement />} />
+        <Route path="students" element={<StudentManagementPage />} />
         <Route path="announcements" element={<AnnouncementManagement />} />
+        <Route path="registration-periods" element={<RegistrationPeriodManagement />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
       </Route>

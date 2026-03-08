@@ -1,0 +1,153 @@
+@startuml
+title UC07 - Configure Registration Period - Update Period Settings
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant RegPeriodRouter as "RegistrationPeriodRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant ValidationMiddleware as "ValidationMiddleware"
+participant RegPeriodController as "RegistrationPeriodController"
+participant RegPeriodService as "RegistrationPeriodService"
+participant RegPeriodModel as "RegistrationPeriodModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) click "Edit/Configure" button
+activate Screen
+
+Screen -> APIClient: (2) GET /api/registration-periods/:id
+activate APIClient
+APIClient -> RegPeriodRouter: (3) forward GET request
+activate RegPeriodRouter
+RegPeriodRouter -> AuthMiddleware: (4) verify token
+activate AuthMiddleware
+AuthMiddleware --> RegPeriodRouter: (4.1) authenticated
+deactivate AuthMiddleware
+RegPeriodRouter -> RegPeriodController: (5) getPeriodById(id)
+activate RegPeriodController
+RegPeriodController -> RegPeriodService: (6) findById(id)
+activate RegPeriodService
+RegPeriodService -> RegPeriodModel: (7) findById(id)
+activate RegPeriodModel
+RegPeriodModel -> DB: (7.1) query by _id
+activate DB
+DB --> RegPeriodModel: (7.2) period found
+deactivate DB
+RegPeriodModel --> RegPeriodService: (7.3) return period
+deactivate RegPeriodModel
+RegPeriodService --> RegPeriodController: (8) return period
+deactivate RegPeriodService
+RegPeriodController --> RegPeriodRouter: (9) 200 OK
+deactivate RegPeriodController
+RegPeriodRouter --> APIClient: (10) return period data
+deactivate RegPeriodRouter
+APIClient --> Screen: (11) pre-fill configuration form
+deactivate APIClient
+
+alt Period is cancelled
+    Screen -> Screen: (11.1) show "Cannot edit cancelled period"
+    Screen --> PrimaryActor: (11.2) block editing
+else Period is editable
+    PrimaryActor -> Screen: (12) modify settings and click "Update"
+    note right
+      Changes:
+      - endDate extended by 7 days
+      - add cohort 21 to allowedCohorts
+      - update description
+    end note
+
+    Screen -> Screen: (12.1) validate changes
+    Screen -> APIClient: (13) PUT /api/registration-periods/:id
+    activate APIClient
+    APIClient -> RegPeriodRouter: (14) forward PUT request
+    activate RegPeriodRouter
+    RegPeriodRouter -> AuthMiddleware: (15) verify token
+    activate AuthMiddleware
+    AuthMiddleware --> RegPeriodRouter: (15.1) authenticated
+    deactivate AuthMiddleware
+
+    RegPeriodRouter -> ValidationMiddleware: (16) validate update data
+    activate ValidationMiddleware
+    ValidationMiddleware -> ValidationMiddleware: (16.1) validate endDate > startDate
+    ValidationMiddleware -> ValidationMiddleware: (16.2) validate cohort values
+    ValidationMiddleware -> ValidationMiddleware: (16.3) validate status transition
+    ValidationMiddleware --> RegPeriodRouter: (16.4) validation passed
+    deactivate ValidationMiddleware
+
+    RegPeriodRouter -> RegPeriodController: (17) updatePeriod(id, updates)
+    activate RegPeriodController
+    RegPeriodController -> RegPeriodService: (18) configurePeriod(id, updates, updatedById)
+    activate RegPeriodService
+
+    RegPeriodService -> RegPeriodService: (18.1) check if period is cancelled
+    alt period status is 'cancelled'
+        RegPeriodService --> RegPeriodController: (18.2) throw Error "Cannot modify cancelled period"
+        RegPeriodController --> RegPeriodRouter: 400 Bad Request
+        RegPeriodRouter --> APIClient: error response
+        APIClient --> Screen: show error message
+    else period is editable
+        RegPeriodService -> RegPeriodService: (19) validate status transition
+        note right
+          Valid transitions:
+          - upcoming → active/cancelled
+          - active → closed/cancelled
+          - closed → (no change)
+        end note
+
+        alt dates changed
+            RegPeriodService -> RegPeriodModel: (20) check new overlap
+            activate RegPeriodModel
+            RegPeriodModel -> DB: (20.1) find overlapping periods (exclude current)
+            activate DB
+            DB --> RegPeriodModel: (20.2) overlap check result
+            deactivate DB
+            RegPeriodModel --> RegPeriodService: (20.3) return result
+            deactivate RegPeriodModel
+
+            alt overlap detected
+                RegPeriodService --> RegPeriodController: (20.4) throw ConflictError
+                RegPeriodController --> RegPeriodRouter: 400 Conflict
+                RegPeriodRouter --> APIClient: error response
+                APIClient --> Screen: show "Period overlaps after changes"
+            end
+        end
+
+        RegPeriodService -> RegPeriodService: (21) auto-adjust status if needed
+        note right
+          If dates changed, recalculate status:
+          - now < startDate → upcoming
+          - startDate <= now <= endDate → active
+          - now > endDate → closed
+        end note
+
+        RegPeriodService -> RegPeriodModel: (22) findByIdAndUpdate(id, updates)
+        activate RegPeriodModel
+        RegPeriodModel -> DB: (22.1) update period document
+        activate DB
+        DB --> RegPeriodModel: (22.2) return updated period
+        deactivate DB
+        RegPeriodModel --> RegPeriodService: (22.3) return updated data
+        deactivate RegPeriodModel
+
+        RegPeriodService -> RegPeriodService: (23) set updatedBy and updatedAt
+        RegPeriodService --> RegPeriodController: (24) return updated period
+        deactivate RegPeriodService
+
+        RegPeriodController --> RegPeriodRouter: (25) 200 OK
+        deactivate RegPeriodController
+        RegPeriodRouter --> APIClient: (26) return updated data
+        deactivate RegPeriodRouter
+        APIClient --> Screen: (27) show "Registration period updated successfully"
+        activate Screen
+        Screen -> Screen: (27.1) update list display
+        Screen --> PrimaryActor: (28) display updated period
+        deactivate Screen
+    end
+end
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

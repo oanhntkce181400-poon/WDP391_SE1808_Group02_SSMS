@@ -1,0 +1,191 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="RegistrationPeriodCD" name="Registration Period Management">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="&lt;i&gt;a. Class Diagram&lt;/i&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="200" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriodRouter -->
+        <mxCell id="RegPeriodRouter" value="&lt;b&gt;RegistrationPeriodRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="RegPeriodRouter-route" value="GET /api/registration-periods&#xa;POST /api/registration-periods&#xa;PUT /api/registration-periods/:id&#xa;PATCH /api/registration-periods/:id/status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegPeriodRouter">
+          <mxGeometry y="30" width="240" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriodController -->
+        <mxCell id="RegPeriodController" value="&lt;b&gt;RegistrationPeriodController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="80" width="280" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="RegPeriodController-methods" value="+getRegistrationPeriods(): Response&#xa;+createRegistrationPeriod(payload): Response&#xa;+updatePeriod(id, payload): Response&#xa;+updateStatus(id, statusDto): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegPeriodController">
+          <mxGeometry y="30" width="280" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriodService -->
+        <mxCell id="RegPeriodService" value="&lt;b&gt;RegistrationPeriodService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="RegPeriodService-methods" value="+getAllPeriods(): RegistrationPeriod[]&#xa;+getPeriodById(id): RegistrationPeriod&#xa;+createPeriod(data, userId): RegistrationPeriod&#xa;+configurePeriod(id, updates, userId): RegistrationPeriod&#xa;+checkPeriodOverlap(dates, cohorts): boolean&#xa;+autoUpdateStatus(period): string&#xa;+validateStatusTransition(current, next): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegPeriodService">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriodRepository -->
+        <mxCell id="RegPeriodRepository" value="&lt;b&gt;RegistrationPeriodRepository&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="250" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="RegPeriodRepository-methods" value="+findAll(): RegistrationPeriod[]&#xa;+findById(id): RegistrationPeriod&#xa;+create(data): RegistrationPeriod&#xa;+update(id, data): RegistrationPeriod&#xa;+findOverlapping(dates, cohorts): RegistrationPeriod[]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegPeriodRepository">
+          <mxGeometry y="30" width="300" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriod Entity -->
+        <mxCell id="RegPeriod" value="&lt;b&gt;RegistrationPeriod&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="250" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="RegPeriod-fields" value="-id: string&#xa;-periodCode: string&#xa;-periodName: string&#xa;-description: string&#xa;-startDate: Date&#xa;-endDate: Date&#xa;-allowedCohorts: number[]&#xa;-status: string&#xa;-maxCoursesPerStudent: number&#xa;-createdBy: string&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegPeriod">
+          <mxGeometry y="30" width="200" height="150" as="geometry" />
+        </mxCell>
+        
+        <!-- User Entity -->
+        <mxCell id="User2" value="&lt;b&gt;User&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="250" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="User2-fields" value="-id: string&#xa;-username: string&#xa;-email: string&#xa;-role: string&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="User2">
+          <mxGeometry y="30" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- CreatePeriodPayload DTO -->
+        <mxCell id="CreatePeriodPayload" value="&lt;b&gt;CreatePeriodPayload&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="400" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="CreatePeriodPayload-fields" value="+periodName: string&#xa;+description: string&#xa;+startDate: Date&#xa;+endDate: Date&#xa;+allowedCohorts: number[]&#xa;+maxCoursesPerStudent: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="CreatePeriodPayload">
+          <mxGeometry y="30" width="200" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- UpdatePeriodPayload DTO -->
+        <mxCell id="UpdatePeriodPayload" value="&lt;b&gt;UpdatePeriodPayload&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="480" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="UpdatePeriodPayload-fields" value="+periodName?: string&#xa;+description?: string&#xa;+endDate?: Date&#xa;+allowedCohorts?: number[]&#xa;+status?: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="UpdatePeriodPayload">
+          <mxGeometry y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- StatusDto -->
+        <mxCell id="StatusDto" value="&lt;b&gt;StatusDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="400" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="StatusDto-fields" value="+status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="StatusDto">
+          <mxGeometry y="30" width="180" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- PeriodNote Entity -->
+        <mxCell id="PeriodNote" value="&lt;b&gt;PeriodNote&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="520" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="PeriodNote-fields" value="-id: string&#xa;-periodId: string&#xa;-note: string&#xa;-createdBy: string&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=10;" vertex="1" parent="PeriodNote">
+          <mxGeometry y="30" width="180" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Relationships -->
+        
+        <!-- Router -> Controller -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegPeriodRouter-route" target="RegPeriodController-methods">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="320" y="125" as="sourcePoint" />
+            <mxPoint x="400" y="125" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller -> Service -->
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegPeriodController-methods" target="RegPeriodService-methods">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="680" y="130" as="sourcePoint" />
+            <mxPoint x="760" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Service -> Repository -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegPeriodService" target="RegPeriodRepository">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="910" y="180" as="sourcePoint" />
+            <mxPoint x="910" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Repository -> RegistrationPeriod -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="RegPeriodRepository-methods" target="RegPeriod-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="760" y="295" as="sourcePoint" />
+            <mxPoint x="600" y="335" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- RegistrationPeriod -> User -->
+        <mxCell id="rel5" value="" style="endArrow=diamondThin;endFill=0;endSize=16;html=1;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegPeriod-fields" target="User2-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="400" y="308" as="sourcePoint" />
+            <mxPoint x="260" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel5-label" value="createdBy" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="rel5">
+          <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+            <mxPoint y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller uses CreatePayload -->
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="RegPeriodController-methods" target="CreatePeriodPayload">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="400" y="130" as="sourcePoint" />
+            <mxPoint x="180" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller uses UpdatePayload -->
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="RegPeriodController" target="UpdatePeriodPayload">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="540" y="150" as="sourcePoint" />
+            <mxPoint x="500" y="480" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Controller uses StatusDto -->
+        <mxCell id="rel8" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" edge="1" parent="1" source="RegPeriodController" target="StatusDto-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="680" y="150" as="sourcePoint" />
+            <mxPoint x="760" y="430" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- PeriodNote -> RegistrationPeriod -->
+        <mxCell id="rel9" value="" style="endArrow=diamondThin;endFill=0;endSize=16;html=1;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="PeriodNote-fields" target="RegPeriod-fields">
+          <mxGeometry width="160" relative="1" as="geometry">
+            <mxPoint x="760" y="563" as="sourcePoint" />
+            <mxPoint x="600" y="392" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel9-label" value="periodId" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="rel9">
+          <mxGeometry x="-0.1" y="-1" relative="1" as="geometry">
+            <mxPoint y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Note about middleware -->
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware,&#xa;ValidationMiddleware&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="80" y="190" width="140" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="RegPeriodRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="200" y="170" as="sourcePoint" />
+            <mxPoint x="150" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

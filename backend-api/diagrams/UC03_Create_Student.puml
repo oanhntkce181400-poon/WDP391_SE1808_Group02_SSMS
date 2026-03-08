@@ -1,0 +1,139 @@
+@startuml
+title UC03 - Create Student - Register New Student with User Account
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant StudentRouter as "StudentRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant ValidationMiddleware as "ValidationMiddleware"
+participant StudentController as "StudentController"
+participant StudentService as "StudentService"
+participant UserModel as "UserModel"
+participant StudentModel as "StudentModel"
+participant WalletModel as "WalletModel"
+participant MajorModel as "MajorModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) click "Add Student" button
+activate Screen
+Screen -> Screen: (1.1) display Create Student form
+
+PrimaryActor -> Screen: (2) fill form data and click "Create"
+Screen -> Screen: (2.1) client-side validation
+Screen -> APIClient: (3) POST /api/students with form data
+activate APIClient
+note right
+  Payload: {
+    studentCode: "SE18001",
+    fullName: "Nguyen Van A",
+    email: "student@example.com",
+    majorCode: "SE",
+    cohort: 18,
+    identityNumber: "123456789",
+    ...
+  }
+end note
+
+APIClient -> StudentRouter: (4) forward POST request
+activate StudentRouter
+
+StudentRouter -> AuthMiddleware: (5) verify access token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (5.1) authenticated
+deactivate AuthMiddleware
+
+StudentRouter -> ValidationMiddleware: (6) validate request body
+activate ValidationMiddleware
+ValidationMiddleware -> ValidationMiddleware: (6.1) check required fields
+ValidationMiddleware -> ValidationMiddleware: (6.2) validate email format
+ValidationMiddleware -> ValidationMiddleware: (6.3) validate data types
+ValidationMiddleware --> StudentRouter: (6.4) validation passed
+deactivate ValidationMiddleware
+
+StudentRouter -> StudentController: (7) createStudent(payload)
+activate StudentController
+StudentController -> StudentService: (8) createStudent(data, createdById)
+activate StudentService
+
+StudentService -> MajorModel: (9) validate majorCode exists
+activate MajorModel
+MajorModel -> DB: (9.1) findOne({ majorCode: "SE" })
+activate DB
+DB --> MajorModel: (9.2) major found
+deactivate DB
+MajorModel --> StudentService: (9.3) major valid
+deactivate MajorModel
+
+StudentService -> StudentModel: (10) check duplicate studentCode
+activate StudentModel
+StudentModel -> DB: (10.1) findOne({ studentCode })
+activate DB
+DB --> StudentModel: (10.2) not found (unique)
+deactivate DB
+StudentModel --> StudentService: (10.3) code available
+deactivate StudentModel
+
+StudentService -> UserModel: (11) check duplicate email
+activate UserModel
+UserModel -> DB: (11.1) findOne({ email })
+activate DB
+DB --> UserModel: (11.2) not found (unique)
+deactivate DB
+UserModel --> StudentService: (11.3) email available
+deactivate UserModel
+
+StudentService -> StudentService: (12) hash default password
+note right
+  Password = identityNumber or "123456"
+  Hash with bcrypt (10 rounds)
+end note
+
+StudentService -> UserModel: (13) create User account
+activate UserModel
+UserModel -> DB: (13.1) insert User document
+activate DB
+DB --> UserModel: (13.2) return created user with _id
+deactivate DB
+UserModel --> StudentService: (13.3) return user
+deactivate UserModel
+
+StudentService -> StudentModel: (14) create Student record
+activate StudentModel
+StudentModel -> DB: (14.1) insert Student with userId link
+activate DB
+DB --> StudentModel: (14.2) return created student
+deactivate DB
+StudentModel --> StudentService: (14.3) return student
+deactivate StudentModel
+
+StudentService -> WalletModel: (15) create Wallet
+activate WalletModel
+WalletModel -> DB: (15.1) insert Wallet with balance=0
+activate DB
+DB --> WalletModel: (15.2) wallet created
+deactivate DB
+WalletModel --> StudentService: (15.3) wallet initialized
+deactivate WalletModel
+
+StudentService -> StudentService: (16) format response
+StudentService --> StudentController: (17) return created student data
+deactivate StudentService
+
+StudentController --> StudentRouter: (18) 201 Created
+deactivate StudentController
+StudentRouter --> APIClient: (19) 201 Created JSON response
+deactivate StudentRouter
+APIClient --> Screen: (20) display success message
+activate Screen
+Screen -> Screen: (20.1) show "Student created successfully"
+Screen -> Screen: (20.2) redirect to student list
+Screen --> PrimaryActor: (21) display updated list with new student
+deactivate Screen
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

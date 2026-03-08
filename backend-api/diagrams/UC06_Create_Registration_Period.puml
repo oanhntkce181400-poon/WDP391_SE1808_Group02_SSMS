@@ -1,0 +1,123 @@
+@startuml
+title UC06 - Create Registration Period - Configure New Registration Period
+
+hide footbox
+
+actor PrimaryActor as "Admin"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant RegPeriodRouter as "RegistrationPeriodRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant ValidationMiddleware as "ValidationMiddleware"
+participant RegPeriodController as "RegistrationPeriodController"
+participant RegPeriodService as "RegistrationPeriodService"
+participant RegPeriodModel as "RegistrationPeriodModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) click "Create Registration Period" button
+activate Screen
+Screen -> Screen: (1.1) display Create Period form
+
+PrimaryActor -> Screen: (2) fill form and click "Create"
+note right
+  Form data:
+  - Period Name: "Đăng ký Kỳ 1 2025-2026"
+  - Start Date: 2025-08-01 08:00
+  - End Date: 2025-08-15 23:59
+  - Allowed Cohorts: [18, 19, 20]
+  - Description: "..."
+end note
+
+Screen -> Screen: (2.1) client-side validation
+Screen -> APIClient: (3) POST /api/registration-periods with data
+activate APIClient
+APIClient -> RegPeriodRouter: (4) forward POST request
+activate RegPeriodRouter
+
+RegPeriodRouter -> AuthMiddleware: (5) verify access token
+activate AuthMiddleware
+AuthMiddleware --> RegPeriodRouter: (5.1) authenticated as Admin
+deactivate AuthMiddleware
+
+RegPeriodRouter -> ValidationMiddleware: (6) validate request body
+activate ValidationMiddleware
+ValidationMiddleware -> ValidationMiddleware: (6.1) check required fields
+ValidationMiddleware -> ValidationMiddleware: (6.2) validate date range (endDate > startDate)
+ValidationMiddleware -> ValidationMiddleware: (6.3) validate cohort values
+ValidationMiddleware --> RegPeriodRouter: (6.4) validation passed
+deactivate ValidationMiddleware
+
+RegPeriodRouter -> RegPeriodController: (7) createRegistrationPeriod(payload)
+activate RegPeriodController
+RegPeriodController -> RegPeriodService: (8) createPeriod(data, createdById)
+activate RegPeriodService
+
+RegPeriodService -> RegPeriodService: (8.1) validate endDate > startDate
+alt endDate <= startDate
+    RegPeriodService --> RegPeriodController: (8.2) throw ValidationError
+    RegPeriodController --> RegPeriodRouter: 400 Bad Request
+    RegPeriodRouter --> APIClient: error response
+    APIClient --> Screen: show error "End date must be after start date"
+else validation passed
+    RegPeriodService -> RegPeriodModel: (9) check for overlapping periods
+    activate RegPeriodModel
+    RegPeriodModel -> DB: (9.1) find overlapping periods for same cohorts
+    activate DB
+    note right
+      Query: {
+        allowedCohorts: { $in: [18,19,20] },
+        status: { $in: ['upcoming', 'active'] },
+        $or: [
+          { startDate: { $lte: endDate, $gte: startDate } },
+          { endDate: { $lte: endDate, $gte: startDate } }
+        ]
+      }
+    end note
+    DB --> RegPeriodModel: (9.2) return overlapping periods
+    deactivate DB
+    RegPeriodModel --> RegPeriodService: (9.3) overlap check result
+    deactivate RegPeriodModel
+
+    alt overlap found
+        RegPeriodService --> RegPeriodController: (9.4) throw ConflictError
+        RegPeriodController --> RegPeriodRouter: 400 Conflict
+        RegPeriodRouter --> APIClient: error response
+        APIClient --> Screen: show "Period overlaps with existing period"
+    else no overlap
+        RegPeriodService -> RegPeriodService: (10) determine initial status
+        note right
+          if (now < startDate) status = 'upcoming'
+          else if (now <= endDate) status = 'active'
+          else status = 'closed'
+        end note
+
+        RegPeriodService -> RegPeriodModel: (11) create new period
+        activate RegPeriodModel
+        RegPeriodModel -> DB: (11.1) insert Registration Period document
+        activate DB
+        DB --> RegPeriodModel: (11.2) return created period with _id
+        deactivate DB
+        RegPeriodModel --> RegPeriodService: (11.3) return period
+        deactivate RegPeriodModel
+
+        RegPeriodService -> RegPeriodService: (12) format response
+        RegPeriodService --> RegPeriodController: (13) return created period
+        deactivate RegPeriodService
+
+        RegPeriodController --> RegPeriodRouter: (14) 201 Created
+        deactivate RegPeriodController
+        RegPeriodRouter --> APIClient: (15) 201 Created JSON response
+        deactivate RegPeriodRouter
+        APIClient --> Screen: (16) display success message
+        activate Screen
+        Screen -> Screen: (16.1) show "Registration period created successfully"
+        Screen -> Screen: (16.2) redirect to period list
+        Screen --> PrimaryActor: (17) display updated list
+        deactivate Screen
+    end
+end
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

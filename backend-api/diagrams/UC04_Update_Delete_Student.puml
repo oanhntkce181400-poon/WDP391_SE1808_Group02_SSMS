@@ -1,0 +1,162 @@
+@startuml
+title UC04 - Update/Delete Student - Modify or Remove Student Record
+
+hide footbox
+
+actor PrimaryActor as "Admin / Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant StudentRouter as "StudentRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant ValidationMiddleware as "ValidationMiddleware"
+participant StudentController as "StudentController"
+participant StudentService as "StudentService"
+participant StudentModel as "StudentModel"
+participant UserModel as "UserModel"
+participant ClassEnrollmentModel as "ClassEnrollmentModel"
+database DB as "Database"
+
+== Flow A: Update Student ==
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1A) click "Edit" button
+activate Screen
+Screen -> APIClient: (2A) GET /api/students/:id
+activate APIClient
+APIClient -> StudentRouter: (3A) forward GET request
+activate StudentRouter
+StudentRouter -> AuthMiddleware: (4A) verify token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (4A.1) authenticated
+deactivate AuthMiddleware
+StudentRouter -> StudentController: (5A) getStudentById(id)
+activate StudentController
+StudentController -> StudentService: (6A) findById(id)
+activate StudentService
+StudentService -> StudentModel: (7A) findById(id)
+activate StudentModel
+StudentModel -> DB: (7A.1) query by _id
+activate DB
+DB --> StudentModel: (7A.2) student found
+deactivate DB
+StudentModel --> StudentService: (7A.3) return student
+deactivate StudentModel
+StudentService --> StudentController: (8A) return student
+deactivate StudentService
+StudentController --> StudentRouter: (9A) 200 OK
+deactivate StudentController
+StudentRouter --> APIClient: (10A) return student data
+deactivate StudentRouter
+APIClient --> Screen: (11A) pre-fill form
+deactivate APIClient
+
+PrimaryActor -> Screen: (12A) modify data and click "Update"
+Screen -> Screen: (12A.1) validate changes
+Screen -> APIClient: (13A) PUT /api/students/:id with updated data
+activate APIClient
+APIClient -> StudentRouter: (14A) forward PUT request
+activate StudentRouter
+StudentRouter -> AuthMiddleware: (15A) verify token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (15A.1) authenticated
+deactivate AuthMiddleware
+StudentRouter -> ValidationMiddleware: (16A) validate update data
+activate ValidationMiddleware
+ValidationMiddleware --> StudentRouter: (16A.1) validation passed
+deactivate ValidationMiddleware
+StudentRouter -> StudentController: (17A) updateStudent(id, data)
+activate StudentController
+StudentController -> StudentService: (18A) updateStudent(id, updates, updatedById)
+activate StudentService
+
+StudentService -> StudentModel: (19A) check email uniqueness (if changed)
+activate StudentModel
+StudentModel -> DB: (19A.1) findOne({ email, _id: { $ne: id } })
+activate DB
+DB --> StudentModel: (19A.2) email unique
+deactivate DB
+StudentModel --> StudentService: (19A.3) validation passed
+deactivate StudentModel
+
+StudentService -> StudentModel: (20A) findByIdAndUpdate(id, updates)
+activate StudentModel
+StudentModel -> DB: (20A.1) update student record
+activate DB
+DB --> StudentModel: (20A.2) return updated student
+deactivate DB
+StudentModel --> StudentService: (20A.3) return updated data
+deactivate StudentModel
+
+StudentService -> StudentService: (21A) set updatedBy and updatedAt
+StudentService --> StudentController: (22A) return updated student
+deactivate StudentService
+StudentController --> StudentRouter: (23A) 200 OK
+deactivate StudentController
+StudentRouter --> APIClient: (24A) return updated data
+deactivate StudentRouter
+APIClient --> Screen: (25A) show "Student updated successfully"
+Screen --> PrimaryActor: (26A) display updated list
+deactivate APIClient
+deactivate Screen
+
+== Flow B: Delete Student ==
+
+PrimaryActor -> Screen: (1B) click "Delete" button
+activate Screen
+Screen -> Screen: (1B.1) show confirmation dialog
+PrimaryActor -> Screen: (2B) confirm deletion
+Screen -> APIClient: (3B) DELETE /api/students/:id
+activate APIClient
+APIClient -> StudentRouter: (4B) forward DELETE request
+activate StudentRouter
+StudentRouter -> AuthMiddleware: (5B) verify token
+activate AuthMiddleware
+AuthMiddleware --> StudentRouter: (5B.1) authenticated
+deactivate AuthMiddleware
+StudentRouter -> StudentController: (6B) deleteStudent(id)
+activate StudentController
+StudentController -> StudentService: (7B) deleteStudent(id, deletedById)
+activate StudentService
+
+StudentService -> ClassEnrollmentModel: (8B) check active enrollments
+activate ClassEnrollmentModel
+ClassEnrollmentModel -> DB: (8B.1) count({ student: id, status: 'enrolled' })
+activate DB
+DB --> ClassEnrollmentModel: (8B.2) count = 0
+deactivate DB
+ClassEnrollmentModel --> StudentService: (8B.3) no active enrollments
+deactivate ClassEnrollmentModel
+
+StudentService -> StudentModel: (9B) soft delete (set isActive=false)
+activate StudentModel
+StudentModel -> DB: (9B.1) update({ _id: id }, { isActive: false })
+activate DB
+DB --> StudentModel: (9B.2) updated successfully
+deactivate DB
+StudentModel --> StudentService: (9B.3) deletion confirmed
+deactivate StudentModel
+
+StudentService -> UserModel: (10B) deactivate linked user account
+activate UserModel
+UserModel -> DB: (10B.1) update({ _id: userId }, { status: 'inactive' })
+activate DB
+DB --> UserModel: (10B.2) user deactivated
+deactivate DB
+UserModel --> StudentService: (10B.3) user account inactive
+deactivate UserModel
+
+StudentService -> StudentService: (11B) log deletion action
+StudentService --> StudentController: (12B) return success
+deactivate StudentService
+StudentController --> StudentRouter: (13B) 200 OK
+deactivate StudentController
+StudentRouter --> APIClient: (14B) deletion confirmed
+deactivate StudentRouter
+APIClient --> Screen: (15B) show "Student deleted successfully"
+Screen -> Screen: (15B.1) remove from list
+Screen --> PrimaryActor: (16B) display updated list
+deactivate Screen
+deactivate APIClient
+deactivate PrimaryActor
+
+@enduml

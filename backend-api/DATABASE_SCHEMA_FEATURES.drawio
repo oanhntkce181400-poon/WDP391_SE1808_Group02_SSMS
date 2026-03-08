@@ -1,0 +1,625 @@
+<mxfile host="app.diagrams.net" modified="2026-02-23T00:00:00.000Z" agent="5.0" version="21.0.0" etag="drawio-schema" type="device">
+  <diagram id="database-schema" name="Database Schema - Features">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2339" pageHeight="3300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="DATABASE SCHEMA - FEATURES IMPLEMENTED&#xa;(GlobalErrorHandling, Manage Major, Manage Student, Registration Period)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1A237E;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1200" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- ErrorLog Table -->
+        <mxCell id="errorlog-table" value="ErrorLog" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#FFF3E0;strokeColor=#E65100;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="360" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#BF360C;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="30" width="360" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-2" value="statusCode: Number (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="60" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-3" value="message: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="88" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-4" value="path: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="116" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-5" value="method: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="144" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-6" value="errorType: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="172" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-7" value="stack: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="200" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-8" value="🔗 userId: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="228" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-9" value="userEmail: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="256" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-10" value="requestBody: Mixed" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="284" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-11" value="requestQuery: Mixed" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="312" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-12" value="ip: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="340" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-13" value="userAgent: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="368" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-14" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="396" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-15" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="424" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-16" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="452" width="360" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-17" value="📌 Index: statusCode, errorType, path" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="errorlog-table">
+          <mxGeometry y="472" width="360" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="errorlog-note" value="💡 Global Error Handling&#xa;Lưu trữ tất cả lỗi của hệ thống" style="text;html=1;strokeColor=#E65100;fillColor=#FFE0B2;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=2;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="700" width="360" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Major Table -->
+        <mxCell id="major-table" value="Major" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#E8F5E9;strokeColor=#2E7D32;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="520" y="160" width="360" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="major-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#1B5E20;" vertex="1" parent="major-table">
+          <mxGeometry y="30" width="360" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="major-2" value="majorCode: String (required, unique)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="major-table">
+          <mxGeometry y="60" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-3" value="majorName: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="major-table">
+          <mxGeometry y="88" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-4" value="studentCount: Number (default: 0)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="major-table">
+          <mxGeometry y="116" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-5" value="isActive: Boolean (default: true)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="major-table">
+          <mxGeometry y="144" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-6" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="major-table">
+          <mxGeometry y="172" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-7" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="major-table">
+          <mxGeometry y="200" width="360" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="major-8" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="major-table">
+          <mxGeometry y="228" width="360" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="major-9" value="📌 Unique: majorCode" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="major-table">
+          <mxGeometry y="248" width="360" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="major-note" value="💡 Manage Major (View, Create, Update/Delete)&#xa;Quản lý danh sách ngành đào tạo" style="text;html=1;strokeColor=#2E7D32;fillColor=#C8E6C9;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=2;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="480" width="360" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- User Table -->
+        <mxCell id="user-table" value="User" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#E3F2FD;strokeColor=#1565C0;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="960" y="160" width="380" height="580" as="geometry" />
+        </mxCell>
+        <mxCell id="user-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#0D47A1;" vertex="1" parent="user-table">
+          <mxGeometry y="30" width="380" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="user-2" value="email: String (required, unique)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="60" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-3" value="password: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="88" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-4" value="fullName: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="116" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-5" value="authProvider: String [google, local]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="144" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-6" value="mustChangePassword: Boolean (default: false)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="172" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-7" value="googleId: String (unique, sparse)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="200" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-8" value="avatarUrl: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="228" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-9" value="avatarCloudinaryId: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="256" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-10" value="role: String [admin, staff, student]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="284" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-11" value="isActive: Boolean (default: true)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="312" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-12" value="status: String [active, inactive, blocked, pending]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="340" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-13" value="lastLoginAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="368" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-14" value="passwordChangedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="user-table">
+          <mxGeometry y="396" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-15" value="🔗 createdBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="user-table">
+          <mxGeometry y="424" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-16" value="🔗 updatedBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="user-table">
+          <mxGeometry y="452" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-17" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="user-table">
+          <mxGeometry y="480" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-18" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="user-table">
+          <mxGeometry y="508" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="user-19" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="user-table">
+          <mxGeometry y="536" width="380" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="user-20" value="📌 Index: role, status, authProvider" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="user-table">
+          <mxGeometry y="556" width="380" height="24" as="geometry" />
+        </mxCell>
+        
+        <!-- Student Table -->
+        <mxCell id="student-table" value="Student" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#FCE4EC;strokeColor=#C2185B;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="820" width="400" height="750" as="geometry" />
+        </mxCell>
+        <mxCell id="student-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#880E4F;" vertex="1" parent="student-table">
+          <mxGeometry y="30" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="student-2" value="studentCode: String (required, unique)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="60" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-3" value="fullName: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="88" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-4" value="email: String (required, unique)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="116" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-5" value="🔗 majorCode: String (FK → Major)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#2E7D32;" vertex="1" parent="student-table">
+          <mxGeometry y="144" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-6" value="cohort: Number (required) [K18, K19, K20]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="172" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-7" value="identityNumber: String (unique, sparse)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="200" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-8" value="dateOfBirth: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="228" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-9" value="phoneNumber: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="256" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-10" value="address: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="284" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-11" value="gender: String [male, female, other]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="312" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-12" value="classSection: String [SE1808, AI1801...]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="340" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-13" value="academicStatus: String [enrolled, on-leave, dropped, graduated]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="368" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-14" value="enrollmentYear: Number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="396" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-15" value="🔗 userId: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="student-table">
+          <mxGeometry y="424" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-16" value="isActive: Boolean (default: true)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="student-table">
+          <mxGeometry y="452" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-17" value="🔗 createdBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="student-table">
+          <mxGeometry y="480" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-18" value="🔗 updatedBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="student-table">
+          <mxGeometry y="508" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-19" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="student-table">
+          <mxGeometry y="536" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-20" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="student-table">
+          <mxGeometry y="564" width="400" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="student-21" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="student-table">
+          <mxGeometry y="592" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="student-22" value="📌 Index: studentCode, fullName, majorCode&#xa;📌 Index: cohort, academicStatus, isActive" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="student-table">
+          <mxGeometry y="612" width="400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="student-23" value="📌 Unique: studentCode, email, identityNumber" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="student-table">
+          <mxGeometry y="652" width="400" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="student-24" value="📌 Unique: userId (sparse)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="student-table">
+          <mxGeometry y="676" width="400" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="student-note" value="💡 Manage Student&#xa;Quản lý sinh viên (CRUD operations)" style="text;html=1;strokeColor=#C2185B;fillColor=#F8BBD0;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=2;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1590" width="400" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- RegistrationPeriod Table -->
+        <mxCell id="regperiod-table" value="RegistrationPeriod" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="560" y="820" width="420" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#4A148C;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="30" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-2" value="periodName: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="60" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-3" value="startDate: Date (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="88" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-4" value="endDate: Date (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="116" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-5" value="allowedCohorts: [Number] (default: [])" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="144" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-6" value="description: String" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="172" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-7" value="status: String [upcoming, active, closed, cancelled]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="200" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-8" value="🔗 createdBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="228" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-9" value="🔗 updatedBy: ObjectId (FK → User)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="256" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-10" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="284" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-11" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="312" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-12" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="340" width="420" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-13" value="📌 Index: status, startDate, endDate" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="360" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-14" value="📌 Validation: endDate &gt; startDate" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="regperiod-table">
+          <mxGeometry y="388" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="regperiod-note" value="💡 Registration Period Management&#xa;Quản lý thời gian đăng ký môn học cho sinh viên" style="text;html=1;strokeColor=#6A1B9A;fillColor=#E1BEE7;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=2;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1260" width="420" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- ClassEnrollment Table (Related) -->
+        <mxCell id="classenroll-table" value="ClassEnrollment" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#FFF9C4;strokeColor=#F57F17;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1700" width="420" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#F57F17;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="30" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-2" value="🔗 classSection: ObjectId (FK → ClassSection)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#795548;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="60" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-3" value="🔗 student: ObjectId (FK → Student)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#C2185B;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="88" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-4" value="enrollmentDate: Date (default: now)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="116" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-5" value="status: String [enrolled, dropped, completed]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="144" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-6" value="grade: Number (0-10)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="172" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-7" value="createdAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="200" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-8" value="updatedAt: Date (auto)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=2;fontColor=#666666;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="228" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-9" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="256" width="420" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-10" value="📌 Index: classSection, student, status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="276" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-11" value="📌 Unique: (classSection, student)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="classenroll-table">
+          <mxGeometry y="304" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classenroll-note" value="💡 Class Enrollment (Related to Student)&#xa;Ghi danh sinh viên vào lớp học" style="text;html=1;strokeColor=#F57F17;fillColor=#FFF9C4;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;fontStyle=2;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="2060" width="420" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- ClassSection Table (Related) -->
+        <mxCell id="classsection-table" value="ClassSection" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#EFEBE9;strokeColor=#5D4037;fontColor=#000000;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1380" width="420" height="460" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-1" value="🔑 _id: ObjectId (PK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=12;fontStyle=1;fontColor=#5D4037;" vertex="1" parent="classsection-table">
+          <mxGeometry y="30" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-2" value="classCode: String (required, unique)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="60" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-3" value="className: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="88" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-4" value="🔗 subject: ObjectId (FK → Subject)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#00695C;" vertex="1" parent="classsection-table">
+          <mxGeometry y="116" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-5" value="🔗 teacher: ObjectId (FK → Teacher)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#5D4037;" vertex="1" parent="classsection-table">
+          <mxGeometry y="144" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-6" value="🔗 room: ObjectId (FK → Room)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#F57C00;" vertex="1" parent="classsection-table">
+          <mxGeometry y="172" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-7" value="🔗 timeslot: ObjectId (FK → Timeslot)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#7B1FA2;" vertex="1" parent="classsection-table">
+          <mxGeometry y="200" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-8" value="semester: Number (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="228" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-9" value="academicYear: String (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="256" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-10" value="maxCapacity: Number (required)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="284" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-11" value="currentEnrollment: Number (default: 0)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="312" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-12" value="status: String [active, cancelled, completed]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="340" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-13" value="dayOfWeek: Number (1-7)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="classsection-table">
+          <mxGeometry y="368" width="420" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-14" value="─────────────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="classsection-table">
+          <mxGeometry y="396" width="420" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="classsection-15" value="📌 Index: subject, teacher, semester, status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="classsection-table">
+          <mxGeometry y="416" width="420" height="28" as="geometry" />
+        </mxCell>
+        
+        <!-- Relationships (Arrows) -->
+        
+        <!-- ErrorLog -> User -->
+        <mxCell id="rel-errorlog-user" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#E65100;strokeWidth=2;dashed=1;" edge="1" parent="1" source="errorlog-8" target="user-1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="600" as="sourcePoint" />
+            <mxPoint x="550" y="550" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-errorlog-user-label" value="userId" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#E65100;fontStyle=1;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-errorlog-user">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="10" y="-9" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Student -> Major -->
+        <mxCell id="rel-student-major" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#2E7D32;strokeWidth=2;" edge="1" parent="1" source="student-table" target="major-2">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="1000" as="sourcePoint" />
+            <mxPoint x="550" y="950" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="500" y="820" />
+              <mxPoint x="500" y="234" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-student-major-label" value="majorCode" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#2E7D32;fontStyle=1;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-student-major">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="10" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Student -> User (userId) -->
+        <mxCell id="rel-student-user1" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=2;dashed=1;" edge="1" parent="1" source="student-15" target="user-1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="1200" as="sourcePoint" />
+            <mxPoint x="550" y="1150" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="920" y="1258" />
+              <mxPoint x="920" y="205" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-student-user1-label" value="userId" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#1565C0;fontStyle=1;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-student-user1">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="10" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Student -> User (createdBy) -->
+        <mxCell id="rel-student-user2" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=1;dashed=1;" edge="1" parent="1" source="student-17" target="user-15">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="1300" as="sourcePoint" />
+            <mxPoint x="550" y="1250" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="900" y="1314" />
+              <mxPoint x="900" y="608" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-student-user2-label" value="createdBy / updatedBy" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#1565C0;fontStyle=2;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-student-user2">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="60" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- RegistrationPeriod -> User (createdBy) -->
+        <mxCell id="rel-regperiod-user" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1565C0;strokeWidth=2;dashed=1;" edge="1" parent="1" source="regperiod-8" target="user-15">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1000" y="1100" as="sourcePoint" />
+            <mxPoint x="1050" y="1050" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1020" y="1062" />
+              <mxPoint x="1020" y="880" />
+              <mxPoint x="940" y="880" />
+              <mxPoint x="940" y="608" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-regperiod-user-label" value="createdBy / updatedBy" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#1565C0;fontStyle=2;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-regperiod-user">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="5" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassEnrollment -> Student -->
+        <mxCell id="rel-classenroll-student" value="" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#C2185B;strokeWidth=2;" edge="1" parent="1" source="classenroll-3" target="student-1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="60" y="1800" as="sourcePoint" />
+            <mxPoint x="60" y="900" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="40" y="1802" />
+              <mxPoint x="40" y="865" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-classenroll-student-label" value="student" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#C2185B;fontStyle=1;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-classenroll-student">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="-15" y="1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ClassEnrollment -> ClassSection -->
+        <mxCell id="rel-classenroll-classsection" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#5D4037;strokeWidth=2;" edge="1" parent="1" source="classenroll-2" target="classsection-1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="520" y="1774" as="sourcePoint" />
+            <mxPoint x="560" y="1425" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="540" y="1774" />
+              <mxPoint x="540" y="1425" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rel-classenroll-classsection-label" value="classSection" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#5D4037;fontStyle=1;backgroundColor=#FFFFFF;" vertex="1" connectable="0" parent="rel-classenroll-classsection">
+          <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+            <mxPoint x="1" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend-box" value="LEGEND / CHÚ THÍCH" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#ECEFF1;strokeColor=#37474F;fontColor=#000000;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="160" width="400" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-1" value="🔑 PK = Primary Key (Khóa chính)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="legend-box">
+          <mxGeometry y="30" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-2" value="🔗 FK = Foreign Key (Khóa ngoại)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;" vertex="1" parent="legend-box">
+          <mxGeometry y="60" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-3" value="─────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="legend-box">
+          <mxGeometry y="90" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-4" value="ObjectId = MongoDB Primary Key (24 hex chars)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="110" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-5" value="timestamps: true = auto createdAt, updatedAt" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="135" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-6" value="unique: true = Giá trị duy nhất không trùng lặp" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="160" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-7" value="sparse: true = Cho phép null và không đánh index null" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="185" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-8" value="─────────────────────" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#999999;" vertex="1" parent="legend-box">
+          <mxGeometry y="210" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-9" value="Solid Arrow (──▶) = Strong Reference (Required FK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="230" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-10" value="Dashed Arrow (- - ▶) = Weak Reference (Optional FK)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="legend-box">
+          <mxGeometry y="255" width="400" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Feature Summary Box -->
+        <mxCell id="summary-box" value="FEATURES IMPLEMENTED" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#E8EAF6;strokeColor=#3F51B5;fontColor=#000000;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="480" width="400" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-1" value="1️⃣ Global Error Handling" style="text;strokeColor=none;fillColor=#FFF3E0;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=1;fontColor=#E65100;" vertex="1" parent="summary-box">
+          <mxGeometry y="30" width="400" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-1-desc" value="   - ErrorLog model: Lưu trữ tất cả lỗi hệ thống" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="summary-box">
+          <mxGeometry y="65" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-2" value="2️⃣ Manage Major (View, Create, Update/Delete)" style="text;strokeColor=none;fillColor=#E8F5E9;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=1;fontColor=#2E7D32;" vertex="1" parent="summary-box">
+          <mxGeometry y="90" width="400" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-2-desc" value="   - Major model: Quản lý ngành đào tạo" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="summary-box">
+          <mxGeometry y="125" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-3" value="3️⃣ Manage Student" style="text;strokeColor=none;fillColor=#FCE4EC;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=1;fontColor=#C2185B;" vertex="1" parent="summary-box">
+          <mxGeometry y="150" width="400" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-3-desc" value="   - Student model: CRUD operations cho sinh viên" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="summary-box">
+          <mxGeometry y="185" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-4" value="4️⃣ Registration Period" style="text;strokeColor=none;fillColor=#F3E5F5;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontStyle=1;fontColor=#6A1B9A;" vertex="1" parent="summary-box">
+          <mxGeometry y="210" width="400" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="summary-4-desc" value="   - RegistrationPeriod model: Quản lý đợt đăng ký môn học" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontColor=#333333;" vertex="1" parent="summary-box">
+          <mxGeometry y="245" width="400" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Relationships Summary -->
+        <mxCell id="relationships-box" value="RELATIONSHIPS / MỐI QUAN HỆ" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;fillColor=#FFF3E0;strokeColor=#F57C00;fontColor=#000000;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="780" width="400" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-1" value="ErrorLog ─ ─ ▶ User (userId)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#E65100;" vertex="1" parent="relationships-box">
+          <mxGeometry y="30" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-1-desc" value="   Lưu user gây ra lỗi (optional)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="60" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-2" value="Student ──▶ Major (majorCode)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#2E7D32;" vertex="1" parent="relationships-box">
+          <mxGeometry y="85" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-2-desc" value="   Mỗi sinh viên thuộc 1 ngành đào tạo" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="115" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-3" value="Student ─ ─ ▶ User (userId)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="relationships-box">
+          <mxGeometry y="140" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-3-desc" value="   Liên kết với tài khoản User (sparse, optional)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="170" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-4" value="Student ─ ─ ▶ User (createdBy, updatedBy)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#1565C0;" vertex="1" parent="relationships-box">
+          <mxGeometry y="195" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-4-desc" value="   Audit trail: ai tạo/sửa sinh viên" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="225" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-5" value="RegistrationPeriod ─ ─ ▶ User (createdBy, updatedBy)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#6A1B9A;" vertex="1" parent="relationships-box">
+          <mxGeometry y="250" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-5-desc" value="   Audit trail: ai tạo/sửa đợt đăng ký" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="280" width="400" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-6" value="ClassEnrollment ──▶ Student, ClassSection" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=11;fontColor=#F57F17;" vertex="1" parent="relationships-box">
+          <mxGeometry y="305" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="relationships-6-desc" value="   Ghi danh sinh viên vào lớp học" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=4;overflow=hidden;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="relationships-box">
+          <mxGeometry y="335" width="400" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Footer -->
+        <mxCell id="footer" value="Created: Feb 2026 | MongoDB Schema | DrawIO Format" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="80" y="2140" width="1200" height="40" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
