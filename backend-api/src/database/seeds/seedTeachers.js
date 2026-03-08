@@ -1,8 +1,13 @@
 require('dotenv').config();
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const { connectDB } = require('../../configs/db.config');
 const Teacher = require('../../models/teacher.model');
+const User = require('../../models/user.model');
+
+const PASSWORD_SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS || 10);
+const DEFAULT_TEACHER_PASSWORD = process.env.DEFAULT_TEACHER_PASSWORD || 'Teacher@123';
 
 const teachersData = [
   { teacherCode: "GV001", fullName: "Nguyễn Văn An", email: "an.nguyen@uni.edu.vn", phone: "0901000001", department: "CNTT", specialization: "Kỹ thuật phần mềm", degree: "masters", gender: "male" },
@@ -48,7 +53,36 @@ async function seed() {
 
     // Seed new teachers
     console.log('👨‍🏫 Seeding 30 teachers...');
-    const teachers = await Teacher.insertMany(teachersData);
+    const teacherPasswordHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, PASSWORD_SALT_ROUNDS);
+    const teachersWithUsers = [];
+
+    for (const teacher of teachersData) {
+      const normalizedEmail = String(teacher.email || '').trim().toLowerCase();
+      const user = await User.findOneAndUpdate(
+        { email: normalizedEmail },
+        {
+          $setOnInsert: {
+            email: normalizedEmail,
+            password: teacherPasswordHash,
+            fullName: teacher.fullName,
+            role: 'staff',
+            authProvider: 'local',
+            status: 'active',
+            isActive: true,
+            mustChangePassword: true,
+          },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
+
+      teachersWithUsers.push({
+        ...teacher,
+        email: normalizedEmail,
+        userId: user._id,
+      });
+    }
+
+    const teachers = await Teacher.insertMany(teachersWithUsers);
     console.log(`✅ Inserted ${teachers.length} teachers`);
 
     // Verify the data

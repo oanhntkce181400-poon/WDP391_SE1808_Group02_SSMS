@@ -134,7 +134,7 @@ async function checkConflict(req, res) {
     if (!teacherId || !roomId || !timeslotId || !dayOfWeek || !semester || !academicYear) {
       return res.status(400).json({
         success: false,
-        message: "Thiếu thông tin bắt buộc để kiểm tra trùng lịch"
+        message: "Thieu thong tin bat buoc de kiem tra trung lich"
       });
     }
 
@@ -165,14 +165,14 @@ async function bulkUpdateStatus(req, res) {
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Danh sách ID lớp học không hợp lệ"
+        message: "Danh sach ID lop hoc khong hop le",
       });
     }
 
     if (!status) {
       return res.status(400).json({
         success: false,
-        message: "Trạng thái mới không được để trống"
+        message: "Trang thai moi khong duoc de trong"
       });
     }
 
@@ -214,7 +214,7 @@ async function reassignClass(req, res) {
 
     let message = `Đã chuyển ${result.movedCount} sinh viên thành công`;
     if (result.skippedCount > 0) {
-      message += ` (${result.skippedCount} sinh viên đã đăng ký lớp đích, bỏ qua)`;
+      message += ` (${result.skippedCount} sinh vien da dang ky lop dich, bo qua)`;
     }
 
     return res.json({
@@ -249,9 +249,6 @@ async function searchClasses(req, res) {
     return handleError(res, err);
   }
 }
-
-//<<<<<<< HEAD
-
 // ─── Get Class Details for Student ───────────────────────────────────
 
 async function getClassDetails(req, res) {
@@ -318,8 +315,6 @@ async function getClassList(req, res) {
     return handleError(res, err);
   }
 }
-//=======
-//>>>>>>> main
 async function selfEnroll(req, res) {
   try {
     const userId = req.user?.userId || req.user?._id;
@@ -338,7 +333,7 @@ async function bulkCreate(req, res) {
     const userId = req.user?.userId || req.user?._id;
     
     if (!classes || !Array.isArray(classes) || classes.length === 0) {
-      return res.status(400).json({ success: false, message: "Danh sách môn học không hợp lệ" });
+      return res.status(400).json({ success: false, message: "Danh sach mon hoc khong hop le" });
     }
 
     const results = await service.bulkCreateClassSections(classes, userId);
@@ -370,9 +365,4 @@ module.exports = {
   searchClasses,
   getClassList,
   getClassDetails,
-// <<<<<<< HEAD
-//   getClassDetails,
-// };
-// =======
 };
-//>>>>>>> main

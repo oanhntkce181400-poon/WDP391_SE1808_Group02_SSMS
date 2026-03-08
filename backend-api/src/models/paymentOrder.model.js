@@ -84,7 +84,6 @@ const paymentOrderSchema = new mongoose.Schema({
 
 // Index for faster queries
 paymentOrderSchema.index({ studentId: 1, semesterCode: 1 });
-paymentOrderSchema.index({ orderCode: 1 });
 paymentOrderSchema.index({ status: 1 });
 
 const PaymentOrder = mongoose.model('PaymentOrder', paymentOrderSchema);

@@ -6,6 +6,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "seed": "node src/database/seeds/index.js",
+    "backfill:teacher-accounts": "node backfill-teacher-accounts.js",
     "migrate": "node src/database/migrations/index.js up",
     "migrate:down": "node src/database/migrations/index.js down",
     "migrate:status": "node src/database/migrations/index.js status"
