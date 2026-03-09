@@ -1,6 +1,50 @@
 // Curriculum Service - Database operations for Curriculum
 const Curriculum = require('../models/curriculum.model');
 
+/**
+ * Parse academicYear string to { startYear, endYear }.
+ * Supports: "2026-2034", "2026/2034", "2024/2025"
+ */
+function parseAcademicYearRange(academicYear) {
+  if (!academicYear || typeof academicYear !== 'string') return null;
+  const parts = academicYear.trim().split(/[-/]/).map(p => parseInt(p, 10)).filter(n => !isNaN(n));
+  if (parts.length < 2) return null;
+  return { startYear: parts[0], endYear: parts[1] };
+}
+
+/**
+ * Tìm khung chương trình áp dụng cho sinh viên theo chuyên ngành và năm nhập học.
+ * Sinh viên nhập học năm 2026 sẽ thuộc curriculum có academicYear "2026-2034" (nếu major khớp).
+ * @param {Object} student - { majorCode, enrollmentYear? (số), cohort? (số 2 chữ số) }
+ * @returns {Object|null} Curriculum document hoặc null
+ */
+async function getCurriculumForStudent(student) {
+  const majorCode = (student.majorCode || '').trim();
+  const enrollmentYear = student.enrollmentYear != null
+    ? Number(student.enrollmentYear)
+    : (student.cohort != null ? 2000 + Number(student.cohort) : null);
+  if (!majorCode || !enrollmentYear) return null;
+
+  const Major = require('../models/major.model');
+  const major = await Major.findOne({ majorCode, isActive: true }).lean();
+  // curriculum.major có thể lưu mã (SE) hoặc tên (Kỹ thuật phần mềm)
+  const majorNames = major ? [major.majorName, majorCode] : [majorCode];
+
+  const curriculums = await Curriculum.find({
+    status: 'active',
+    $or: majorNames.map(m => ({ major: new RegExp(`^${String(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }))
+  }).lean();
+
+  for (const c of curriculums) {
+    const range = parseAcademicYearRange(c.academicYear);
+    if (!range) continue;
+    if (enrollmentYear >= range.startYear && enrollmentYear <= range.endYear) {
+      return c;
+    }
+  }
+  return null;
+}
+
 const curriculumService = {
   // Get all curriculums with optional pagination
   async getCurriculums({ page = 1, limit = 10, keyword = '' } = {}) {
@@ -40,23 +84,36 @@ const curriculumService = {
         throw new Error('Curriculum not found');
       }
       
-      // If using relational structure, populate semesters with courses
-      if (curriculum.useRelationalStructure) {
-        const CurriculumSemester = require('../models/curriculumSemester.model');
-        const CurriculumCourse = require('../models/curriculumCourse.model');
-        
-        const semesters = await CurriculumSemester.find({ curriculum: id }).sort({ semesterOrder: 1 });
-        
-        // Get courses for each semester
+      // If using relational structure (or relational data already exists),
+      // populate semesters with courses
+      const CurriculumSemester = require('../models/curriculumSemester.model');
+      const CurriculumCourse = require('../models/curriculumCourse.model');
+
+      // Detect relational structure automatically: either flag is true
+      // hoặc đã có bản ghi CurriculumSemester trong DB
+      const relationalSemesters = await CurriculumSemester.find({ curriculum: id }).sort({ semesterOrder: 1 });
+      const hasRelationalData = relationalSemesters.length > 0;
+
+      if (curriculum.useRelationalStructure || hasRelationalData) {
+        // Đảm bảo cờ luôn đúng cho các curriculum cũ
+        if (!curriculum.useRelationalStructure && hasRelationalData) {
+          curriculum.useRelationalStructure = true;
+          await curriculum.save();
+        }
+
+        const semesters = relationalSemesters;
+
+        // Get courses for each semester (CurriculumCourse uses subjectCode/subjectName)
         for (const sem of semesters) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
             .populate('subject', 'subjectCode subjectName credits');
           sem.courses = courses.map(c => ({
-            _id: c._id,
-            code: c.code,
-            name: c.name,
-            credits: c.credits,
-            hasPrerequisite: c.hasPrerequisite,
+            _id: c.subject?._id || c._id,
+            code: c.subjectCode || c.code,
+            name: c.subjectName || c.name,
+            credits: c.credits ?? c.subject?.credits ?? 0,
+            hasPrerequisite: !!c.hasPrerequisite,
+            subjectId: c.subject?._id,
             subject: c.subject ? {
               _id: c.subject._id,
               subjectCode: c.subject.subjectCode,
@@ -78,7 +135,9 @@ const curriculumService = {
   // Create new curriculum
   async createCurriculum(data) {
     try {
-      const curriculum = new Curriculum(data);
+      // Lọc bỏ các field không hợp lệ
+      const { startYear, endYear, ...validData } = data;
+      const curriculum = new Curriculum(validData);
       await curriculum.save();
 
       // Tự động khởi tạo sẵn các học kỳ cho khung chương trình mới (cấu trúc relational)
@@ -111,7 +170,22 @@ const curriculumService = {
   // Update existing curriculum
   async updateCurriculum(id, data) {
     try {
-      const { semesters, ...curriculumData } = data;
+      const { semesters, startYear, endYear, ...restData } = data;
+      
+      // Chỉ lấy các field hợp lệ cho Curriculum model
+      const validFields = ['code', 'name', 'major', 'majorId', 'academicYear', 'description', 'status', 'totalCredits', 'totalCourses'];
+      const curriculumData = {};
+      for (const key of validFields) {
+        if (restData[key] !== undefined) {
+          curriculumData[key] = restData[key];
+        }
+      }
+      
+      // Xử lý majorId - chỉ gửi nếu là ObjectId hợp lệ
+      if (curriculumData.majorId === '' || curriculumData.majorId === null) {
+        delete curriculumData.majorId;
+      }
+      
       const curriculum = await Curriculum.findById(id);
       
       if (!curriculum) {
@@ -119,9 +193,16 @@ const curriculumService = {
       }
       
       // If using relational structure, handle semesters/courses separately
-      if (curriculum.useRelationalStructure && semesters) {
+      // Always ensure we process semesters - convert to relational if needed
+      if (curriculum.useRelationalStructure || semesters) {
         const CurriculumSemester = require('../models/curriculumSemester.model');
         const CurriculumCourse = require('../models/curriculumCourse.model');
+        
+        // If not using relational structure yet, mark it as using it
+        if (!curriculum.useRelationalStructure) {
+          curriculum.useRelationalStructure = true;
+          await curriculum.save();
+        }
         
         // Get existing semester IDs
         const existingSemesters = await CurriculumSemester.find({ curriculum: id });
@@ -141,19 +222,26 @@ const curriculumService = {
         for (const sem of semesters) {
           let semesterDoc;
           
-          if (sem._id) {
+          // Find existing semester by semesterOrder (sem.id) or _id
+          const semId = sem.id || sem.semesterOrder;
+          const existingSemester = await CurriculumSemester.findOne({ 
+            curriculum: id,
+            semesterOrder: semId
+          });
+          
+          if (existingSemester) {
             // Update existing semester
             semesterDoc = await CurriculumSemester.findByIdAndUpdate(
-              sem._id,
-              { name: sem.name, credits: sem.credits || 0, semesterOrder: sem.id },
-              { new: true, upsert: true, new: true }
+              existingSemester._id,
+              { name: sem.name, credits: sem.credits || 0, semesterOrder: semId },
+              { new: true }
             );
           } else {
             // Create new semester
             semesterDoc = new CurriculumSemester({
               curriculum: id,
               name: sem.name,
-              semesterOrder: sem.id,
+              semesterOrder: semId,
               credits: sem.credits || 0
             });
             await semesterDoc.save();
@@ -164,16 +252,31 @@ const curriculumService = {
             // Delete existing courses for this semester
             await CurriculumCourse.deleteMany({ semester: semesterDoc._id });
             
-            // Add new courses
-            const courseDocs = sem.courses.map(c => ({
-              curriculum: id,
-              semester: semesterDoc._id,
-              subject: c._id || c.subjectId, // Could be subject ID or embedded
-              subjectCode: c.subjectCode || c.code,
-              subjectName: c.subjectName || c.name,
-              credits: c.credits,
-              hasPrerequisite: c.hasPrerequisite || false
-            }));
+            const Subject = require('../models/subject.model');
+            const subjectCodeList = sem.courses.map(c => (c.subjectCode || c.code || '').trim()).filter(Boolean);
+            const subjectsByCode = {};
+            if (subjectCodeList.length > 0) {
+              const subjects = await Subject.find({ subjectCode: { $in: subjectCodeList } }).lean();
+              subjects.forEach(s => { subjectsByCode[s.subjectCode] = s; });
+            }
+            
+            const courseDocs = [];
+            for (const c of sem.courses) {
+              const code = (c.subjectCode || c.code || '').trim();
+              const name = (c.subjectName || c.name || '').trim();
+              const subjectDoc = subjectsByCode[code] || null;
+              const subjectId = c.subjectId || c._id || (subjectDoc && subjectDoc._id);
+              if (!subjectId && !subjectDoc) continue;
+              courseDocs.push({
+                curriculum: id,
+                semester: semesterDoc._id,
+                subject: subjectId || subjectDoc._id,
+                subjectCode: code || subjectDoc?.subjectCode,
+                subjectName: name || subjectDoc?.subjectName,
+                credits: c.credits ?? subjectDoc?.credits ?? 0,
+                hasPrerequisite: !!c.hasPrerequisite
+              });
+            }
             
             if (courseDocs.length > 0) {
               await CurriculumCourse.insertMany(courseDocs);
@@ -198,7 +301,8 @@ const curriculumService = {
         );
       }
       
-      return await Curriculum.findById(id);
+      // Return full curriculum with populated semesters and courses so client can refresh view
+      return await this.getCurriculumById(id);
     } catch (error) {
       throw error;
     }
@@ -242,10 +346,41 @@ const curriculumService = {
         throw new Error('Curriculum not found');
       }
       
-      // Check if using relational structure
-      if (curriculum.useRelationalStructure) {
-        const CurriculumSemester = require('../models/curriculumSemester.model');
-        const semesters = await CurriculumSemester.find({ curriculum: id }).sort({ semesterOrder: 1 });
+      // Check if using relational structure (or if relational data exists)
+      const CurriculumSemester = require('../models/curriculumSemester.model');
+      const CurriculumCourse = require('../models/curriculumCourse.model');
+      const semestersDocs = await CurriculumSemester.find({ curriculum: id }).sort({ semesterOrder: 1 });
+      const hasRelationalData = semestersDocs.length > 0;
+
+      if (curriculum.useRelationalStructure || hasRelationalData) {
+        const semesters = semestersDocs;
+
+        // Attach courses for each semester so legacy consumers still receive full data
+        for (const sem of semesters) {
+          const courses = await CurriculumCourse.find({ semester: sem._id })
+            .populate('subject', 'subjectCode subjectName credits');
+
+          sem.courses = courses.map(c => ({
+            _id: c.subject?._id || c._id,
+            code: c.subjectCode || c.code,
+            name: c.subjectName || c.name,
+            credits: c.credits ?? c.subject?.credits ?? 0,
+            hasPrerequisite: !!c.hasPrerequisite,
+            subjectId: c.subject?._id,
+            subject: c.subject
+              ? {
+                  _id: c.subject._id,
+                  subjectCode: c.subject.subjectCode,
+                  subjectName: c.subject.subjectName,
+                  credits: c.subject.credits,
+                }
+              : null,
+          }));
+
+          // Normalize id field for frontend compatibility
+          sem.id = sem.semesterOrder;
+        }
+
         return semesters;
       }
       
@@ -265,28 +400,23 @@ const curriculumService = {
         return [];
       }
       
-      // If using relational structure
-      if (curriculum.useRelationalStructure) {
-        const CurriculumSemester = require('../models/curriculumSemester.model');
-        const CurriculumCourse = require('../models/curriculumCourse.model');
-        
-        // Find semester by curriculum and semester number
-        console.log("Searching for semester with semester:", semester, "type:", typeof semester);
-        const semesterDoc = await CurriculumSemester.findOne({
-          curriculum: id,
-          semesterOrder: parseInt(semester, 10)
-        });
-        console.log("Found semesterDoc:", semesterDoc);
-        
+      // If using relational structure (or relational data exists)
+      const CurriculumSemester = require('../models/curriculumSemester.model');
+      const CurriculumCourse = require('../models/curriculumCourse.model');
+      const semesterNum = parseInt(semester, 10);
+      const semesterDoc = await CurriculumSemester.findOne({
+        curriculum: id,
+        semesterOrder: semesterNum
+      });
+
+      if (curriculum.useRelationalStructure || semesterDoc) {
         if (!semesterDoc) {
           return [];
         }
-        
+
         // Get courses for this semester
         const courses = await CurriculumCourse.find({ semester: semesterDoc._id })
           .populate('subject', 'subjectCode subjectName credits');
-        
-        console.log("Found courses:", courses);
         
         return courses.map(course => ({
           subject: course.subject,
@@ -296,7 +426,6 @@ const curriculumService = {
         }));
       } else {
         // Embedded structure - find semester by semester number
-        const semesterNum = parseInt(semester, 10);
         const sem = curriculum.semesters?.find(s => s.id === semesterNum);
         
         if (!sem || !sem.courses) {
@@ -337,6 +466,12 @@ const curriculumService = {
       throw error;
     }
   },
+
+  // Parse "2026-2034" -> { startYear, endYear }
+  parseAcademicYearRange,
+
+  // Tìm khung chương trình cho sinh viên theo majorCode + năm nhập học (trong khoảng academicYear)
+  getCurriculumForStudent,
 };
 
 module.exports = curriculumService;

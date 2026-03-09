@@ -181,7 +181,8 @@ export default function CurriculumManagement() {
       if (curriculumId) {
         try {
           console.log('Fetching curriculum:', curriculumId);
-          const response = await curriculumService.getCurriculum(curriculumId);
+          // Use detailed endpoint to always include semesters + courses (relational structure)
+          const response = await curriculumService.getCurriculumWithDetails(curriculumId);
           const curriculumData = response.data?.data;
           console.log('Curriculum data:', curriculumData);
           

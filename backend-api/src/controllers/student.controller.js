@@ -3,6 +3,7 @@
 // Tác giả: Group02 - WDP391
 
 const studentService = require('../services/student.service');
+const curriculumService = require('../services/curriculum.service');
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/students - Tạo sinh viên mới
@@ -211,6 +212,158 @@ const getSuggestedClassSection = async (req, res) => {
   }
 };
 
+// GET /api/students/:id/curriculum - Lấy khung chương trình của sinh viên
+const getStudentCurriculum = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Lấy thông tin sinh viên
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tìm khung chương trình phù hợp
+    const curriculum = await curriculumService.getCurriculumForStudent({
+      majorCode: student.majorCode,
+      enrollmentYear: student.enrollmentYear,
+      cohort: student.cohort,
+    });
+
+    // Tính năm nhập học (nếu chưa có)
+    const enrollmentYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
+
+    // Tính học kỳ hiện tại trong khung chương trình (1-9)
+    let currentSemesterInCurriculum = null;
+    let currentAcademicYear = null;
+    let currentSemesterOrder = null;
+
+    if (curriculum && enrollmentYear) {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1; // 1-12
+      currentAcademicYear = currentMonth >= 8 
+        ? `${currentYear}-${currentYear + 1}` 
+        : `${currentYear - 1}-${currentYear}`;
+
+      const startYear = curriculumService.parseAcademicYearRange(curriculum.academicYear)?.startYear;
+      if (startYear) {
+        const yearsSinceEnrollment = currentYear - startYear;
+        const isSecondSemester = currentMonth >= 1 && currentMonth <= 5;
+        
+        currentSemesterOrder = isSecondSemester 
+          ? yearsSinceEnrollment * 2 + 2 
+          : yearsSinceEnrollment * 2 + 1;
+        
+        currentSemesterInCurriculum = Math.min(Math.max(currentSemesterOrder, 1), 9);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        student: {
+          _id: student._id,
+          studentCode: student.studentCode,
+          fullName: student.fullName,
+          majorCode: student.majorCode,
+          enrollmentYear,
+          cohort: student.cohort,
+        },
+        curriculum: curriculum || null,
+        currentSemesterInCurriculum,
+        currentAcademicYear,
+        currentSemesterOrder,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getStudentCurriculum error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// GET /api/students/me/curriculum - Lấy khung chương trình của sinh viên hiện tại (qua token)
+const getMyCurriculum = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+
+    // Tìm sinh viên qua userId
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tìm khung chương trình phù hợp
+    const curriculum = await curriculumService.getCurriculumForStudent({
+      majorCode: student.majorCode,
+      enrollmentYear: student.enrollmentYear,
+      cohort: student.cohort,
+    });
+
+    // Tính năm nhập học
+    const enrollmentYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
+
+    // Tính học kỳ hiện tại trong khung chương trình
+    let currentSemesterInCurriculum = null;
+    let currentAcademicYear = null;
+    let currentSemesterOrder = null;
+
+    if (curriculum && enrollmentYear) {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      currentAcademicYear = currentMonth >= 8 
+        ? `${currentYear}-${currentYear + 1}` 
+        : `${currentYear - 1}-${currentYear}`;
+
+      const startYear = curriculumService.parseAcademicYearRange(curriculum.academicYear)?.startYear;
+      if (startYear) {
+        const yearsSinceEnrollment = currentYear - startYear;
+        const isSecondSemester = currentMonth >= 1 && currentMonth <= 5;
+        
+        currentSemesterOrder = isSecondSemester 
+          ? yearsSinceEnrollment * 2 + 2 
+          : yearsSinceEnrollment * 2 + 1;
+        
+        currentSemesterInCurriculum = Math.min(Math.max(currentSemesterOrder, 1), 9);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        student: {
+          _id: student._id,
+          studentCode: student.studentCode,
+          fullName: student.fullName,
+          majorCode: student.majorCode,
+          enrollmentYear,
+          cohort: student.cohort,
+        },
+        curriculum: curriculum || null,
+        currentSemesterInCurriculum,
+        currentAcademicYear,
+        currentSemesterOrder,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyCurriculum error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
 module.exports = {
   createStudent,
   getStudents,
@@ -220,4 +373,6 @@ module.exports = {
   getMajorsForFilter,
   getCohortsForFilter,
   getSuggestedClassSection,
+  getStudentCurriculum,
+  getMyCurriculum,
 };

@@ -22,18 +22,19 @@ class PayOSService {
 
   // Tạo link thanh toán
   async createPaymentLink(data) {
-    const { description, productName, price, returnUrl, cancelUrl } = data;
+    const { description, productName, price, amount, returnUrl, cancelUrl } = data;
+    const amountValue = price ?? amount;
 
     // Tạo orderCode unique
     const orderCode = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 10000);
 
     // PayOS yêu cầu description tối đa 25 ký tự
-    const shortDescription = description.length > 25 ? description.substring(0, 25) : description;
+    const shortDescription = (description || '').length > 25 ? (description || '').substring(0, 25) : (description || '');
 
     // Build request body
     const requestBody = {
       orderCode: parseInt(orderCode),
-      amount: price,
+      amount: amountValue,
       description: shortDescription,
       buyerAddress: '',
       buyerEmail: '',
@@ -43,9 +44,9 @@ class PayOSService {
       returnUrl: returnUrl,
       items: [
         {
-          name: productName,
+          name: productName || shortDescription,
           quantity: 1,
-          price: price,
+          price: amountValue,
         },
       ],
     };

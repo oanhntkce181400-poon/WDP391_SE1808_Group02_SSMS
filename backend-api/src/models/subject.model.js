@@ -15,7 +15,7 @@ const subjectSchema = new mongoose.Schema(
     subjectCode: { type: String, required: true, unique: true, trim: true },
     subjectName: { type: String, required: true, trim: true },
     credits: { type: Number, required: true },
-    tuitionFee: { type: Number, default: 0 }, // Học phí (VNĐ) - 630,000 VNĐ/tín chỉ
+    tuitionFee: { type: Number, default: 0 }, // Học phí (VNĐ) - 100 VNĐ/tín chỉ
     majorCode: { type: String, trim: true }, // Single department (backward compatibility)
     majorCodes: [{ type: String, trim: true }], // Multiple departments (backward compatibility)
     isCommon: { type: Boolean, default: false }, // Môn chung cho toàn khoa

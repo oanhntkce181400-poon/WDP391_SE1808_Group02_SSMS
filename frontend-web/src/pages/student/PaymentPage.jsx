@@ -41,6 +41,10 @@ export default function PaymentPage() {
   const [bankInfo, setBankInfo] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  
+  // State cho thanh toán theo kỳ curriculum
+  const [curriculumPaymentStatus, setCurriculumPaymentStatus] = useState(null);
+  const [isLoadingCurriculumStatus, setIsLoadingCurriculumStatus] = useState(true);
 
   // Kiểm tra xem có orderCode từ URL không (người dùng quay lại sau khi thanh toán)
   const orderCodeFromUrl = searchParams.get('orderCode');
@@ -48,7 +52,21 @@ export default function PaymentPage() {
   useEffect(() => {
     loadSummary();
     loadPaymentHistory();
+    loadCurriculumPaymentStatus();
   }, [selectedSemester]);
+
+  // Load trạng thái thanh toán theo kỳ curriculum
+  async function loadCurriculumPaymentStatus() {
+    setIsLoadingCurriculumStatus(true);
+    try {
+      const res = await financeService.getCurriculumPaymentStatus();
+      setCurriculumPaymentStatus(res.data.data);
+    } catch (err) {
+      console.error('Error loading curriculum payment status:', err);
+    } finally {
+      setIsLoadingCurriculumStatus(false);
+    }
+  }
 
   // Load lịch sử thanh toán
   async function loadPaymentHistory() {
@@ -178,6 +196,81 @@ export default function PaymentPage() {
     }
   };
 
+  // Thanh toán theo kỳ curriculum
+  const handleCurriculumPayment = async () => {
+    if (!curriculumPaymentStatus || curriculumPaymentStatus.hasPaid) {
+      toast.warning('Bạn đã thanh toán học phí kỳ này rồi!');
+      return;
+    }
+
+    setIsCreatingPayment(true);
+    try {
+      const response = await financeService.createCurriculumPayment();
+
+      if (response.data.success) {
+        const paymentResult = response.data.data;
+        
+        if (paymentResult.checkoutUrl) {
+          // Mở cổng thanh toán PayOS
+          const script = document.createElement('script');
+          script.src = PAYOS_SCRIPT_URL;
+          script.onload = () => {
+            if (window.PayOSCheckout) {
+              let url = paymentResult.checkoutUrl;
+              if (paymentResult.checkoutUrl.startsWith('https://dev.pay.payos.vn')) {
+                url = paymentResult.checkoutUrl.replace('https://dev.pay.payos.vn', 'https://next.dev.pay.payos.vn');
+              }
+              if (paymentResult.checkoutUrl.startsWith('https://pay.payos.vn')) {
+                url = paymentResult.checkoutUrl.replace('https://pay.payos.vn', 'https://next.pay.payos.vn');
+              }
+
+              const { open } = window.PayOSCheckout.usePayOS({
+                RETURN_URL: `${window.location.origin}/student/payment/result`,
+                ELEMENT_ID: 'payos-checkout-container',
+                CHECKOUT_URL: url,
+                onExit: (eventData) => {
+                  console.log('Payment exit:', eventData);
+                },
+                onSuccess: async (eventData) => {
+                  console.log('Payment success:', eventData);
+                  // Xác nhận thanh toán và auto-enrollment
+                  try {
+                    await financeService.confirmPaymentWithEnrollment({
+                      orderCode: eventData.orderCode,
+                      amount: paymentResult.amount,
+                      status: 'PAID'
+                    });
+                    toast.success('Thanh toán thành công! Các môn học đang được đăng ký...');
+                    // Reload dữ liệu
+                    loadCurriculumPaymentStatus();
+                    loadSummary();
+                    loadPaymentHistory();
+                  } catch (confirmErr) {
+                    console.error('Error confirming payment:', confirmErr);
+                  }
+                  window.location.href = `${window.location.origin}/student/payment/result?orderCode=${eventData.orderCode}`;
+                },
+                onCancel: (eventData) => {
+                  console.log('Payment cancel:', eventData);
+                  window.location.href = `${window.location.origin}/student/payment?canceled=true`;
+                },
+              });
+              open();
+            }
+          };
+          document.body.appendChild(script);
+        }
+      } else {
+        toast.error(response.data.message || 'Có lỗi xảy ra khi tạo thanh toán');
+      }
+    } catch (error) {
+      console.error('Curriculum payment error:', error);
+      toast.error('Có lỗi xảy ra khi tạo thanh toán');
+    } finally {
+      setIsCreatingPayment(false);
+    }
+  };
+
   const openPayOSCheckout = () => {
     if (paymentData?.checkoutUrl && window.PayOSCheckout) {
       let url = paymentData.checkoutUrl;
@@ -263,6 +356,101 @@ export default function PaymentPage() {
             Thanh toán học phí trực tuyến qua PayOS
           </p>
         </div>
+
+        {/* Curriculum Payment Status Banner - Hiển thị yêu cầu thanh toán theo kỳ */}
+        {!isLoadingCurriculumStatus && curriculumPaymentStatus && curriculumPaymentStatus.mustPay && (
+          <div className={`mb-6 rounded-xl border p-5 shadow-sm ${
+            curriculumPaymentStatus.isNewStudent 
+              ? 'border-red-300 bg-red-50' 
+              : 'border-yellow-300 bg-yellow-50'
+          }`}>
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">
+                {curriculumPaymentStatus.isNewStudent ? '🎓' : '📚'}
+              </div>
+              <div className="flex-1">
+                <h3 className={`font-semibold ${
+                  curriculumPaymentStatus.isNewStudent ? 'text-red-700' : 'text-yellow-700'
+                }`}>
+                  {curriculumPaymentStatus.isNewStudent 
+                    ? 'Chào mừng tân sinh viên!' 
+                    : 'Thông báo học phí'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-700">
+                  Bạn cần thanh toán học phí <strong>{curriculumPaymentStatus.curriculumSemesterName}</strong> 
+                  {' '}- {curriculumPaymentStatus.curriculumName}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Mã kỳ: {curriculumPaymentStatus.semesterCode} | Khóa: {curriculumPaymentStatus.studentInfo?.cohort}
+                </p>
+                
+                {/* Thông tin học phí */}
+                {curriculumPaymentStatus.tuitionFee && (
+                  <div className="mt-3 rounded-lg bg-white p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Học phí kỳ {curriculumPaymentStatus.currentCurriculumSemester}:</span>
+                      <span className="font-bold text-red-600">
+                        {formatMoney(curriculumPaymentStatus.tuitionFee.finalTuitionFee)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+                      <span>Số tín chỉ: {curriculumPaymentStatus.tuitionFee.totalCredits}</span>
+                      <span>Giá/tín chỉ: {formatMoney(curriculumPaymentStatus.tuitionFee.pricePerCredit)}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Deadline */}
+                {curriculumPaymentStatus.deadline && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    ⏰ Hạn thanh toán: {formatDate(curriculumPaymentStatus.deadline)}
+                    {curriculumPaymentStatus.isOverdue && (
+                      <span className="ml-1 font-medium text-red-600">(Đã quá hạn!)</span>
+                    )}
+                  </p>
+                )}
+                
+                {/* Nút thanh toán */}
+                <button
+                  onClick={handleCurriculumPayment}
+                  disabled={isCreatingPayment}
+                  className={`mt-4 flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium text-white ${
+                    curriculumPaymentStatus.isNewStudent 
+                      ? 'bg-red-600 hover:bg-red-700' 
+                      : 'bg-yellow-600 hover:bg-yellow-700'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {isCreatingPayment ? (
+                    <>
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                      Đang tạo thanh toán...
+                    </>
+                  ) : (
+                    <>
+                      <span>💳</span>
+                      Thanh toán ngay
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Đã thanh toán */}
+        {!isLoadingCurriculumStatus && curriculumPaymentStatus && !curriculumPaymentStatus.mustPay && (
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="text-3xl">✅</div>
+              <div>
+                <h3 className="font-semibold text-green-700">Đã thanh toán học phí</h3>
+                <p className="text-sm text-slate-600">
+                  Bạn đã thanh toán học phí {curriculumPaymentStatus.curriculumSemesterName} - {curriculumPaymentStatus.curriculumName}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Payment Data Display */}
         {paymentData ? (
@@ -382,57 +570,57 @@ export default function PaymentPage() {
             </div>
           </div>
         ) : (
-          /* Payment Summary */
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-slate-800">Thông tin thanh toán</h2>
-
-            {summary ? (
-              <>
-                <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm text-slate-500">Tổng học phí</p>
-                    <p className="text-xl font-bold text-slate-800">{formatMoney(summary.totalTuition)}</p>
+          /* Chỉ hiển thị "Thông tin thanh toán" khi chưa dùng thanh toán theo kỳ (fallback) */
+          !curriculumPaymentStatus && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-slate-800">Thông tin thanh toán</h2>
+              {summary ? (
+                <>
+                  <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">Tổng học phí</p>
+                      <p className="text-xl font-bold text-slate-800">{formatMoney(summary.totalTuition)}</p>
+                    </div>
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                      <p className="text-sm text-green-600">Đã nộp</p>
+                      <p className="text-xl font-bold text-green-600">{formatMoney(summary.totalPaid)}</p>
+                    </div>
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm text-red-600">Còn nợ</p>
+                      <p className="text-xl font-bold text-red-600">{formatMoney(summary.remainingDebt)}</p>
+                    </div>
                   </div>
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                    <p className="text-sm text-green-600">Đã nộp</p>
-                    <p className="text-xl font-bold text-green-600">{formatMoney(summary.totalPaid)}</p>
-                  </div>
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                    <p className="text-sm text-red-600">Còn nợ</p>
-                    <p className="text-xl font-bold text-red-600">{formatMoney(summary.remainingDebt)}</p>
-                  </div>
+                  {summary.remainingDebt > 0 ? (
+                    <button
+                      onClick={handlePayment}
+                      disabled={isCreatingPayment}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#5D5FEF] px-5 py-3 font-medium text-white hover:bg-[#4a4dcf] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isCreatingPayment ? (
+                        <>
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                          Đang tạo thanh toán...
+                        </>
+                      ) : (
+                        <>
+                          <span>💳</span>
+                          Thanh toán ngay
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="rounded-lg bg-green-50 p-4 text-center text-green-700">
+                      🎉 Bạn đã thanh toán đầy đủ học phí!
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center text-slate-400">
+                  Không có thông tin học phí
                 </div>
-
-                {summary.remainingDebt > 0 ? (
-                  <button
-                    onClick={handlePayment}
-                    disabled={isCreatingPayment}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#5D5FEF] px-5 py-3 font-medium text-white hover:bg-[#4a4dcf] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isCreatingPayment ? (
-                      <>
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        Đang tạo thanh toán...
-                      </>
-                    ) : (
-                      <>
-                        <span>💳</span>
-                        Thanh toán ngay
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="rounded-lg bg-green-50 p-4 text-center text-green-700">
-                    🎉 Bạn đã thanh toán đầy đủ học phí!
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center text-slate-400">
-                Không có thông tin học phí
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )
         )}
 
         {/* Lịch sử thanh toán */}

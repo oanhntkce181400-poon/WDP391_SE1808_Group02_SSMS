@@ -42,6 +42,26 @@ const financeService = {
   getAllStudentsPaymentSummary(params = {}) {
     return axiosClient.get('/finance/payments/all-students', { params });
   },
+
+  // Lấy trạng thái thanh toán theo kỳ của khung chương trình
+  getCurriculumPaymentStatus() {
+    return axiosClient.get('/finance/payments/curriculum-status');
+  },
+
+  // Tạo thanh toán theo kỳ của khung chương trình
+  createCurriculumPayment() {
+    return axiosClient.post('/finance/payments/create-curriculum');
+  },
+
+  // Xác nhận thanh toán và tự động đăng ký môn học
+  confirmPaymentWithEnrollment(data) {
+    return axiosClient.post('/finance/payments/confirm-with-enrollment', data);
+  },
+
+  // Số tiền nộp thừa học phí (để chuyển vào ví)
+  getTuitionExcess() {
+    return axiosClient.get('/finance/tuition-excess');
+  },
 };
 
 export default financeService;

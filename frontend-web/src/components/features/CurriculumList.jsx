@@ -140,8 +140,11 @@ export default function CurriculumList() {
       setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving curriculum:', error);
+      // Log chi tiết lỗi từ backend
+      const errorMsg = error?.response?.data?.message || error?.message || 'Lỗi không xác định';
+      console.error('Server error details:', error.response?.data);
       showToast(
-        modalMode === 'create' ? 'Thêm khung chương trình thất bại!' : 'Cập nhật khung chương trình thất bại!',
+        modalMode === 'create' ? `Thêm khung chương trình thất bại: ${errorMsg}` : `Cập nhật khung chương trình thất bại: ${errorMsg}`,
         'error'
       );
     } finally {

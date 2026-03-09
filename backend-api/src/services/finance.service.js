@@ -7,6 +7,8 @@ const Subject         = require('../models/subject.model');
 const TuitionFee      = require('../models/tuitionFee.model');
 const Payment         = require('../models/payment.model');
 const OtherFee        = require('../models/otherFee.model');
+const Wallet          = require('../models/wallet.model');
+const WalletTransaction = require('../models/walletTransaction.model');
 
 async function findStudentByUserId(userId) {
   const user = await User.findById(userId).lean();
@@ -192,7 +194,8 @@ async function getMyTuitionSummary(userId, semesterId) {
 
   const tuitionRule = await findPricePerCredit(student.cohort, semester);
 
-  const pricePerCredit = tuitionRule ? tuitionRule.price : 100;
+  // Luôn dùng 100 VNĐ / 1 tín chỉ (theo yêu cầu hệ thống)
+  const pricePerCredit = 100;
   const fallbackCredits = tuitionRule ? tuitionRule.fallbackCredits : 22;
 
   if (registeredCredits === 0 && fallbackCredits > 0) {
@@ -241,7 +244,6 @@ async function confirmPayment({ userId, orderCode, amount, status }) {
   }
 
   const student = await findStudentByUserId(userId);
-  const semester = await getCurrentSemester();
 
   // Kiểm tra xem đã có payment với orderCode này chưa
   const existingPayment = await Payment.findOne({ orderCode }).lean();
@@ -249,15 +251,27 @@ async function confirmPayment({ userId, orderCode, amount, status }) {
     return existingPayment; // Đã xử lý rồi
   }
 
+  // Dùng mã kỳ curriculum để lịch sử thanh toán trả về đúng trên trang Học phí
+  let semesterCode;
+  try {
+    const paymentValidation = require('./paymentValidation.service');
+    const paymentStatus = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+    semesterCode = paymentStatus.semesterCode; // VD: K1_SE2026K1
+  } catch (_) {
+    const semester = await getCurrentSemester();
+    semesterCode = semester?.code || `sem-${Date.now()}`;
+  }
+
   // Tạo bản ghi thanh toán mới
   const payment = await Payment.create({
     student: student._id,
-    semesterCode: semester.code,
+    semesterCode: semesterCode,
     amount: amount,
     paidAt: new Date(),
     method: 'online',
     note: `PayOS - OrderCode: ${orderCode}`,
     orderCode: orderCode,
+    status: 'completed',
   });
 
   return payment;
@@ -434,6 +448,158 @@ async function getAllStudentsPaymentSummary(semesterId, majorCode, graduationYea
   return { summary, students: studentSummaries };
 }
 
+// ─────────────────────────────────────────────────────────────
+// getMyCurriculumPaymentStatus: Lấy trạng thái thanh toán theo kỳ curriculum
+// Input: userId
+// Output: { mustPay, currentCurriculumSemester, hasPaid, ... }
+// ─────────────────────────────────────────────────────────────
+async function getMyCurriculumPaymentStatus(userId) {
+  const paymentValidation = require('./paymentValidation.service');
+  const student = await findStudentByUserId(userId);
+  return await paymentValidation.checkSemesterPaymentRequirement(student._id);
+}
+
+// getTuitionExcess: Số tiền nộp thừa so với học phí kỳ hiện tại (để chuyển vào ví)
+// Input: userId
+// Output: { excess, semesterCode, totalTuition, totalPaid, curriculumSemesterName }
+// ─────────────────────────────────────────────────────────────
+async function getTuitionExcess(userId) {
+  const student = await findStudentByUserId(userId);
+  const status = await getMyCurriculumPaymentStatus(userId);
+  const semesterCode = status.semesterCode;
+  const totalTuition = status.tuitionFee?.finalTuitionFee ?? 0;
+
+  if (!semesterCode) {
+    return { excess: 0, semesterCode: null, totalTuition: 0, totalPaid: 0, curriculumSemesterName: '' };
+  }
+  const payments = await Payment.find({
+    student: student._id,
+    semesterCode,
+    status: 'completed',
+  }).lean();
+  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const excess = Math.max(0, totalPaid - totalTuition);
+
+  let alreadyRefunded = 0;
+  if (excess > 0 && semesterCode) {
+    const wallet = await Wallet.findOne({ userId }).lean();
+    if (wallet) {
+      const refundTxs = await WalletTransaction.find({
+        wallet: wallet._id,
+        type: 'refund',
+        semesterCode,
+      }).lean();
+      alreadyRefunded = refundTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+    }
+  }
+  const refundable = Math.max(0, excess - alreadyRefunded);
+
+  return {
+    excess,
+    alreadyRefunded,
+    refundable,
+    semesterCode: semesterCode || null,
+    totalTuition,
+    totalPaid,
+    curriculumSemesterName: status.curriculumSemesterName || 'Học kỳ',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// createCurriculumPayment: Tạo yêu cầu thanh toán theo kỳ curriculum
+// Input: userId
+// Output: { checkoutUrl, orderCode, amount, ... }
+// ─────────────────────────────────────────────────────────────
+async function createCurriculumPayment(userId) {
+  const paymentValidation = require('./paymentValidation.service');
+  const autoEnrollment = require('./autoEnrollment.service');
+  const payosService = require('./payos.service');
+  
+  const student = await findStudentByUserId(userId);
+  
+  // Lấy trạng thái thanh toán
+  const paymentStatus = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+  
+  // Nếu đã thanh toán rồi
+  if (paymentStatus.hasPaid) {
+    return {
+      success: false,
+      message: 'Bạn đã thanh toán học phí kỳ này rồi',
+      paymentStatus
+    };
+  }
+  
+  // Lấy số tiền cần thanh toán
+  let amount = 0;
+  if (paymentStatus.tuitionFee && paymentStatus.tuitionFee.finalTuitionFee) {
+    amount = paymentStatus.tuitionFee.finalTuitionFee;
+  }
+  
+  // Nếu chưa có học phí, lấy preview để tính
+  if (amount === 0) {
+    const preview = await autoEnrollment.previewAutoEnrollment(student._id);
+    if (preview.subjects && preview.subjects.length > 0) {
+      // Tính học phí dựa trên số tín chỉ
+      const tuitionFeeService = require('./tuitionFee.service');
+      const totalCredits = preview.subjects.reduce((sum, s) => sum + (s.credits || 0), 0);
+      
+      // Lấy giá tiền tín chỉ
+      const tuitionRule = await TuitionFee.findOne({
+        cohort: { $in: [String(student.cohort), `K${student.cohort}`, student.cohort] },
+        academicYear: paymentStatus.currentAcademicYear,
+        status: 'active'
+      }).lean();
+      
+      const pricePerCredit = tuitionRule && tuitionRule.totalCredits > 0
+        ? Math.round(tuitionRule.baseTuitionFee / tuitionRule.totalCredits)
+        : 100; // 100 VNĐ / 1 tín chỉ
+      
+      amount = totalCredits * pricePerCredit;
+    }
+  }
+  
+  if (amount === 0) {
+    return {
+      success: false,
+      message: 'Không có học phí cần thanh toán',
+      paymentStatus
+    };
+  }
+  
+  // Tạo mô tả thanh toán
+  const description = `HP ${paymentStatus.curriculumSemesterName} - ${student.studentCode}`;
+  const productName = `Học phí ${paymentStatus.curriculumSemesterName}`;
+  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  
+  // Gọi PayOS tạo link thanh toán (đúng format: price, returnUrl, cancelUrl, productName)
+  const payosPayload = {
+    price: amount,
+    description: description,
+    productName: productName,
+    returnUrl: `${baseUrl}/student/payment/result`,
+    cancelUrl: `${baseUrl}/student/finance`,
+    buyerName: student.fullName,
+    buyerEmail: student.email,
+  };
+  
+  const payosResult = await payosService.createPaymentLink(payosPayload);
+  
+  // PayOS có thể trả về checkoutUrl, qrCode, accountNumber, accountName (tùy API)
+  return {
+    success: true,
+    checkoutUrl: payosResult.checkoutUrl || payosResult.data?.checkoutUrl,
+    orderCode: payosResult.orderCode ?? payosResult.data?.orderCode,
+    amount: amount,
+    description: description,
+    qrCode: payosResult.qrCode ?? payosResult.data?.qrCode,
+    accountNumber: payosResult.accountNumber ?? payosResult.data?.accountNumber,
+    accountName: payosResult.accountName ?? payosResult.data?.accountName ?? student.fullName,
+    bin: payosResult.bin ?? payosResult.data?.bin,
+    paymentStatus: paymentStatus,
+    message: 'Tạo thanh toán thành công'
+  };
+}
+
 module.exports = {
   getMyTuitionSummary,
   resolveSemester,
@@ -441,4 +607,7 @@ module.exports = {
   confirmPayment,
   getPaymentHistory,
   getAllStudentsPaymentSummary,
+  getMyCurriculumPaymentStatus,
+  createCurriculumPayment,
+  getTuitionExcess,
 };

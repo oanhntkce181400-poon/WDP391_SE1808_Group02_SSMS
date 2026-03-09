@@ -72,6 +72,18 @@ const studentService = {
   getSuggestedClassSection: async (majorCode, cohort) => {
     return axiosClient.get(`/students/suggest-class?majorCode=${majorCode}&cohort=${cohort}`);
   },
+
+  // ─────────────────────────────────────────────────────────────
+  // Lấy khung chương trình của sinh viên hiện tại (qua token)
+  // ─────────────────────────────────────────────────────────────
+  getMyCurriculum: async () => {
+    return axiosClient.get('/students/me/curriculum');
+  },
+
+  // Lấy khung chương trình của sinh viên theo id (admin/staff)
+  getStudentCurriculum: async (studentId) => {
+    return axiosClient.get(`/students/${studentId}/curriculum`);
+  },
 };
 
 export default studentService;

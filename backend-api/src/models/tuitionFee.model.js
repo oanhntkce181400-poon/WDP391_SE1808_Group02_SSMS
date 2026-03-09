@@ -31,7 +31,7 @@ const tuitionFeeSchema = new mongoose.Schema(
     
     // Học phí cơ bản (tính từ tổng tín chỉ)
     totalCredits: { type: Number, required: true },
-    baseTuitionFee: { type: Number, required: true }, // = totalCredits × 630,000
+    baseTuitionFee: { type: Number, required: true }, // = totalCredits × 100 (100 VNĐ/tín chỉ)
     
     // Các loại giảm giá
     discounts: [discountSchema],

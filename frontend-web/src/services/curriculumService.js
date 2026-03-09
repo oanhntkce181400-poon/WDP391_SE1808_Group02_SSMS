@@ -38,7 +38,8 @@ const curriculumService = {
   
   // Semester APIs
   getSemesters(curriculumId) {
-    return axiosClient.get(`/curriculums/${curriculumId}/semesters`);
+    // New relational endpoint uses /semesters/list to avoid clashing with legacy routes
+    return axiosClient.get(`/curriculums/${curriculumId}/semesters/list`);
   },
   getSemesterWithCourses(semesterId) {
     return axiosClient.get(`/curriculums/semesters/${semesterId}`);

@@ -61,37 +61,43 @@ export default function PaymentResultPage() {
       console.log('Order response:', res);
       
       if (res.data?.error === 0 && res.data.data?.status === 'PAID') {
-        setOrder(res.data.data);
+        const orderData = res.data.data;
+        setOrder(orderData);
         isPaidRef.current = true;
-        
-        // Gọi API xác nhận thanh toán để lưu vào DB
-        try {
-          await financeService.confirmPayment({
-            orderCode: orderCode,
-            amount: res.data.data.amount,
-            status: 'PAID',
-          });
-          console.log('Đã xác nhận thanh toán và lưu vào DB');
-        } catch (confirmError) {
-          console.error('Lỗi xác nhận thanh toán:', confirmError);
-        }
-        
-        // Nếu thanh toán thành công, cập nhật lại dữ liệu học phí
-        setIsRefreshing(true);
-        try {
-          const summaryRes = await financeService.getMyTuitionSummary();
-          setSummary(summaryRes.data.data);
-          toast.success('Thanh toán thành công! Cảm ơn bạn đã thanh toán học phí.');
-        } catch (refreshError) {
-          console.log('Refresh tuition error (non-critical):', refreshError);
-        } finally {
-          setIsRefreshing(false);
-        }
-        
-        // Dừng retry nếu đã thanh toán
+        setLoading(false);
+        toast.success('Thanh toán thành công!');
         if (retryIntervalRef.current) {
           clearInterval(retryIntervalRef.current);
         }
+        
+        // Xác nhận thanh toán và lưu vào DB (chạy ngầm, dùng curriculum semesterCode để lịch sử trả về đúng)
+        (async () => {
+          setIsRefreshing(true);
+          try {
+            await financeService.confirmPaymentWithEnrollment({
+              orderCode: orderCode,
+              amount: orderData.amount,
+              status: 'PAID',
+            });
+          } catch (_) {
+            try {
+              await financeService.confirmPayment({
+                orderCode: orderCode,
+                amount: orderData.amount,
+                status: 'PAID',
+              });
+            } catch (e) {
+              console.error('Lỗi xác nhận thanh toán:', e);
+            }
+          }
+          try {
+            const summaryRes = await financeService.getMyTuitionSummary();
+            setSummary(summaryRes.data.data);
+          } catch (_) {}
+          finally {
+            setIsRefreshing(false);
+          }
+        })();
       } else {
         // Thanh toán chưa hoàn tất - thử lại sau
         console.log(`Payment not completed. Status: ${res.data?.data?.status}. Retrying... (${retryCount + 1}/${maxRetries})`);
@@ -140,7 +146,7 @@ export default function PaymentResultPage() {
               {isPaid ? 'Thanh toán thành công!' : 'Đang chờ thanh toán'}
             </h1>
             <p className="mt-2 text-slate-500">
-              {isPaid ? 'Cảm ơn bạn đã thanh toán học phí.' : 'Vui lòng hoàn tất thanh toán.'}
+              {isPaid ? 'Đã hoàn thành học phí và không còn nợ.' : 'Vui lòng hoàn tất thanh toán.'}
             </p>
           </div>
           
@@ -213,13 +219,13 @@ export default function PaymentResultPage() {
               onClick={() => navigate('/student/finance')}
               className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-700"
             >
-              Xem lịch sử giao dịch
+              Xem lịch sử
             </button>
             <button
               onClick={() => navigate('/student')}
-              className="rounded-lg bg-slate-100 px-5 py-2.5 font-medium text-slate-600 hover:bg-slate-200"
+              className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 font-medium text-slate-600 hover:bg-slate-50"
             >
-              Về trang chủ
+              Quay lại
             </button>
           </div>
         </div>

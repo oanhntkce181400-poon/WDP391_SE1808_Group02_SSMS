@@ -42,6 +42,9 @@ import WaitlistPage from "./pages/student/WaitlistPage";
 import PaymentPage from "./pages/student/PaymentPage";
 import PaymentResultPage from "./pages/student/PaymentResultPage";
 import MyTransactionsPage from "./pages/student/MyTransactionsPage";
+import StudentCurriculumPage from "./pages/student/StudentCurriculumPage";
+import WalletPage from "./pages/student/WalletPage";
+import WalletResultPage from "./pages/student/WalletResultPage";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
 import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
@@ -115,6 +118,7 @@ export default function App() {
         <Route index element={<StudentHome />} />
         <Route path="profile" element={<StudentProfilePage />} />
         <Route path="announcements" element={<AnnouncementPage />} />
+        <Route path="curriculum" element={<StudentCurriculumPage />} />
         <Route path="registration" element={<ClassRegistrationPage />} />
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
@@ -123,6 +127,8 @@ export default function App() {
         <Route path="finance" element={<TuitionPage />} />
         <Route path="payment" element={<PaymentPage />} />
         <Route path="payment/result" element={<PaymentResultPage />} />
+        <Route path="wallet" element={<WalletPage />} />
+        <Route path="wallet/result" element={<WalletResultPage />} />
         <Route path="transactions" element={<MyTransactionsPage />} />
       </Route>
 

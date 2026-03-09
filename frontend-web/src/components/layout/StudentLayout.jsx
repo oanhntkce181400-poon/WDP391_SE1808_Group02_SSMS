@@ -29,6 +29,7 @@ export default function StudentLayout() {
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
     { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
     { name: 'Thông báo', path: '/student/announcements', icon: '📢' },
+    { name: 'Khung chương trình của tôi', path: '/student/curriculum', icon: '📖' },
     { name: 'Đăng ký tín chỉ', path: '/student/registration', icon: '📝' },
     { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📄' },
@@ -36,6 +37,7 @@ export default function StudentLayout() {
     { name: 'Danh sách chờ', path: '/student/waitlist', icon: '⏳' },
     { name: 'Kết quả học tập', path: '/student/grades', icon: '📊' },
     { name: 'Tài chính', path: '/student/finance', icon: '💰' },
+    { name: 'Ví của tôi', path: '/student/wallet', icon: '💳' },
     { name: 'Giáo trình & Tài liệu', path: '/student/materials', icon: '📚' },
   ];
 

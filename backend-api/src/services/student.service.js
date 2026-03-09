@@ -564,10 +564,22 @@ async function getSuggestedClassSection(majorCode, cohort) {
   };
 }
 
+// GET /api/students/me - Lấy thông tin sinh viên hiện tại qua userId
+async function getStudentByUserId(userId) {
+  const student = await Student.findOne({ userId }).lean();
+  
+  if (!student) {
+    return null;
+  }
+
+  return student;
+}
+
 module.exports = {
   createStudent,
   getStudents,
   getStudentById,
+  getStudentByUserId,
   updateStudent,
   deleteStudent,
   getMajorsForFilter,

@@ -1,5 +1,5 @@
 // Script to update tuition fees for all subjects in MongoDB Atlas
-// Formula: tuitionFee = credits × 630,000 VNĐ
+// Formula: tuitionFee = credits × 100 VNĐ
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Subject = require('../../models/subject.model');

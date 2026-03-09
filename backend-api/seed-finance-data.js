@@ -4,7 +4,7 @@
 //
 // Sẽ tạo:
 //   • 1 Semester (học kỳ hiện tại, isCurrent = true)
-//   • 1 TuitionFee rule cho khóa K18 (pricePerCredit = 630.000đ)
+//   • 1 TuitionFee rule cho khóa K18 (pricePerCredit = 100đ)
 //   • Payments (lịch sử nộp tiền) cho sinh viên huyhmce181719@fpt.edu.vn
 //   • OtherFees (các khoản phí khác) cho sinh viên đó
 
