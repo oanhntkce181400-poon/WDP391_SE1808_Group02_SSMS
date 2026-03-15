@@ -46,6 +46,31 @@ router.get(
   studentController.getMyCurriculum
 );
 
+// GET /api/students/me/gpa - Lấy GPA của sinh viên hiện tại
+router.get(
+  '/me/gpa',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMyGPA
+);
+
+// GET /api/students/me/semesters - Lấy danh sách kỳ học của sinh viên hiện tại
+router.get(
+  '/me/semesters',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMySemesterList
+);
+
+// GET /api/students/me/gpa/semester/:semesterNumber/:academicYear 
+// Lấy GPA kỳ học của sinh viên hiện tại
+router.get(
+  '/me/gpa/semester/:semesterNumber/:academicYear',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMyGPABySemester
+);
+
 // ─────────────────────────────────────────────────────────────
 // CRUD ENDPOINTS
 // ─────────────────────────────────────────────────────────────
@@ -96,6 +121,31 @@ router.get(
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
   studentController.getStudentCurriculum
+);
+
+// GET /api/students/:id/gpa - Lấy GPA của sinh viên (admin/staff)
+router.get(
+  '/:id/gpa',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.getStudentGPA
+);
+
+// GET /api/students/:id/semesters - Lấy danh sách kỳ học của sinh viên (admin/staff)
+router.get(
+  '/:id/semesters',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.getStudentSemesterList
+);
+
+// GET /api/students/:id/gpa/semester/:semesterNumber/:academicYear 
+// Lấy GPA kỳ học của sinh viên (admin/staff)
+router.get(
+  '/:id/gpa/semester/:semesterNumber/:academicYear',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.getStudentGPABySemester
 );
 
 module.exports = router;

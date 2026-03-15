@@ -4,6 +4,7 @@
 
 const studentService = require('../services/student.service');
 const curriculumService = require('../services/curriculum.service');
+const gpaService = require('../services/gpa.service');
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/students - Tạo sinh viên mới
@@ -364,6 +365,267 @@ const getMyCurriculum = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me/gpa - Lấy GPA của sinh viên hiện tại
+// ─────────────────────────────────────────────────────────────
+const getMyGPA = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+
+    // Tìm sinh viên qua userId
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tính GPA
+    const gpaResult = await gpaService.calculateStudentGPA(student._id);
+    const warnings = await gpaService.checkGPAWarning(student._id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy GPA thành công',
+      data: {
+        studentId: student._id,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        gpa: gpaResult.gpa,
+        totalCredits: gpaResult.totalCredits,
+        courses: gpaResult.courses,
+        warning: warnings.isLow,
+        warningStatus: warnings.status,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyGPA error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/:id/gpa - Lấy GPA của sinh viên (Admin)
+// ─────────────────────────────────────────────────────────────
+const getStudentGPA = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Tìm sinh viên
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tính GPA
+    const gpaResult = await gpaService.calculateStudentGPA(id);
+    const warnings = await gpaService.checkGPAWarning(id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy GPA thành công',
+      data: {
+        studentId: student._id,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        gpa: gpaResult.gpa,
+        totalCredits: gpaResult.totalCredits,
+        courses: gpaResult.courses,
+        warning: warnings.isLow,
+        warningStatus: warnings.status,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getStudentGPA error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me/gpa/semester/:semesterNumber/:academicYear
+// Lấy GPA kỳ học của sinh viên hiện tại
+// ─────────────────────────────────────────────────────────────
+const getMyGPABySemester = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+    const { semesterNumber, academicYear } = req.params;
+
+    // Validate params
+    if (!semesterNumber || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu tham số semesterNumber hoặc academicYear',
+      });
+    }
+
+    // Tìm sinh viên qua userId
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tính GPA kỳ học
+    const gpaResult = await gpaService.calculateSemesterGPA(
+      student._id,
+      parseInt(semesterNumber),
+      academicYear
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy GPA kỳ học thành công',
+      data: {
+        studentId: student._id,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        ...gpaResult,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyGPABySemester error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/:id/gpa/semester/:semesterNumber/:academicYear
+// Lấy GPA kỳ học của sinh viên (Admin)
+// ─────────────────────────────────────────────────────────────
+const getStudentGPABySemester = async (req, res) => {
+  try {
+    const { id, semesterNumber, academicYear } = req.params;
+
+    // Validate params
+    if (!semesterNumber || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu tham số semesterNumber hoặc academicYear',
+      });
+    }
+
+    // Tìm sinh viên
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Tính GPA kỳ học
+    const gpaResult = await gpaService.calculateSemesterGPA(
+      id,
+      parseInt(semesterNumber),
+      academicYear
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy GPA kỳ học thành công',
+      data: {
+        studentId: student._id,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        ...gpaResult,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getStudentGPABySemester error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me/semesters - Lấy danh sách kỳ học của sinh viên hiện tại
+// ─────────────────────────────────────────────────────────────
+const getMySemesterList = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+
+    // Tìm sinh viên qua userId
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Lấy danh sách kỳ học
+    const semesters = await gpaService.getSemesterListForStudent(student._id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy danh sách kỳ học thành công',
+      data: semesters,
+    });
+  } catch (error) {
+    console.error('[StudentController] getMySemesterList error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/:id/semesters - Lấy danh sách kỳ học của sinh viên (Admin)
+// ─────────────────────────────────────────────────────────────
+const getStudentSemesterList = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Tìm sinh viên
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    // Lấy danh sách kỳ học
+    const semesters = await gpaService.getSemesterListForStudent(id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy danh sách kỳ học thành công',
+      data: semesters,
+    });
+  } catch (error) {
+    console.error('[StudentController] getStudentSemesterList error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
 module.exports = {
   createStudent,
   getStudents,
@@ -375,4 +637,10 @@ module.exports = {
   getSuggestedClassSection,
   getStudentCurriculum,
   getMyCurriculum,
+  getMyGPA,
+  getStudentGPA,
+  getMyGPABySemester,
+  getStudentGPABySemester,
+  getMySemesterList,
+  getStudentSemesterList,
 };

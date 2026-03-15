@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import userService from '../services/userService';
+import gpaService from '../services/gpaService';
 import AvatarUploader from '../components/features/AvatarUploader';
 
 const StudentProfilePage = () => {
@@ -12,6 +13,8 @@ const StudentProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [cumulativeGPA, setCumulativeGPA] = useState(null);
+  const [gpaLoading, setGpaLoading] = useState(true);
 
   // Mock data for enrolled courses
   const enrolledCourses = [
@@ -40,7 +43,23 @@ const StudentProfilePage = () => {
 
   useEffect(() => {
     fetchStudentProfile();
+    fetchCumulativeGPA();
   }, []);
+
+  const fetchCumulativeGPA = async () => {
+    try {
+      setGpaLoading(true);
+      const res = await gpaService.getMyGPA();
+      if (res?.data?.success) {
+        setCumulativeGPA(res.data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching cumulative GPA:', err);
+      // Silently fail - GPA is optional
+    } finally {
+      setGpaLoading(false);
+    }
+  };
 
   const fetchStudentProfile = async () => {
     try {
@@ -227,7 +246,7 @@ const StudentProfilePage = () => {
           </div>
 
           {/* Student Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-blue-500">
               <p className="text-gray-600 text-sm font-medium">STUDENT ID</p>
               <p className="text-xl font-bold text-gray-800 mt-2">SV20240102</p>
@@ -241,6 +260,25 @@ const StudentProfilePage = () => {
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-purple-500">
               <p className="text-gray-600 text-sm font-medium">SEMESTER</p>
               <p className="text-xl font-bold text-gray-800 mt-2">Năm thứ 3</p>
+            </div>
+            <div className={`bg-white rounded-lg shadow-md p-4 text-center border-t-4 ${
+              cumulativeGPA && cumulativeGPA.gpa < 5.0 ? 'border-red-500' : 'border-orange-500'
+            }`}>
+              <p className="text-gray-600 text-sm font-medium">GPA TÍCH LŨY</p>
+              {gpaLoading ? (
+                <p className="text-xl font-bold text-gray-800 mt-2">Đang tải...</p>
+              ) : cumulativeGPA ? (
+                <div>
+                  <p className={`text-xl font-bold mt-2 ${gpaService.getGPAColor(cumulativeGPA.gpa)}`}>
+                    {gpaService.formatGPA(cumulativeGPA.gpa)}
+                  </p>
+                  {cumulativeGPA.gpa < 5.0 && (
+                    <p className="text-xs text-red-600 font-semibold mt-1">⚠️ Cảnh báo</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xl font-bold text-gray-800 mt-2">N/A</p>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import authService from '../../services/authService';
+import gpaService from '../../services/gpaService';
 
 export default function StudentLayout() {
   const location = useLocation();
@@ -11,6 +12,13 @@ export default function StudentLayout() {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}'); }
     catch { return {}; }
   });
+
+  const [gpa, setGpa] = useState(null);
+  const [gpaLoading, setGpaLoading] = useState(true);
+  const [semesters, setSemesters] = useState([]);
+  const [selectedSemester, setSelectedSemester] = useState(null);
+  const [semesterGPA, setSemesterGPA] = useState(null);
+  const [semesterGPALoading, setSemesterGPALoading] = useState(false);
 
   // Refresh user info from server on mount
   useEffect(() => {
@@ -24,6 +32,69 @@ export default function StudentLayout() {
       })
       .catch(() => {}); // ignore if token expired / offline
   }, []);
+
+  // Fetch GPA on mount
+  useEffect(() => {
+    const fetchGPA = async () => {
+      try {
+        setGpaLoading(true);
+        const res = await gpaService.getMyGPA();
+        if (res?.data?.success) {
+          setGpa(res.data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching GPA:', err);
+        // Silently fail - GPA is optional
+      } finally {
+        setGpaLoading(false);
+      }
+    };
+
+    fetchGPA();
+  }, []);
+
+  // Fetch semester list
+  useEffect(() => {
+    const fetchSemesters = async () => {
+      try {
+        const res = await gpaService.getMySemesters();
+        if (res?.data?.success && res.data.data.length > 0) {
+          setSemesters(res.data.data);
+          // Select the first semester (most recent)
+          setSelectedSemester(res.data.data[0]);
+        }
+      } catch (err) {
+        console.error('Error fetching semesters:', err);
+      }
+    };
+
+    fetchSemesters();
+  }, []);
+
+  // Fetch semester GPA when selected semester changes
+  useEffect(() => {
+    const fetchSemesterGPA = async () => {
+      if (!selectedSemester) return;
+
+      try {
+        setSemesterGPALoading(true);
+        const res = await gpaService.getMyGPABySemester(
+          selectedSemester.semesterNumber,
+          selectedSemester.academicYear
+        );
+        if (res?.data?.success) {
+          setSemesterGPA(res.data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching semester GPA:', err);
+        setSemesterGPA(null);
+      } finally {
+        setSemesterGPALoading(false);
+      }
+    };
+
+    fetchSemesterGPA();
+  }, [selectedSemester]);
 
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
@@ -158,6 +229,78 @@ export default function StudentLayout() {
             </div>
 
             <div className="flex items-center gap-4">
+              {/* GPA Display */}
+              {gpa && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                  gpa.warning
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-green-300 bg-green-50'
+                }`}>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-slate-500">GPA Tổng</span>
+                    <span className={`text-sm font-bold ${gpaService.getGPAColor(gpa.gpa)}`}>
+                      {gpaService.formatGPA(gpa.gpa)}
+                    </span>
+                  </div>
+                  {gpa.warning && (
+                    <div className="flex items-center gap-1 text-xs text-red-600 font-semibold ml-2">
+                      <span>⚠️</span>
+                      <span>Cảnh báo</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Semester Selector */}
+              {semesters.length > 0 && (
+                <div className="relative group">
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-blue-300 bg-blue-50 hover:bg-blue-100 transition">
+                    <span className="text-xs text-slate-600">
+                      {selectedSemester?.semesterName || 'Chọn kỳ'}
+                    </span>
+                    <span className="text-sm">▼</span>
+                  </button>
+                  {/* Dropdown Menu */}
+                  <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 max-h-48 overflow-y-auto">
+                    {semesters.map((sem) => (
+                      <button
+                        key={`${sem.semesterNumber}-${sem.academicYear}`}
+                        onClick={() => setSelectedSemester(sem)}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition ${
+                          selectedSemester?.semesterNumber === sem.semesterNumber &&
+                          selectedSemester?.academicYear === sem.academicYear
+                            ? 'bg-blue-50 text-blue-700 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {sem.semesterName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Semester GPA Display */}
+              {semesterGPA && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                  semesterGPA.gpa < 5.0
+                    ? 'border-orange-300 bg-orange-50'
+                    : 'border-blue-300 bg-blue-50'
+                }`}>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-slate-500">GPA Kỳ</span>
+                    <span className={`text-sm font-bold ${gpaService.getGPAColor(semesterGPA.gpa)}`}>
+                      {gpaService.formatGPA(semesterGPA.gpa)}
+                    </span>
+                  </div>
+                  {semesterGPA.gpa < 5.0 && (
+                    <div className="flex items-center gap-1 text-xs text-orange-600 font-semibold ml-1">
+                      <span>⚠️</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Notifications */}
               <button className="relative rounded-lg p-2 hover:bg-slate-100">
                 <svg
