@@ -33,6 +33,15 @@ router.get(
 // ADMIN/STAFF ROUTES
 // ─────────────────────────────────────────────────────────────
 
+// POST /api/grades/submit
+// Nhập điểm cho các sinh viên theo thành phần
+router.post(
+  '/submit',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  gradesController.submitGrades
+);
+
 // POST /api/grades/:enrollmentId/calculate
 // Tính điểm cuối cùng dựa trên các thành phần điểm
 router.post(
@@ -50,6 +59,15 @@ router.patch(
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
   gradesController.updateGradeComponent
+);
+
+// GET /api/grades/class/:classSectionId/enrollments
+// Lấy danh sách sinh viên của lớp để nhập điểm
+router.get(
+  '/class/:classSectionId/enrollments',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  gradesController.getClassEnrollmentsForGrading
 );
 
 // POST /api/grades/class/:classSectionId/calculate-all

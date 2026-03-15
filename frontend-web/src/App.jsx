@@ -52,6 +52,7 @@ import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManage
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import ViewGradesPage from "./pages/student/ViewGradesPage";
+import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
 export default function App() {
   return (
     <Routes>
@@ -143,6 +144,15 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["lecturer"]}>
             <TeachingSchedulePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/lecturer/grades/:classSectionId"
+        element={
+          <ProtectedRoute allowedRoles={["lecturer"]}>
+            <LecturerGradesEntryPage />
           </ProtectedRoute>
         }
       />

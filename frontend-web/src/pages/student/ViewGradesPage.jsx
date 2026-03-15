@@ -189,6 +189,9 @@ export default function ViewGradesPage() {
                       BT
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      QT
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Điểm
                     </th>
                   </tr>
@@ -231,6 +234,13 @@ export default function ViewGradesPage() {
                           : gradesService.getScoreColor(enrollment.assignmentScore)
                       }`}>
                         {gradesService.formatScore(enrollment.assignmentScore)}
+                      </td>
+                      <td className={`px-6 py-4 text-center text-sm ${
+                        enrollment.continuousScore === null
+                          ? 'text-gray-500'
+                          : gradesService.getScoreColor(enrollment.continuousScore)
+                      }`}>
+                        {gradesService.formatScore(enrollment.continuousScore)}
                       </td>
                       <td className={`px-6 py-4 text-center text-sm font-semibold ${
                         gradesService.getScoreColor(enrollment.grade)
@@ -291,6 +301,9 @@ export default function ViewGradesPage() {
             <span className="font-semibold">BT:</span> Điểm bài tập/thực hành (20%)
           </div>
           <div>
+            <span className="font-semibold">QT:</span> Điểm quá trình (tùy chọn)
+          </div>
+          <div className="md:col-span-2">
             <span className="font-semibold">Điểm:</span> Điểm tổng kết = (GK×0.3 + CK×0.5 + BT×0.2)
           </div>
         </div>

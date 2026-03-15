@@ -147,6 +147,38 @@ const gradesService = {
   },
 
   /**
+   * Nhập điểm cho các sinh viên
+   * POST /api/grades/submit
+   * Body: { grades: [{ enrollmentId, midtermScore, finalScore, assignmentScore }], autoCalculate: true }
+   */
+  submitGrades: async (grades, autoCalculate = true) => {
+    try {
+      const response = await axiosClient.post('/grades/submit', {
+        grades,
+        autoCalculate
+      });
+      return response;
+    } catch (error) {
+      console.error('Error submitting grades:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy danh sách sinh viên của một lớp để nhập điểm
+   * GET /api/grades/class/:classSectionId/enrollments
+   */
+  getClassEnrollmentsForGrading: async (classSectionId) => {
+    try {
+      const response = await axiosClient.get(`/grades/class/${classSectionId}/enrollments`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching class enrollments for grading:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Lấy tên hiển thị của thành phần điểm
    * @param {string} componentType
    * @returns {string} Component name in Vietnamese

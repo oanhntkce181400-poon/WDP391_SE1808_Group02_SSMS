@@ -316,8 +316,7 @@ class GradesService {
     try {
       const enrollments = await ClassEnrollment.find({
         student: studentId,
-        grade: { $exists: true, $ne: null },
-        status: 'completed'
+        status: { $in: ['enrolled', 'completed', 'active'] }
       })
         .populate({
           path: 'classSection',
@@ -404,6 +403,149 @@ class GradesService {
     } catch (error) {
       console.error('Error getting my grades:', error);
       throw new Error(`Lỗi lấy dữ liệu điểm: ${error.message}`);
+    }
+  }
+
+  /**
+   * Nhập điểm cho các sinh viên theo thành phần
+   * Giáo viên nhập GK, CK, BT - Tính grade tự động
+   * 
+   * @param {Array} gradesData - Array of { enrollmentId, midtermScore, finalScore, assignmentScore, continuousScore }
+   * @param {Object} options - { autoCalculate: boolean }
+   * @returns {Promise<Object>} { success: boolean, updated: number, errors: Array }
+   */
+  async submitGrades(gradesData, options = { autoCalculate: true }) {
+    try {
+      if (!Array.isArray(gradesData) || gradesData.length === 0) {
+        throw new Error('Dữ liệu điểm không hợp lệ');
+      }
+
+      let successCount = 0;
+      const errors = [];
+      const updatedEnrollments = [];
+
+      for (const gradeUpdate of gradesData) {
+        try {
+          const { enrollmentId, midtermScore, finalScore, assignmentScore, continuousScore } = gradeUpdate;
+
+          if (!enrollmentId) {
+            errors.push({ enrollmentId: null, error: 'enrollmentId is required' });
+            continue;
+          }
+
+          // Find enrollment
+          const enrollment = await ClassEnrollment.findById(enrollmentId);
+          if (!enrollment) {
+            errors.push({ enrollmentId, error: 'Enrollment not found' });
+            continue;
+          }
+
+          // Validate scores are within range
+          const scores = { midtermScore, finalScore, assignmentScore, continuousScore };
+          for (const [key, score] of Object.entries(scores)) {
+            if (score !== null && score !== undefined && (score < 0 || score > 10)) {
+              errors.push({ 
+                enrollmentId, 
+                error: `${key} phải nằm trong khoảng 0-10` 
+              });
+              continue;
+            }
+          }
+
+          // Update only provided scores (не перезаписывать существующие)
+          if (midtermScore !== null && midtermScore !== undefined) {
+            enrollment.midtermScore = midtermScore;
+          }
+          if (finalScore !== null && finalScore !== undefined) {
+            enrollment.finalScore = finalScore;
+          }
+          if (assignmentScore !== null && assignmentScore !== undefined) {
+            enrollment.assignmentScore = assignmentScore;
+          }
+          if (continuousScore !== null && continuousScore !== undefined) {
+            enrollment.continuousScore = continuousScore;
+          }
+
+          // Auto-calculate final grade if all components are provided
+          if (options.autoCalculate && 
+              enrollment.midtermScore !== null && 
+              enrollment.finalScore !== null && 
+              enrollment.assignmentScore !== null) {
+            const calculatedGrade = 
+              (enrollment.midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore) +
+              (enrollment.finalScore * this.constructor.GRADE_WEIGHTS.finalScore) +
+              (enrollment.assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore);
+            enrollment.grade = parseFloat(calculatedGrade.toFixed(2));
+          }
+
+          // Save enrollment
+          const saved = await enrollment.save();
+          updatedEnrollments.push(saved);
+          successCount++;
+        } catch (err) {
+          errors.push({
+            enrollmentId: gradeUpdate?.enrollmentId,
+            error: err.message
+          });
+        }
+      }
+
+      return {
+        success: successCount > 0,
+        message: `Cập nhật điểm cho ${successCount}/${gradesData.length} sinh viên thành công`,
+        updated: successCount,
+        total: gradesData.length,
+        updatedEnrollments,
+        errors: errors.length > 0 ? errors : undefined
+      };
+    } catch (error) {
+      console.error('Error submitting grades:', error);
+      throw new Error(`Lỗi nhập điểm: ${error.message}`);
+    }
+  }
+
+  /**
+   * Lấy danh sách sinh viên của một lớp học để nhập điểm
+   * 
+   * @param {string} classSectionId - ID của class section
+   * @returns {Promise<Array>} Array of enrollments with student info
+   */
+  async getClassEnrollmentsForGrading(classSectionId) {
+    try {
+      const enrollments = await ClassEnrollment.find({
+        classSection: classSectionId,
+        status: { $in: ['enrolled', 'completed'] }
+      })
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName email')
+        .select('student classSection midtermScore finalScore assignmentScore continuousScore grade status')
+        .lean();
+
+      if (!enrollments || enrollments.length === 0) {
+        return {
+          success: true,
+          message: 'Không có sinh viên đăng ký lớp này',
+          enrollments: [],
+          count: 0
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Lấy danh sách sinh viên thành công',
+        enrollments,
+        count: enrollments.length,
+        classInfo: enrollments[0]?.classSection
+      };
+    } catch (error) {
+      console.error('Error getting class enrollments for grading:', error);
+      throw new Error(`Lỗi lấy danh sách sinh viên: ${error.message}`);
     }
   }
 }

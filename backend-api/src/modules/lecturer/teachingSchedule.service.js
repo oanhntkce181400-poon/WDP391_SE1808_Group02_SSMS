@@ -110,6 +110,7 @@ async function getTeachingSchedule(userId, filters = {}) {
       academicYear,
     },
     classes: classes.map((cls) => ({
+      _id: cls._id,
       id: cls._id,
       classCode: cls.classCode,
       className: cls.className,

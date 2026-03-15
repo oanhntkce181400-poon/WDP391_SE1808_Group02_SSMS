@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import lecturerService from '../../services/lecturerService';
 import scheduleService from '../../services/scheduleService';
 
@@ -13,6 +14,7 @@ function normalizeLecturerOptions(response) {
 }
 
 export default function TeachingSchedulePage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loadingLecturers, setLoadingLecturers] = useState(false);
   const [error, setError] = useState('');
@@ -163,11 +165,12 @@ export default function TeachingSchedulePage() {
                     <th className="px-3 py-2">Ca hoc</th>
                     <th className="px-3 py-2">Si so</th>
                     <th className="px-3 py-2">Lich</th>
+                    <th className="px-3 py-2">Thao tac</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(data.classes || []).map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top">
+                    <tr key={item._id} className="border-b border-slate-100 align-top">
                       <td className="px-3 py-2 font-medium text-slate-900">{item.classCode}</td>
                       <td className="px-3 py-2">
                         <div className="font-medium text-slate-800">{item.subject?.subjectCode || '-'}</div>
@@ -198,11 +201,19 @@ export default function TeachingSchedulePage() {
                           </div>
                         )}
                       </td>
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => navigate(`/lecturer/grades/${item._id}`)}
+                          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
+                        >
+                          Nhập Điểm
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {(data.classes || []).length === 0 && (
                     <tr>
-                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={7}>
+                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={8}>
                         Khong co lop nao phu hop voi bo loc hien tai.
                       </td>
                     </tr>

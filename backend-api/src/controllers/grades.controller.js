@@ -229,6 +229,81 @@ class GradesController {
       });
     }
   }
+
+  /**
+   * POST /api/grades/submit
+   * Nhập điểm cho các sinh viên theo thành phần
+   * Body: { grades: [{ enrollmentId, midtermScore, finalScore, assignmentScore, continuousScore }], autoCalculate: boolean }
+   */
+  async submitGrades(req, res) {
+    try {
+      const userId = req.auth?.sub || req.auth?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const { grades = [], autoCalculate = true } = req.body;
+
+      if (!Array.isArray(grades) || grades.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Dữ liệu điểm không hợp lệ'
+        });
+      }
+
+      const result = await gradesService.submitGrades(grades, { autoCalculate });
+
+      return res.status(200).json({
+        success: result.success,
+        message: result.message,
+        data: {
+          updated: result.updated,
+          total: result.total,
+          errors: result.errors
+        }
+      });
+    } catch (error) {
+      console.error('[GradesController] submitGrades error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to submit grades'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/class/:classSectionId/enrollments
+   * Lấy danh sách sinh viên của một lớp để nhập điểm
+   */
+  async getClassEnrollmentsForGrading(req, res) {
+    try {
+      const { classSectionId } = req.params;
+
+      if (!classSectionId) {
+        return res.status(400).json({
+          success: false,
+          message: 'classSectionId is required'
+        });
+      }
+
+      const result = await gradesService.getClassEnrollmentsForGrading(classSectionId);
+
+      return res.status(200).json({
+        success: result.success,
+        message: result.message,
+        data: result.enrollments || []
+      });
+    } catch (error) {
+      console.error('[GradesController] getClassEnrollmentsForGrading error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get class enrollments'
+      });
+    }
+  }
 }
 
 // Export instance
