@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const repo = require("./lecturer.repository");
 const { uploadImage } = require("../../external/cloudinary.provider");
+const { normalizeRole } = require("../../utils/role.util");
 
 const DEFAULT_PASSWORD = "Teacher@123";
 
@@ -29,7 +30,17 @@ function normalizeEmail(email) {
 }
 
 async function ensureTeacherUserAccount(teacher, actorId) {
+  const syncedUserFields = {
+    role: normalizeRole('lecturer'),
+    fullName: teacher.fullName,
+    status: teacher.isActive === false ? "inactive" : "active",
+    isActive: teacher.isActive !== false,
+    avatarUrl: teacher.avatarUrl || undefined,
+    updatedBy: actorId || undefined,
+  };
+
   if (teacher.userId) {
+    await repo.updateUserById(teacher.userId, syncedUserFields);
     return { created: false, userId: teacher.userId };
   }
 
@@ -46,7 +57,7 @@ async function ensureTeacherUserAccount(teacher, actorId) {
       password: hashedPassword,
       fullName: teacher.fullName,
       authProvider: "local",
-      role: "staff",
+      role: "lecturer",
       status: teacher.isActive === false ? "inactive" : "active",
       isActive: teacher.isActive !== false,
       mustChangePassword: true,
@@ -57,6 +68,7 @@ async function ensureTeacherUserAccount(teacher, actorId) {
     return { created: true, userId: user._id };
   }
 
+  await repo.updateUserById(user._id, syncedUserFields);
   teacher.userId = user._id;
   return { created: false, userId: user._id };
 }
@@ -155,7 +167,7 @@ async function createLecturer(body, file, auth) {
         password: hashedPassword,
         fullName,
         authProvider: "local",
-        role: "staff",
+        role: "lecturer",
         status: "active",
         mustChangePassword: true,
         avatarUrl,
@@ -238,12 +250,16 @@ async function updateLecturer(id, body, file, auth) {
 
   if (isActive !== undefined) {
     teacher.isActive = isActive === true || isActive === "true";
-    if (teacher.userId) {
-      await repo.updateUserById(teacher.userId, {
-        isActive: teacher.isActive,
-        status: teacher.isActive ? "active" : "inactive",
-      });
-    }
+  }
+
+  if (teacher.userId) {
+    await repo.updateUserById(teacher.userId, {
+      fullName: teacher.fullName,
+      role: "lecturer",
+      avatarUrl: teacher.avatarUrl || undefined,
+      isActive: teacher.isActive,
+      status: teacher.isActive ? "active" : "inactive",
+    });
   }
 
   await repo.saveLecturerDoc(teacher);
@@ -264,6 +280,7 @@ async function deleteLecturer(id) {
 
   if (teacher.userId) {
     await repo.updateUserById(teacher.userId, {
+      role: "lecturer",
       isActive: false,
       status: "inactive",
     });

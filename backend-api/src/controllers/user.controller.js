@@ -2,7 +2,20 @@ const User = require('../models/user.model');
 const Wallet = require('../models/wallet.model');
 const { uploadImage, deleteImage } = require('../external/cloudinary.provider');
 const { validateImportRows, normalizeCellValue, mapHeaders, findHeaderRowIndex } = require('../utils/importHelper');
+const { normalizeRole, isValidUserRole, VALID_USER_ROLES } = require('../utils/role.util');
 const ExcelJS = require('exceljs');
+
+function serializeUser(user) {
+  if (!user) return user;
+
+  const plainUser =
+    typeof user.toObject === 'function'
+      ? user.toObject({ virtuals: false })
+      : { ...user };
+
+  plainUser.role = normalizeRole(plainUser.role, 'student');
+  return plainUser;
+}
 
 // List users (for IT Admin)
 exports.listUsers = async (req, res) => {
@@ -35,7 +48,7 @@ exports.listUsers = async (req, res) => {
 
     res.json({
       success: true,
-      data: users,
+      data: users.map(serializeUser),
       pagination: {
         total,
         page,
@@ -63,7 +76,7 @@ exports.getUserProfile = async (req, res) => {
 
     res.json({
       success: true,
-      data: user,
+      data: serializeUser(user),
     });
   } catch (error) {
     res.status(500).json({
@@ -123,7 +136,7 @@ exports.updateAvatar = async (req, res) => {
     res.json({
       success: true,
       message: 'Avatar updated successfully',
-      data: user,
+      data: serializeUser(user),
     });
   } catch (error) {
     res.status(500).json({
@@ -167,7 +180,7 @@ exports.updateProfile = async (req, res) => {
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: user,
+      data: serializeUser(user),
     });
   } catch (error) {
     res.status(500).json({
@@ -196,8 +209,16 @@ exports.updateUser = async (req, res) => {
     }
 
     // Update allowed fields
-    if (role && ['admin', 'staff', 'student'].includes(role)) {
-      user.role = role;
+    if (role !== undefined) {
+      const normalizedRole = normalizeRole(role);
+      if (!isValidUserRole(normalizedRole)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid role. Allowed roles: ${VALID_USER_ROLES.join(', ')}`,
+        });
+      }
+
+      user.role = normalizedRole;
     }
     if (status && ['active', 'inactive', 'blocked', 'pending'].includes(status)) {
       user.status = status;
@@ -209,7 +230,7 @@ exports.updateUser = async (req, res) => {
     res.json({
       success: true,
       message: 'User updated successfully',
-      data: user,
+      data: serializeUser(user),
     });
   } catch (error) {
     console.error('updateUser error:', error);

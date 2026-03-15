@@ -55,6 +55,8 @@ export default function LoginPage() {
       // Redirect based on user role
       if (nextUser?.role === 'student') {
         navigate('/student', { replace: true });
+      } else if (nextUser?.role === 'lecturer') {
+        navigate('/lecturer/teaching-schedule', { replace: true });
       } else {
         navigate('/admin', { replace: true });
       }

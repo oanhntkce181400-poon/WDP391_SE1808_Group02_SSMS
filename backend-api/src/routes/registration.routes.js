@@ -46,4 +46,11 @@ router.post(
   registrationController.validateAll
 );
 
+router.get(
+  '/eligibility-summary',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  registrationController.getEligibilitySummary
+);
+
 module.exports = router;

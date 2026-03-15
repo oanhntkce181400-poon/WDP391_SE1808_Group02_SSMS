@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { VALID_USER_ROLES, normalizeRole } = require('../utils/role.util');
 
 const userSchema = new mongoose.Schema(
   {
@@ -15,7 +16,12 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String, unique: true, sparse: true, trim: true },
     avatarUrl: { type: String, trim: true },
     avatarCloudinaryId: { type: String, trim: true },
-    role: { type: String, enum: ['admin', 'staff', 'student'], default: 'admin' },
+    role: {
+      type: String,
+      enum: VALID_USER_ROLES,
+      default: 'student',
+      set: (value) => normalizeRole(value, 'student'),
+    },
     isActive: { type: Boolean, default: true },
     status: {
       type: String,

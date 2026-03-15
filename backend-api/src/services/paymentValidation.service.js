@@ -18,7 +18,53 @@ const curriculumService = require('./curriculum.service');
  * @param {Object} currentSemester - semester đang diễn ra
  * @returns {Number} semesterOrder (1, 2, 3...)
  */
-async function calculateStudentCurriculumSemester(student, currentSemester) {
+function parseAcademicYearStart(academicYear) {
+  if (!academicYear || typeof academicYear !== 'string') return null;
+
+  const [startYearRaw] = academicYear.split(/[-/]/);
+  const startYear = parseInt(startYearRaw, 10);
+  return Number.isNaN(startYear) ? null : startYear;
+}
+
+async function resolveTermsPerYear(currentSemester) {
+  const configuredTermsPerYear = parseInt(process.env.CURRICULUM_TERMS_PER_YEAR || '', 10);
+  if (!Number.isNaN(configuredTermsPerYear) && configuredTermsPerYear > 0) {
+    return configuredTermsPerYear;
+  }
+
+  const semesterNumbers = await Semester.distinct('semesterNum', {
+    isActive: { $ne: false },
+  });
+  const normalizedSemesterNumbers = semesterNumbers
+    .map((value) => parseInt(value, 10))
+    .filter((value) => !Number.isNaN(value) && value > 0);
+
+  return Math.max(
+    2,
+    parseInt(currentSemester?.semesterNum, 10) || 1,
+    normalizedSemesterNumbers.length > 0 ? Math.max(...normalizedSemesterNumbers) : 0,
+  );
+}
+
+async function calculateStudentCurriculumSemester(student, currentSemester, options = {}) {
+  if (!student || !currentSemester) return 1;
+
+  const enrollmentYear = parseInt(student.enrollmentYear, 10);
+  const academicYearStart = parseAcademicYearStart(currentSemester.academicYear);
+  const semesterIndex = Math.max(1, parseInt(currentSemester.semesterNum, 10) || 1);
+
+  if (Number.isNaN(enrollmentYear) || academicYearStart == null) return 1;
+
+  const termsPerYear =
+    Number.isInteger(options.termsPerYear) && options.termsPerYear > 0
+      ? options.termsPerYear
+      : await resolveTermsPerYear(currentSemester);
+  const academicYearsElapsed = Math.max(0, academicYearStart - enrollmentYear);
+
+  return academicYearsElapsed * termsPerYear + semesterIndex;
+}
+
+async function calculateStudentCurriculumSemesterLegacy(student, currentSemester) {
   if (!student || !currentSemester) return 1;
   
   const enrollmentYear = student.enrollmentYear;
@@ -312,6 +358,8 @@ async function checkEnrollmentPermission(studentId) {
 }
 
 module.exports = {
+  parseAcademicYearStart,
+  resolveTermsPerYear,
   calculateStudentCurriculumSemester,
   generateSemesterPaymentCode,
   getCreditsFromCurriculum,

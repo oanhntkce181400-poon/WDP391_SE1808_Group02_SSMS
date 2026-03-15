@@ -1,17 +1,24 @@
 const registrationService = require('../services/registration.service');
 const Student = require('../models/student.model');
 
-/**
- * UC43 - Validate Prerequisites
- * POST /api/registrations/validate
- * Body: { classId }
- */
+async function resolveStudentFromAuth(req) {
+  const userId = req.auth?.sub;
+  if (!userId) return null;
+
+  let student = await Student.findOne({ userId });
+  if (student) return student;
+
+  const email = req.auth?.email;
+  if (email) {
+    student = await Student.findOne({ email: String(email).toLowerCase() });
+  }
+
+  return student;
+}
+
 const validatePrerequisites = async (req, res) => {
   try {
     const { classId } = req.body;
-    const userId = req.user?.userId || req.user?._id;
-
-    // Validate input
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -19,8 +26,7 @@ const validatePrerequisites = async (req, res) => {
       });
     }
 
-    // Find student by userId
-    const student = await Student.findOne({ userId });
+    const student = await resolveStudentFromAuth(req);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -28,7 +34,6 @@ const validatePrerequisites = async (req, res) => {
       });
     }
 
-    // Validate prerequisites
     const result = await registrationService.validatePrerequisites(student._id, classId);
 
     return res.status(200).json({
@@ -37,7 +42,6 @@ const validatePrerequisites = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Error validating prerequisites:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to validate prerequisites',
@@ -46,16 +50,9 @@ const validatePrerequisites = async (req, res) => {
   }
 };
 
-/**
- * UC40 - Validate Class Capacity
- * POST /api/registrations/validate-capacity
- * Body: { classId }
- */
 const validateClassCapacity = async (req, res) => {
   try {
     const { classId } = req.body;
-
-    // Validate input
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -63,7 +60,6 @@ const validateClassCapacity = async (req, res) => {
       });
     }
 
-    // Validate capacity
     const result = await registrationService.validateClassCapacity(classId);
 
     return res.status(200).json({
@@ -72,7 +68,6 @@ const validateClassCapacity = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Error validating class capacity:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to validate class capacity',
@@ -81,17 +76,9 @@ const validateClassCapacity = async (req, res) => {
   }
 };
 
-/**
- * UC33 - Validate Wallet
- * POST /api/registrations/validate-wallet
- * Body: { classId }
- */
 const validateWallet = async (req, res) => {
   try {
     const { classId } = req.body;
-    const userId = req.user?.userId || req.user?._id;
-
-    // Validate input
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -99,8 +86,7 @@ const validateWallet = async (req, res) => {
       });
     }
 
-    // Find student by userId
-    const student = await Student.findOne({ userId });
+    const student = await resolveStudentFromAuth(req);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -108,7 +94,6 @@ const validateWallet = async (req, res) => {
       });
     }
 
-    // Validate wallet balance
     const result = await registrationService.validateWallet(student._id, classId);
 
     return res.status(200).json({
@@ -117,7 +102,6 @@ const validateWallet = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Error validating wallet:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to validate wallet balance',
@@ -126,18 +110,9 @@ const validateWallet = async (req, res) => {
   }
 };
 
-/**
- * Combined validation endpoint
- * POST /api/registrations/validate-all
- * Body: { classId }
- * Validates prerequisites, capacity, and wallet in one call
- */
 const validateAll = async (req, res) => {
   try {
     const { classId } = req.body;
-    const userId = req.user?.userId || req.user?._id;
-
-    // Validate input
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -145,8 +120,7 @@ const validateAll = async (req, res) => {
       });
     }
 
-    // Find student by userId
-    const student = await Student.findOne({ userId });
+    const student = await resolveStudentFromAuth(req);
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -154,29 +128,26 @@ const validateAll = async (req, res) => {
       });
     }
 
-    const studentId = student._id;
-
-    // Run all validations
-    const [prerequisitesResult, capacityResult, walletResult] = await Promise.all([
-      registrationService.validatePrerequisites(studentId, classId),
+    const [prerequisitesResult, capacityResult, walletResult, eligibility] = await Promise.all([
+      registrationService.validatePrerequisites(student._id, classId),
       registrationService.validateClassCapacity(classId),
-      registrationService.validateWallet(studentId, classId),
+      registrationService.validateWallet(student._id, classId),
+      registrationService.getStudentEligibilitySummary(student._id, classId),
     ]);
 
-    // Determine overall eligibility
     const isEligible =
-      prerequisitesResult.eligible && !capacityResult.isFull && walletResult.isSufficient;
+      prerequisitesResult.eligible &&
+      !capacityResult.isFull &&
+      walletResult.isSufficient &&
+      eligibility.canRegister;
 
     const validationErrors = [];
-    if (!prerequisitesResult.eligible) {
-      validationErrors.push(prerequisitesResult.message);
-    }
-    if (capacityResult.isFull) {
-      validationErrors.push(capacityResult.message);
-    }
-    if (!walletResult.isSufficient) {
-      validationErrors.push(walletResult.message);
-    }
+    if (!prerequisitesResult.eligible) validationErrors.push(prerequisitesResult.message);
+    if (capacityResult.isFull) validationErrors.push(capacityResult.message);
+    if (!walletResult.isSufficient) validationErrors.push(walletResult.message);
+    if (!eligibility.limits.overload.allowed) validationErrors.push(eligibility.limits.overload.message);
+    if (!eligibility.limits.credit.allowed) validationErrors.push(eligibility.limits.credit.message);
+    if (!eligibility.limits.cohortAccess.allowed) validationErrors.push(eligibility.limits.cohortAccess.message);
 
     return res.status(200).json({
       success: true,
@@ -186,14 +157,46 @@ const validateAll = async (req, res) => {
         prerequisites: prerequisitesResult,
         capacity: capacityResult,
         wallet: walletResult,
+        overload: eligibility.limits.overload,
+        credit: eligibility.limits.credit,
+        cohortAccess: eligibility.limits.cohortAccess,
+        eligibility,
         validationErrors,
       },
     });
   } catch (error) {
-    console.error('Error validating registration:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to validate registration',
+      error: error.message,
+    });
+  }
+};
+
+const getEligibilitySummary = async (req, res) => {
+  try {
+    const student = await resolveStudentFromAuth(req);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found for this user',
+      });
+    }
+
+    const data = await registrationService.getStudentEligibilitySummary(
+      student._id,
+      req.query.classId || null,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Eligibility summary loaded successfully',
+      data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load eligibility summary',
       error: error.message,
     });
   }
@@ -204,4 +207,5 @@ module.exports = {
   validateClassCapacity,
   validateWallet,
   validateAll,
+  getEligibilitySummary,
 };

@@ -452,7 +452,7 @@ async function seedTeachers() {
           email,
           password: teacherPasswordHash,
           fullName,
-          role: 'staff',
+          role: 'lecturer',
           authProvider: 'local',
           status: 'active',
           isActive: true,

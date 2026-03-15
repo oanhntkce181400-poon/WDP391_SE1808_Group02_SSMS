@@ -16,7 +16,7 @@ router.post(
 router.get(
   '/:templateId/statistics',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackSubmissionController.getStatistics.bind(feedbackSubmissionController)
 );
 
@@ -24,7 +24,7 @@ router.get(
 router.get(
   '/teacher/:teacherId/summary',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackSubmissionController.getTeacherFeedbackSummary.bind(feedbackSubmissionController)
 );
 

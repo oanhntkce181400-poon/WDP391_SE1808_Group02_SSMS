@@ -38,25 +38,31 @@ async function findByCode(code) {
   return Semester.findOne({ code }).lean();
 }
 
-async function clearCurrentFlag(excludeId = null) {
+async function clearCurrentFlag(excludeId = null, options = {}) {
   const filter = { isCurrent: true };
   if (excludeId) filter._id = { $ne: excludeId };
-  return Semester.updateMany(filter, { isCurrent: false });
+  return Semester.updateMany(filter, { isCurrent: false }, options);
 }
 
-async function create(data) {
+async function create(data, options = {}) {
+  if (options.session) {
+    const [created] = await Semester.create([data], { session: options.session });
+    return created;
+  }
+
   return Semester.create(data);
 }
 
-async function updateById(id, data) {
+async function updateById(id, data, options = {}) {
   return Semester.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
+    ...(options.session ? { session: options.session } : {}),
   });
 }
 
-async function deleteById(id) {
-  return Semester.findByIdAndDelete(id);
+async function deleteById(id, options = {}) {
+  return Semester.findByIdAndDelete(id, options.session ? { session: options.session } : {});
 }
 
 module.exports = {

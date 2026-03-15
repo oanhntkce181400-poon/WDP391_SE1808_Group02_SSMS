@@ -30,6 +30,10 @@ const registrationPeriodSchema = new mongoose.Schema(
     allowedCohorts: {
       type: [Number],
       default: [],
+      set: (cohorts) => {
+        if (!Array.isArray(cohorts)) return [];
+        return [...new Set(cohorts.map((c) => Number(c)).filter((c) => !Number.isNaN(c)))];
+      },
     },
 
     // Mô tả chi tiết

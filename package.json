@@ -1,0 +1,20 @@
+{
+  "name": "wdp391-se1808-group02-ssms-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev-all.js",
+    "dev:backend": "npm --prefix backend-api run dev",
+    "start:backend": "npm --prefix backend-api run start",
+    "dev:frontend": "npm --prefix frontend-web run dev",
+    "start:frontend": "npm --prefix frontend-web run start",
+    "build:frontend": "npm --prefix frontend-web run build",
+    "preview:frontend": "npm --prefix frontend-web run preview",
+    "migrate:status": "npm --prefix backend-api run migrate:status",
+    "migrate": "npm --prefix backend-api run migrate",
+    "seed": "npm --prefix backend-api run seed",
+    "seed:feature-fixtures": "npm --prefix backend-api run seed:feature-fixtures",
+    "fix:waitlist-indexes": "npm --prefix backend-api run fix:waitlist-indexes",
+    "normalize:user-roles": "npm --prefix backend-api run normalize:user-roles",
+    "verify:feature-flows": "npm --prefix backend-api run verify:feature-flows"
+  }
+}

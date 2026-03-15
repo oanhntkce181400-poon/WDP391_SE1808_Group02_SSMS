@@ -1,3 +1,4 @@
+const { normalizeRole, isValidUserRole, VALID_USER_ROLES } = require('./role.util');
 const User = require('../models/user.model.js');
 
 // Normalize cell value from Excel (handles objects, null, undefined)
@@ -25,20 +26,20 @@ const mapHeaders = (rawHeaders) => {
     'e-mail': 'email',
     'email address': 'email',
     // Vietnamese variations
-    'địa chỉ email': 'email',
+    'địa chềEemail': 'email',
     'email': 'email',
     
     fullname: 'fullName',
     'full name': 'fullName',
     'full_name': 'fullName',
-    'họ tên': 'fullName',
+    'hềEtên': 'fullName',
     'tên đầy đủ': 'fullName',
     'name': 'fullName',
     'tên': 'fullName',
     
     role: 'role',
     'vai trò': 'role',
-    'vị trí': 'role',
+    'vềEtrí': 'role',
     
     status: 'status',
     'trạng thái': 'status',
@@ -88,26 +89,24 @@ const validateUserRow = (row, rowIndex) => {
   // Normalize values
   const email = normalizeCellValue(row.email);
   const fullName = normalizeCellValue(row.fullName);
-  const role = normalizeCellValue(row.role).toLowerCase(); // LOWERCASE
+  const role = normalizeRole(normalizeCellValue(row.role));
   const status = normalizeCellValue(row.status).toLowerCase(); // LOWERCASE
 
   // Check required fields
   if (!email) {
-    errors.push('Email không được để trống');
+    errors.push('Email không được đềEtrống');
   } else if (!isValidEmail(email)) {
-    errors.push(`Email không hợp lệ: ${email}`);
+    errors.push(`Email không hợp lềE ${email}`);
   }
 
   if (!fullName) {
-    errors.push('Họ tên không được để trống');
+    errors.push('HềEtên không được đềEtrống');
   }
-
-  if (role && !['admin', 'staff', 'student'].includes(role)) {
-    errors.push(`Role không hợp lệ: ${role}. Phải là: admin, staff, student`);
+  if (role && !isValidUserRole(role)) {
+    errors.push(`Role khong hop le: ${role}. Phai la: ${VALID_USER_ROLES.join(', ')}`);
   }
-
   if (status && !['active', 'inactive', 'blocked', 'pending'].includes(status)) {
-    errors.push(`Status không hợp lệ: ${status}. Phải là: active, inactive, blocked, pending`);
+    errors.push(`Status không hợp lềE ${status}. Phải là: active, inactive, blocked, pending`);
   }
 
   return {
@@ -147,7 +146,7 @@ const validateImportRows = async (rows) => {
         rowIndex,
         email,
         fullName: validation.normalized.fullName,
-        errors: ['Email bị trùng trong file import'],
+        errors: ['Email bềEtrùng trong file import'],
       });
       continue;
     }
@@ -159,7 +158,7 @@ const validateImportRows = async (rows) => {
         rowIndex,
         email,
         fullName: validation.normalized.fullName,
-        errors: ['Email đã tồn tại trong hệ thống'],
+        errors: ['Email đã tồn tại trong hềEthống'],
       });
       continue;
     }

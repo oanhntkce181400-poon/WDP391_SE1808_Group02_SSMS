@@ -1,4 +1,14 @@
 const repo = require("./semester.repository");
+const autoEnrollmentService = require("../autoEnrollment/autoEnrollment.service");
+const mongoose = require('mongoose');
+
+function normalizeBoolean(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+  return Boolean(value);
+}
 
 function formatSemester(doc) {
   if (!doc) return null;
@@ -61,43 +71,115 @@ async function createSemester(data) {
     isActive,
   } = data;
 
+  const normalizedIsCurrent = normalizeBoolean(isCurrent, false);
+  const normalizedIsActive = normalizeBoolean(isActive, true);
+
   if (!code || !name || !semesterNum) {
     throw new Error("code, name, and semesterNum are required");
+  }
+
+  if (normalizedIsCurrent && !normalizedIsActive) {
+    throw new Error("Current semester must remain active");
   }
 
   const existing = await repo.findByCode(code);
   if (existing) throw new Error("Semester code already exists");
 
-  if (isCurrent) await repo.clearCurrentFlag();
+  const session = await mongoose.startSession();
+  let doc;
 
-  const doc = await repo.create({
-    code,
-    name,
-    semesterType: semesterType || 'regular',
-    semesterNum,
-    academicYear,
-    startDate,
-    endDate,
-    description,
-    isCurrent: !!isCurrent,
-    isActive: isActive !== false,
-  });
-  return formatSemester(doc);
+  try {
+    await session.withTransaction(async () => {
+      if (normalizedIsCurrent) {
+        await repo.clearCurrentFlag(null, { session });
+      }
+
+      doc = await repo.create(
+        {
+          code,
+          name,
+          semesterType: semesterType || 'regular',
+          semesterNum,
+          academicYear,
+          startDate,
+          endDate,
+          description,
+          isCurrent: normalizedIsCurrent,
+          isActive: normalizedIsActive,
+        },
+        { session },
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
+  const payload = formatSemester(doc);
+
+  if (payload.isCurrent) {
+    try {
+      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(String(doc._id));
+      payload.autoEnrollment = autoEnrollment;
+    } catch (error) {
+      payload.autoEnrollment = {
+        success: false,
+        message: error.message || "Failed to trigger auto enrollment",
+      };
+    }
+  }
+
+  return payload;
 }
 
 async function updateSemester(id, data) {
   const { isCurrent, isActive, ...rest } = data;
+  const existingSemester = await repo.findById(id);
+  if (!existingSemester) throw new Error("Semester not found");
 
-  if (isCurrent) await repo.clearCurrentFlag(id);
+  const willSetCurrent = normalizeBoolean(isCurrent, false);
+  const nextIsCurrent = isCurrent !== undefined ? willSetCurrent : existingSemester.isCurrent === true;
+  const nextIsActive = normalizeBoolean(isActive, existingSemester.isActive !== false);
 
-  const update = { 
+  if (nextIsCurrent && !nextIsActive) {
+    throw new Error("Current semester must remain active");
+  }
+
+  const update = {
     ...rest, 
-    ...(isCurrent !== undefined ? { isCurrent } : {}),
-    ...(isActive !== undefined ? { isActive } : {}),
+    ...(isCurrent !== undefined ? { isCurrent: willSetCurrent } : {}),
+    ...(isActive !== undefined ? { isActive: nextIsActive } : {}),
   };
-  const updated = await repo.updateById(id, update);
+
+  const session = await mongoose.startSession();
+  let updated;
+
+  try {
+    await session.withTransaction(async () => {
+      if (isCurrent !== undefined && willSetCurrent) {
+        await repo.clearCurrentFlag(id, { session });
+      }
+
+      updated = await repo.updateById(id, update, { session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
   if (!updated) throw new Error("Semester not found");
-  return formatSemester(updated.toObject ? updated.toObject() : updated);
+  const payload = formatSemester(updated.toObject ? updated.toObject() : updated);
+
+  if (isCurrent !== undefined && willSetCurrent && !existingSemester.isCurrent) {
+    try {
+      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(id);
+      payload.autoEnrollment = autoEnrollment;
+    } catch (error) {
+      payload.autoEnrollment = {
+        success: false,
+        message: error.message || "Failed to trigger auto enrollment",
+      };
+    }
+  }
+
+  return payload;
 }
 
 async function deleteSemester(id) {

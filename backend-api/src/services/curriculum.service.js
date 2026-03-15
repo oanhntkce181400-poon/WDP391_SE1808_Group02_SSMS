@@ -1,5 +1,10 @@
 // Curriculum Service - Database operations for Curriculum
 const Curriculum = require('../models/curriculum.model');
+require('../models/subject.model');
+
+function normalizeText(value) {
+  return String(value || '').trim().toUpperCase();
+}
 
 /**
  * Parse academicYear string to { startYear, endYear }.
@@ -7,42 +12,186 @@ const Curriculum = require('../models/curriculum.model');
  */
 function parseAcademicYearRange(academicYear) {
   if (!academicYear || typeof academicYear !== 'string') return null;
-  const parts = academicYear.trim().split(/[-/]/).map(p => parseInt(p, 10)).filter(n => !isNaN(n));
+  const parts = academicYear
+    .trim()
+    .split(/[-/]/)
+    .map((part) => parseInt(part, 10))
+    .filter((part) => !Number.isNaN(part));
   if (parts.length < 2) return null;
   return { startYear: parts[0], endYear: parts[1] };
 }
 
-/**
- * Tìm khung chương trình áp dụng cho sinh viên theo chuyên ngành và năm nhập học.
- * Sinh viên nhập học năm 2026 sẽ thuộc curriculum có academicYear "2026-2034" (nếu major khớp).
- * @param {Object} student - { majorCode, enrollmentYear? (số), cohort? (số 2 chữ số) }
- * @returns {Object|null} Curriculum document hoặc null
- */
-async function getCurriculumForStudent(student) {
-  const majorCode = (student.majorCode || '').trim();
-  const enrollmentYear = student.enrollmentYear != null
-    ? Number(student.enrollmentYear)
-    : (student.cohort != null ? 2000 + Number(student.cohort) : null);
-  if (!majorCode || !enrollmentYear) return null;
+function resolveStudentEnrollmentYear(student = {}) {
+  const enrollmentYear = Number.parseInt(student.enrollmentYear, 10);
+  return Number.isNaN(enrollmentYear) ? null : enrollmentYear;
+}
+
+async function resolveMajorAliases(majorCode) {
+  const normalizedMajorCode = normalizeText(majorCode);
+  if (!normalizedMajorCode) return [];
 
   const Major = require('../models/major.model');
-  const major = await Major.findOne({ majorCode, isActive: true }).lean();
-  // curriculum.major có thể lưu mã (SE) hoặc tên (Kỹ thuật phần mềm)
-  const majorNames = major ? [major.majorName, majorCode] : [majorCode];
-
-  const curriculums = await Curriculum.find({
-    status: 'active',
-    $or: majorNames.map(m => ({ major: new RegExp(`^${String(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }))
+  const major = await Major.findOne({
+    majorCode: normalizedMajorCode,
+    isActive: true,
   }).lean();
 
-  for (const c of curriculums) {
-    const range = parseAcademicYearRange(c.academicYear);
-    if (!range) continue;
-    if (enrollmentYear >= range.startYear && enrollmentYear <= range.endYear) {
-      return c;
-    }
+  const aliases = new Set([normalizedMajorCode]);
+  if (major?.majorName) {
+    aliases.add(normalizeText(major.majorName));
   }
-  return null;
+
+  return Array.from(aliases);
+}
+
+function buildCurriculumLookup(curriculums = []) {
+  const lookup = new Map();
+
+  for (const curriculum of curriculums) {
+    const key = normalizeText(curriculum?.major);
+    if (!key) continue;
+
+    if (!lookup.has(key)) {
+      lookup.set(key, []);
+    }
+
+    lookup.get(key).push(curriculum);
+  }
+
+  return lookup;
+}
+
+function sortCurriculumsByRange(curriculums = []) {
+  return [...curriculums].sort((left, right) => {
+    const leftRange = parseAcademicYearRange(left?.academicYear);
+    const rightRange = parseAcademicYearRange(right?.academicYear);
+
+    const leftStart = leftRange?.startYear || 0;
+    const rightStart = rightRange?.startYear || 0;
+
+    if (rightStart !== leftStart) {
+      return rightStart - leftStart;
+    }
+
+    return String(right?._id || '').localeCompare(String(left?._id || ''));
+  });
+}
+
+function curriculumMatchesAnyAlias(curriculum, aliases = []) {
+  const normalizedMajor = normalizeText(curriculum?.major);
+  return normalizedMajor && aliases.includes(normalizedMajor);
+}
+
+async function getCurriculumMatchForStudent(student, options = {}) {
+  const majorCode = normalizeText(student?.majorCode);
+  if (!majorCode) {
+    return {
+      curriculum: null,
+      reason: 'missing_major_code',
+      majorCode: null,
+      enrollmentYear: resolveStudentEnrollmentYear(student),
+      availableCurriculumCodes: [],
+    };
+  }
+
+  const enrollmentYear = resolveStudentEnrollmentYear(student);
+  let majorAliases = [];
+
+  if (options.majorAliasesByCode instanceof Map && options.majorAliasesByCode.has(majorCode)) {
+    majorAliases = options.majorAliasesByCode.get(majorCode);
+  } else if (Array.isArray(options.majorAliases) && options.majorAliases.length > 0) {
+    majorAliases = options.majorAliases;
+  } else {
+    majorAliases = await resolveMajorAliases(majorCode);
+  }
+
+  const normalizedAliases = Array.from(
+    new Set([majorCode, ...majorAliases.map((alias) => normalizeText(alias)).filter(Boolean)]),
+  );
+
+  let matchingCurriculums = [];
+  if (options.curriculumLookup instanceof Map) {
+    const deduped = new Map();
+    for (const alias of normalizedAliases) {
+      for (const curriculum of options.curriculumLookup.get(alias) || []) {
+        deduped.set(String(curriculum._id), curriculum);
+      }
+    }
+    matchingCurriculums = Array.from(deduped.values());
+  } else if (Array.isArray(options.curriculums)) {
+    matchingCurriculums = options.curriculums.filter((curriculum) =>
+      curriculumMatchesAnyAlias(curriculum, normalizedAliases),
+    );
+  } else {
+    const allActiveCurriculums = await Curriculum.find({ status: 'active' }).lean();
+    matchingCurriculums = allActiveCurriculums.filter((curriculum) =>
+      curriculumMatchesAnyAlias(curriculum, normalizedAliases),
+    );
+  }
+
+  const availableCurriculumCodes = matchingCurriculums.map((curriculum) => curriculum.code).filter(Boolean);
+  if (!matchingCurriculums.length) {
+    return {
+      curriculum: null,
+      reason: 'no_active_curriculum_for_major',
+      majorCode,
+      enrollmentYear,
+      availableCurriculumCodes,
+    };
+  }
+
+  if (enrollmentYear == null) {
+    if (options.allowSingleCurriculumFallback === true && matchingCurriculums.length === 1) {
+      return {
+        curriculum: matchingCurriculums[0],
+        reason: 'fallback_single_curriculum',
+        majorCode,
+        enrollmentYear,
+        availableCurriculumCodes,
+        fallbackUsed: true,
+      };
+    }
+
+    return {
+      curriculum: null,
+      reason: 'missing_enrollment_year',
+      majorCode,
+      enrollmentYear,
+      availableCurriculumCodes,
+    };
+  }
+
+  const matchedCurriculums = sortCurriculumsByRange(matchingCurriculums).filter((curriculum) => {
+    const range = parseAcademicYearRange(curriculum.academicYear);
+    if (!range) return false;
+    return enrollmentYear >= range.startYear && enrollmentYear <= range.endYear;
+  });
+
+  if (!matchedCurriculums.length) {
+    return {
+      curriculum: null,
+      reason: 'no_curriculum_for_enrollment_year',
+      majorCode,
+      enrollmentYear,
+      availableCurriculumCodes,
+    };
+  }
+
+  return {
+    curriculum: matchedCurriculums[0],
+    reason: 'matched',
+    majorCode,
+    enrollmentYear,
+    availableCurriculumCodes,
+  };
+}
+
+/**
+ * Resolve the curriculum for a student based on major and enrollment year.
+ */
+async function getCurriculumForStudent(student, options = {}) {
+  const match = await getCurriculumMatchForStudent(student, options);
+  return match.curriculum;
 }
 
 const curriculumService = {
@@ -469,6 +618,9 @@ const curriculumService = {
 
   // Parse "2026-2034" -> { startYear, endYear }
   parseAcademicYearRange,
+  buildCurriculumLookup,
+  resolveStudentEnrollmentYear,
+  getCurriculumMatchForStudent,
 
   // Tìm khung chương trình cho sinh viên theo majorCode + năm nhập học (trong khoảng academicYear)
   getCurriculumForStudent,

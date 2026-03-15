@@ -16,8 +16,7 @@ const waitlistSchema = new mongoose.Schema({
   targetSemester: {
     type: Number,
     required: true,
-    min: 1,
-    max: 3
+    min: 1
   },
   targetAcademicYear: {
     type: String,
@@ -44,7 +43,10 @@ const waitlistSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Compound unique index - một sinh viên chỉ có thể có 1 waitlist active cho 1 môn
-waitlistSchema.index({ student: 1, subject: 1, status: 1 }, { unique: true });
+waitlistSchema.index(
+  { student: 1, subject: 1, targetSemester: 1, targetAcademicYear: 1, status: 1 },
+  { unique: true },
+);
 
 // Index cho việc tìm kiếm waitlist theo môn và kỳ
 waitlistSchema.index({ subject: 1, targetSemester: 1, targetAcademicYear: 1, status: 1 });

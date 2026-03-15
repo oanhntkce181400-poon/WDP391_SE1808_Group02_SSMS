@@ -219,6 +219,7 @@ const UserListPage = () => {
                 <option value="admin">Admin</option>
                 <option value="staff">Staff</option>
                 <option value="student">Student</option>
+                <option value="lecturer">Lecturer</option>
               </select>
             </div>
             <div className="mb-4">
