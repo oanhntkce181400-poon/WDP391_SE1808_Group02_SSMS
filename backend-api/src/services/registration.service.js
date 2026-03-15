@@ -61,10 +61,16 @@ async function getCurriculumSubjectIdSet(student, semester) {
     };
   }
 
-  const curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
-    student,
-    semester,
-  );
+  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
+  let curriculumSemesterOrder;
+  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
+    curriculumSemesterOrder = student.currentCurriculumSemester;
+  } else {
+    curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
+      student,
+      semester,
+    );
+  }
 
   const subjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,

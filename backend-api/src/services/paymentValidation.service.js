@@ -170,12 +170,18 @@ async function checkSemesterPaymentRequirement(studentId) {
     err.statusCode = 404;
     throw err;
   }
-  
-  // Tính kỳ hiện tại trong khung chương trình
-  const curriculumSemesterOrder = await calculateStudentCurriculumSemester(
-    student,
-    currentSemester
-  );
+
+  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
+  // Fallback về tính toán nếu chưa có
+  let curriculumSemesterOrder;
+  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
+    curriculumSemesterOrder = student.currentCurriculumSemester;
+  } else {
+    curriculumSemesterOrder = await calculateStudentCurriculumSemester(
+      student,
+      currentSemester
+    );
+  }
   
   // Lấy thông tin khung chương trình của sinh viên
   const curriculum = await curriculumService.getCurriculumForStudent({
@@ -286,8 +292,15 @@ async function getAllUnpaidSemesters(studentId) {
   });
   
   const curriculumCode = curriculum?.code || `${student.majorCode}K${student.cohort}`;
-  const currentCurriculumSemester = await calculateStudentCurriculumSemester(student, currentSemester);
-  
+
+  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
+  let currentCurriculumSemester;
+  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
+    currentCurriculumSemester = student.currentCurriculumSemester;
+  } else {
+    currentCurriculumSemester = await calculateStudentCurriculumSemester(student, currentSemester);
+  }
+
   // Lấy tất cả các kỳ đã thanh toán
   const payments = await Payment.find({
     student: studentId,

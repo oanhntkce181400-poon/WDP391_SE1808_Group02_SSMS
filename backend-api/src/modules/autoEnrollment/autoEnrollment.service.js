@@ -148,6 +148,11 @@ async function getCurriculumMatchCached(cache, student, options) {
 }
 
 async function getCurriculumSemesterOrderCached(cache, student, semester, options) {
+  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
+  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
+    return student.currentCurriculumSemester;
+  }
+
   const enrollmentYear = curriculumService.resolveStudentEnrollmentYear(student);
   const cacheKey = `${enrollmentYear ?? 'N/A'}:${semester.semesterNum}:${semester.academicYear}:${options.termsPerYear}`;
   if (!cache.has(cacheKey)) {
@@ -654,10 +659,17 @@ async function previewAutoEnrollment(studentId) {
   }
 
   const curriculum = curriculumMatch.curriculum;
-  const curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
-    student,
-    currentSemester,
-  );
+
+  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
+  let curriculumSemesterOrder;
+  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
+    curriculumSemesterOrder = student.currentCurriculumSemester;
+  } else {
+    curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
+      student,
+      currentSemester,
+    );
+  }
 
   const semesterSubjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,
