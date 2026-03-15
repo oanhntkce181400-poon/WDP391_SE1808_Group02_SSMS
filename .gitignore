@@ -45,3 +45,7 @@ backend-api/docs/
 
 # Uploads folder
 uploads/
+
+# Local Codex / editor artifacts
+.codex/
+backend-api/Microsoft/
