@@ -1,4 +1,5 @@
 const Subject = require('../models/subject.model');
+const CurriculumCourse = require('../models/curriculumCourse.model');
 
 class SubjectService {
   // Create new subject

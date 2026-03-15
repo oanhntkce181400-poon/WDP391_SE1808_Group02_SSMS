@@ -84,6 +84,41 @@ const studentService = {
   getStudentCurriculum: async (studentId) => {
     return axiosClient.get(`/students/${studentId}/curriculum`);
   },
+
+  // ─────────────────────────────────────────────────────────────
+  // Lấy môn học kỳ hiện tại của sinh viên đang đăng nhập
+  // ─────────────────────────────────────────────────────────────
+  getMyCurrentSemesterCourses: async () => {
+    return axiosClient.get('/students/me/current-semester-courses');
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // Lấy môn học kỳ hiện tại của sinh viên (admin/staff)
+  // ─────────────────────────────────────────────────────────────
+  getStudentCurrentSemesterCourses: async (studentId) => {
+    return axiosClient.get(`/students/${studentId}/current-semester-courses`);
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // Cập nhật kỳ khung chương trình của sinh viên (admin/staff)
+  // ─────────────────────────────────────────────────────────────
+  updateStudentCurriculumSemester: async (studentId, semester) => {
+    return axiosClient.put(`/students/${studentId}/curriculum-semester`, { currentCurriculumSemester: semester });
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // Lấy kỳ tiếp theo của sinh viên đang đăng nhập
+  // ─────────────────────────────────────────────────────────────
+  getMyNextCurriculumSemester: async () => {
+    return axiosClient.get('/students/me/next-curriculum-semester');
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // Lấy kỳ tiếp theo của sinh viên (admin/staff)
+  // ─────────────────────────────────────────────────────────────
+  getStudentNextCurriculumSemester: async (studentId) => {
+    return axiosClient.get(`/students/${studentId}/next-curriculum-semester`);
+  },
 };
 
 export default studentService;

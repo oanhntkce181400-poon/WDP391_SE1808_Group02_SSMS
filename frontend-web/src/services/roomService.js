@@ -27,6 +27,10 @@ const roomService = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  // Lịch sử sử dụng phòng
+  getRoomUsageHistory(id) {
+    return axiosClient.get(`/rooms/${id}/usage-history`);
+  },
 };
 
 export default roomService;

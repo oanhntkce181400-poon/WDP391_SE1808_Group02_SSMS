@@ -311,6 +311,64 @@ async function checkEnrollmentPermission(studentId) {
   };
 }
 
+/**
+ * Kiểm tra sinh viên có nợ học phí các kỳ trước không
+ * @param {String} studentId - ObjectId của sinh viên
+ * @param {String} currentSemesterId - Kỳ hiện tại đang đăng ký
+ * @returns {Object} - { hasDebt, unpaidBills, canEnroll, message }
+ */
+async function checkPendingTuition(studentId, currentSemesterId) {
+  const TuitionBill = require('../models/tuitionBill.model');
+  const Semester = require('../models/semester.model');
+  
+  // Lấy thông tin kỳ hiện tại
+  const currentSemester = await Semester.findById(currentSemesterId).lean();
+  if (!currentSemester) {
+    return { hasDebt: false, unpaidBills: [], canEnroll: true, message: 'Kỳ học không xác định' };
+  }
+  
+  // Tìm tất cả các kỳ trước kỳ hiện tại (dùng semesterNum và academicYear)
+  const previousSemesters = await Semester.find({
+    $or: [
+      { academicYear: currentSemester.academicYear, semesterNum: { $lt: currentSemester.semesterNum } },
+      { academicYear: { $lt: currentSemester.academicYear } }
+    ]
+  }).lean();
+  
+  const previousSemesterIds = previousSemesters.map(s => s._id);
+  
+  // Tìm tất cả bill của SV trong các kỳ trước
+  const unpaidBills = await TuitionBill.find({
+    student: studentId,
+    semester: { $in: previousSemesterIds },
+    status: { $in: ['pending', 'overdue'] }
+  }).lean();
+  
+  if (unpaidBills.length > 0) {
+    const totalDebt = unpaidBills.reduce((sum, b) => sum + b.totalAmount, 0);
+    return {
+      hasDebt: true,
+      unpaidBills: unpaidBills.map(b => ({
+        semesterName: b.semesterName,
+        academicYear: b.academicYear,
+        amount: b.totalAmount,
+        status: b.status,
+        dueDate: b.dueDate
+      })),
+      totalDebt,
+      canEnroll: false,
+      message: `Còn nợ ${unpaidBills.length} kỳ học phí. Tổng nợ: ${totalDebt.toLocaleString()} VNĐ`
+    };
+  }
+  
+  return {
+    hasDebt: false,
+    unpaidBills: [],
+    canEnroll: true,
+    message: 'Không có nợ học phí'
+  };
+}
+
 module.exports = {
   calculateStudentCurriculumSemester,
   generateSemesterPaymentCode,
@@ -318,5 +376,6 @@ module.exports = {
   findTuitionByCurriculumSemester,
   checkSemesterPaymentRequirement,
   getAllUnpaidSemesters,
-  checkEnrollmentPermission
+  checkEnrollmentPermission,
+  checkPendingTuition
 };

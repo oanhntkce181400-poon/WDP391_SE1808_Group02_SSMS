@@ -62,6 +62,27 @@ const financeService = {
   getTuitionExcess() {
     return axiosClient.get('/finance/tuition-excess');
   },
+
+  // Tính học phí cho sinh viên theo kỳ
+  calculateTuition(semesterId) {
+    return axiosClient.post('/finance/tuition/calculate', { semesterId });
+  },
+
+  // Lấy bill học phí của sinh viên theo kỳ
+  getTuitionBill(semesterId) {
+    return axiosClient.get(`/finance/tuition/bill/${semesterId}`);
+  },
+
+  // Lấy tất cả bills của sinh viên
+  getTuitionBills(status = null) {
+    const params = status ? { status } : {};
+    return axiosClient.get('/finance/tuition/bills', { params });
+  },
+
+  // Kiểm tra nợ học phí
+  checkPendingTuition(semesterId) {
+    return axiosClient.get('/registrations/check-pending-tuition', { params: { semesterId } });
+  },
 };
 
 export default financeService;

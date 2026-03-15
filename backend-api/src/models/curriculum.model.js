@@ -11,6 +11,7 @@ const curriculumSchema = new mongoose.Schema(
       ref: 'Major' 
     },
     academicYear: { type: String, required: true, trim: true },
+    version: { type: Number, default: 1 }, // Phiên bản CTĐT
     description: { type: String, trim: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     totalCredits: { type: Number, default: 0 },
@@ -37,6 +38,9 @@ const curriculumSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Index for version queries
+curriculumSchema.index({ major: 1, academicYear: 1, version: 1 });
 
 const Curriculum = mongoose.model('Curriculum', curriculumSchema);
 

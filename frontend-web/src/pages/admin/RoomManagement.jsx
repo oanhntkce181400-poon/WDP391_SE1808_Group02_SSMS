@@ -6,6 +6,7 @@ import RoomModal from '../../components/features/RoomModal';
 import RoomDeleteModal from '../../components/features/RoomDeleteModal';
 import RoomFilterPanel from '../../components/features/RoomFilterPanel';
 import RoomDetailModal from '../../components/features/RoomDetailModal';
+import RoomUsageHistoryModal from '../../components/features/RoomUsageHistoryModal';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
@@ -31,6 +32,7 @@ export default function RoomManagement() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [isUsageHistoryOpen, setIsUsageHistoryOpen] = useState(false);
 
   // State for selected room
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -150,6 +152,12 @@ export default function RoomManagement() {
   const handleView = (room) => {
     setSelectedRoom(room);
     setIsDetailModalOpen(true);
+  };
+
+  // Handle view usage history
+  const handleViewUsageHistory = (room) => {
+    setSelectedRoom(room);
+    setIsUsageHistoryOpen(true);
   };
 
   // Handle submit form (create/update)
@@ -435,6 +443,26 @@ export default function RoomManagement() {
                               </svg>
                             </button>
                             <button
+                              onClick={() => handleViewUsageHistory(room)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              title="Lịch sử sử dụng"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="w-5 h-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                            </button>
+                            <button
                               onClick={() => handleDelete(room)}
                               className="p-1.5 text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                               title="Xóa"
@@ -547,6 +575,13 @@ export default function RoomManagement() {
         room={selectedRoom}
         onEdit={handleEdit}
         onDelete={handleDelete}
+      />
+
+      {/* Room Usage History Modal */}
+      <RoomUsageHistoryModal
+        isOpen={isUsageHistoryOpen}
+        onClose={() => setIsUsageHistoryOpen(false)}
+        room={selectedRoom}
       />
 
       {/* Filter Panel */}

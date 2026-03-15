@@ -40,70 +40,91 @@ export default function StudentCurriculumPage() {
     );
   }
 
-  const { student, curriculum, currentSemesterInCurriculum, currentAcademicYear } = data || {};
-  const yearInProgram = currentSemesterInCurriculum
-    ? Math.ceil(currentSemesterInCurriculum / 2)
-    : null;
+  const { studentInfo, curriculum, currentCurriculumSemester, activeSystemSemester } = data || {};
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">📖 Khung chương trình của tôi</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Thông tin khung chương trình và học kỳ hiện tại theo năm nhập học
+          Thông tin khung chương trình và tiến độ học tập theo khung chương trình
         </p>
       </div>
 
-      {/* Thông tin sinh viên & học kỳ hiện tại */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-            Thông tin của bạn
-          </h2>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Mã SV</dt>
-              <dd className="font-medium text-slate-900">{student?.studentCode || '—'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Họ tên</dt>
-              <dd className="font-medium text-slate-900">{student?.fullName || '—'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Năm nhập học</dt>
-              <dd className="font-medium text-slate-900">{student?.enrollmentYear || '—'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Ngành</dt>
-              <dd className="font-medium text-slate-900">{student?.majorCode || '—'}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-700">
-            Học kỳ hiện tại
-          </h2>
-          {currentSemesterInCurriculum != null ? (
-            <div className="mt-3">
-              <p className="text-lg font-bold text-slate-900">
-                Học kỳ {currentSemesterInCurriculum} — Năm {yearInProgram}
-              </p>
-              {currentAcademicYear && (
-                <p className="mt-1 text-sm text-slate-600">
-                  Năm học: {currentAcademicYear}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-600">
-              Chưa xác định được học kỳ. Kiểm tra năm nhập học và khung chương trình.
-            </p>
-          )}
-        </div>
+      {/* Khối 1: Thông tin sinh viên */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          Thông tin của bạn
+        </h2>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Mã SV</dt>
+            <dd className="font-medium text-slate-900">{studentInfo?.studentCode || '—'}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Họ tên</dt>
+            <dd className="font-medium text-slate-900">{studentInfo?.fullName || '—'}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Năm nhập học</dt>
+            <dd className="font-medium text-slate-900">{studentInfo?.enrollmentYear || '—'}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-slate-500">Ngành</dt>
+            <dd className="font-medium text-slate-900">{studentInfo?.majorCode || '—'}</dd>
+          </div>
+        </dl>
       </div>
 
-      {/* Khung chương trình */}
+      {/* Khối 2: Tiến độ học tập theo khung chương trình */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-blue-700">
+          Tiến độ học tập theo khung chương trình
+        </h2>
+        {currentCurriculumSemester ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-lg font-bold text-slate-900">
+              {currentCurriculumSemester.semesterLabel}
+            </p>
+            <p className="text-sm text-slate-600">
+              Năm học: <strong>{currentCurriculumSemester.academicYear}</strong>
+            </p>
+            <p className="text-sm text-slate-500">
+              Thuộc khung: <strong>{curriculum?.code || '—'}</strong> · Tiến độ: {currentCurriculumSemester.progress}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-600">
+            Chưa xác định được học kỳ. Vui lòng liên hệ phòng Đào tạo để cập nhật.
+          </p>
+        )}
+      </div>
+
+      {/* Khối 3: Kỳ hệ thống đang mở đăng ký */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-800">
+          Kỳ hệ thống đang mở đăng ký
+        </h2>
+        {activeSystemSemester ? (
+          <div className="mt-3 space-y-1">
+            <p className="text-sm font-medium text-slate-700">
+              {activeSystemSemester.name}
+            </p>
+            <p className="text-sm text-slate-600">
+              Năm học: {activeSystemSemester.academicYear}
+            </p>
+            <p className="text-xs text-slate-500">
+              Đây là kỳ hệ thống để đăng ký học phần, học lại, học vượt
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-600">
+            Chưa có kỳ hệ thống đang mở đăng ký
+          </p>
+        )}
+      </div>
+
+      {/* Khối 4: Khung chương trình áp dụng */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
           Khung chương trình áp dụng

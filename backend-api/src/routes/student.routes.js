@@ -46,6 +46,22 @@ router.get(
   studentController.getMyCurriculum
 );
 
+// GET /api/students/me/current-semester-courses - Lấy môn học kỳ hiện tại (SV đang đăng nhập)
+router.get(
+  '/me/current-semester-courses',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMyCurrentSemesterCourses
+);
+
+// GET /api/students/me/next-curriculum-semester - Lấy kỳ tiếp theo (SV đang đăng nhập)
+router.get(
+  '/me/next-curriculum-semester',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMyNextCurriculumSemester
+);
+
 // ─────────────────────────────────────────────────────────────
 // CRUD ENDPOINTS
 // ─────────────────────────────────────────────────────────────
@@ -96,6 +112,30 @@ router.get(
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
   studentController.getStudentCurriculum
+);
+
+// GET /api/students/:id/current-semester-courses - Lấy môn học kỳ hiện tại (admin/staff)
+router.get(
+  '/:id/current-semester-courses',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.getStudentCurrentSemesterCourses
+);
+
+// PUT /api/students/:id/curriculum-semester - Cập nhật kỳ khung chương trình (admin/staff)
+router.put(
+  '/:id/curriculum-semester',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.updateStudentCurriculumSemester
+);
+
+// GET /api/students/:id/next-curriculum-semester - Lấy kỳ tiếp theo (admin/staff)
+router.get(
+  '/:id/next-curriculum-semester',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.getStudentNextCurriculumSemester
 );
 
 module.exports = router;

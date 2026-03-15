@@ -46,4 +46,34 @@ router.post(
   registrationController.validateAll
 );
 
+// UC44 - Check Pending Tuition (kiểm tra nợ học phí)
+// GET /api/registrations/check-pending-tuition?semesterId=...
+router.get(
+  '/check-pending-tuition',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  async (req, res) => {
+    try {
+      const paymentValidation = require('../services/paymentValidation.service');
+      const studentService = require('../services/student.service');
+      const userId = req.auth.sub;
+      const { semesterId } = req.query;
+      
+      if (!semesterId) {
+        return res.status(400).json({ success: false, message: 'Thiếu semesterId' });
+      }
+      
+      const student = await studentService.getStudentByUserId(userId);
+      if (!student) {
+        return res.status(404).json({ success: false, message: 'Sinh viên không tìm thấy' });
+      }
+      
+      const result = await paymentValidation.checkPendingTuition(student._id, semesterId);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+);
+
 module.exports = router;

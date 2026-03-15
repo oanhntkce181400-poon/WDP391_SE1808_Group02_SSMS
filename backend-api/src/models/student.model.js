@@ -24,6 +24,21 @@ const studentSchema = new mongoose.Schema(
       index: true
     }, // Đang học, Bảo lưu, Thôi học, Tốt nghiệp
     enrollmentYear: { type: Number }, // Năm nhập học
+
+    // Liên kết khung chương trình (curriculum)
+    curriculumId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Curriculum',
+      index: true
+    },
+    // Kỳ hiện tại trong khung chương trình (1-9)
+    currentCurriculumSemester: { 
+      type: Number, 
+      default: 1, 
+      min: 1, 
+      max: 9,
+      index: true
+    },
     
     // Liên kết tài khoản
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true, sparse: true },

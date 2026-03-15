@@ -1,0 +1,107 @@
+@startuml Check Schedule Conflict - Verify Room and Teacher Availability
+title Check Schedule Conflict - Verify Room and Teacher Availability
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Schedule Form)"
+participant APIClient as "API Client (Frontend)"
+participant ScheduleRouter as "ScheduleRouter"
+participant Validation as "ValidationMiddleware"
+participant ScheduleController as "ScheduleController"
+participant ScheduleService as "ScheduleService"
+participant ScheduleRepository as "ScheduleRepository"
+participant ClassSectionRepository as "ClassSectionRepository"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) enter schedule details\n(room, teacher, dayOfWeek, startPeriod, endPeriod)
+activate Screen
+
+Screen -> APIClient: (2) POST /api/classes/:classId/schedules/check-conflict\n{ room_id, teacher_id, day_of_week, start_period, end_period, semester, academic_year }
+APIClientactivate 
+
+APIClient -> ScheduleRouter: (3) forward request
+activate ScheduleRouter
+
+ScheduleRouter -> Validation: (4) validate required fields
+activate Validation
+alt invalid - missing required fields
+  Validation --> ScheduleRouter: (4.1.1) validation failed
+  deactivate Validation
+
+  ScheduleRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error: "Thiếu thông tin bắt buộc"
+else valid
+  deactivate Validation
+
+  ScheduleRouter -> ScheduleController: (4.2.1) checkConflict(req)
+  activate ScheduleController
+
+  ScheduleController -> ScheduleService: (4.2.1.1) checkScheduleConflict(data)
+  activate ScheduleService
+
+  alt semester/academicYear not provided
+    ScheduleService -> ClassSectionRepository: (4.2.1.1.1) findById(classSectionId)\nselect: semester, academicYear
+    activate ClassSectionRepository
+    ClassSectionRepository -> DB: (4.2.1.1.2) db find classSection
+    activate DB
+    DB --> ClassSectionRepository: (4.2.1.1.3) return classSection
+    deactivate DB
+    ClassSectionRepository --> ScheduleService: (4.2.1.1.4) return semester & academicYear
+    deactivate ClassSectionRepository
+  end
+
+  alt roomId provided
+    ScheduleService -> ScheduleRepository: (4.2.1.2.1) checkRoomConflict(roomId, dayOfWeek, startPeriod, endPeriod, classSectionId, semester, academicYear)
+    activate ScheduleRepository
+
+    ScheduleRepository -> DB: (4.2.1.2.1.1) query schedules in same semester/year
+    activate DB
+
+    DB --> ScheduleRepository: (4.2.1.2.1.2) return conflicting schedules
+    deactivate DB
+
+    ScheduleRepository --> ScheduleService: (4.2.1.2.1.3) return room conflicts
+    deactivate ScheduleRepository
+  end
+
+  alt teacherId provided
+    ScheduleService -> ScheduleRepository: (4.2.1.3.1) checkTeacherConflict(teacherId, dayOfWeek, startPeriod, endPeriod, classSectionId, semester, academicYear)
+    activate ScheduleRepository
+
+    ScheduleRepository -> DB: (4.2.1.3.1.1) query teacher schedules in same time slot
+    activate DB
+
+    DB --> ScheduleRepository: (4.2.1.3.1.2) return teacher conflicts
+    deactivate DB
+
+    ScheduleRepository --> ScheduleService: (4.2.1.3.1.3) return teacher conflicts
+    deactivate ScheduleRepository
+  end
+
+  ScheduleService --> ScheduleController: (4.2.1.4) return conflicts object\n{ room: [...], teacher: [...] }
+  deactivate ScheduleService
+
+  ScheduleController --> ScheduleRouter: (4.2.2) 200 OK with conflicts
+  deactivate ScheduleController
+
+  ScheduleRouter --> APIClient: (5) response with conflict results
+  deactivate ScheduleRouter
+
+  APIClient --> Screen: (6) display conflict results
+  activate APIClient
+  deactivate APIClient
+
+  alt conflicts found
+    Screen --> PrimaryActor: (7.1) display conflict warnings\n(show conflicting classes)
+  else no conflicts
+    Screen --> PrimaryActor: (7.2) display success\n"Room and teacher are available"
+  end
+end
+
+deactivate Screen
+deactivate PrimaryActor
+
+@enduml

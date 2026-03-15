@@ -1,0 +1,147 @@
+@startuml Update and Delete Faculty
+title Update and Delete Faculty
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Faculty Detail/Edit Modal)"
+participant APIClient as "API Client (Frontend)"
+participant FacultyRouter as "FacultyRouter"
+participant Validation as "ValidationMiddleware"
+participant FacultyController as "FacultyController"
+participant FacultyService as "FacultyService"
+participant FacultyModel as "FacultyModel"
+database DB as "Database"
+
+== UPDATE FACULTY ==
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) click "Edit" button on faculty row
+activate Screen
+Screen -> PrimaryActor: (1.1) display edit form with current data
+
+PrimaryActor -> Screen: (2) modify faculty fields\n(facultyCode, facultyName, shortName, description, isActive)
+Screen -> APIClient: (3) PUT /api/faculties/:id\n{ facultyCode, facultyName, shortName, description, isActive }
+APIClientactivate 
+
+APIClient -> FacultyRouter: (4) forward request
+activate FacultyRouter
+
+FacultyRouter -> Validation: (5) validate payload
+activate Validation
+alt invalid
+  Validation --> FacultyRouter: (5.1.1) validation failed
+  deactivate Validation
+
+  FacultyRouter --> APIClient: (5.1.2) 400 Bad Request
+  APIClient --> Screen: (5.1.3) show validation error
+  Screen --> PrimaryActor: (5.1.4) display error messages
+else valid
+  deactivate Validation
+
+  FacultyRouter -> FacultyController: (5.2.1) updateFaculty(req)
+  activate FacultyController
+
+  FacultyController -> FacultyService: (5.2.1.1) updateFaculty(id, data)
+  activate FacultyService
+
+  FacultyService -> FacultyModel: (5.2.1.1.1) findByIdAndUpdate(id, data)
+  activate FacultyModel
+  FacultyModel -> DB: (5.2.1.1.2) db update
+  activate DB
+  DB --> FacultyModel: (5.2.1.1.3) return updated faculty
+  deactivate DB
+  FacultyModel --> FacultyService: (5.2.1.1.4) return updated faculty
+  deactivate FacultyModel
+
+  alt faculty not found
+    FacultyService --> FacultyController: (5.2.1.1.5) return null
+    FacultyController --> FacultyRouter: (5.2.1.1.6) 404 Not Found
+    FacultyRouter --> APIClient: (5.2.1.1.7) 404 response
+    APIClient --> Screen: (5.2.1.1.8) show error: "Không tìm thấy khoa"
+    Screen --> PrimaryActor: (5.2.1.1.9) display error
+  else updated successfully
+    FacultyService --> FacultyController: (5.2.1.2.1) return updated faculty
+    deactivate FacultyService
+
+    FacultyController --> FacultyRouter: (5.2.1.2.2) 200 OK
+    deactivate FacultyController
+  end
+end
+
+FacultyRouter --> APIClient: (6) response (success/error)
+deactivate FacultyRouter
+
+APIClient --> Screen: (7) display result
+activate APIClient
+deactivate APIClient
+
+alt success
+  Screen --> PrimaryActor: (8.1) show success message\n"Cập nhật khoa thành công"
+else error
+  Screen --> PrimaryActor: (8.2) show error message
+end
+
+deactivate Screen
+
+== DELETE FACULTY ==
+
+PrimaryActor -> Screen: (9) click "Delete" button on faculty row
+activate Screen
+
+Screen -> PrimaryActor: (9.1) display confirmation dialog\n"Are you sure you want to delete this faculty?"
+
+alt Cancel delete
+  PrimaryActor -> Screen: (9.2.1) click "Cancel"
+  Screen --> PrimaryActor: (9.2.2) close dialog
+else Confirm delete
+  PrimaryActor -> Screen: (9.2.3) click "Confirm Delete"
+  Screen -> APIClient: (10) DELETE /api/faculties/:id
+  activate APIClient
+
+  APIClient -> FacultyRouter: (11) forward DELETE request
+  activate FacultyRouter
+
+  FacultyRouter -> FacultyController: (12) deleteFaculty(req)
+  activate FacultyController
+
+  FacultyController -> FacultyService: (12.1) deleteFaculty(id)
+  activate FacultyService
+
+  FacultyService -> FacultyModel: (12.1.1) findByIdAndDelete(id)
+  activate FacultyModel
+  FacultyModel -> DB: (12.1.2) db delete
+  activate DB
+  DB --> FacultyModel: (12.1.3) return deleted faculty
+  deactivate DB
+  FacultyModel --> FacultyService: (12.1.4) return deleted faculty
+  deactivate FacultyModel
+
+  alt faculty not found
+    FacultyService --> FacultyController: (12.1.5) return null
+    FacultyController --> FacultyRouter: (12.1.6) 404 Not Found
+    FacultyRouter --> APIClient: (12.1.7) 404 response
+    APIClient --> Screen: (12.1.8) show error: "Không tìm thấy khoa"
+    Screen --> PrimaryActor: (12.1.9) display error
+  else deleted successfully
+    FacultyService --> FacultyController: (12.2.1) return success
+    deactivate FacultyService
+
+    FacultyController --> FacultyRouter: (12.2.2) 200 OK
+    deactivate FacultyController
+
+    FacultyRouter --> APIClient: (13) response success
+    deactivate FacultyRouter
+
+    APIClient --> Screen: (14) display success
+    activate APIClient
+    deactivate APIClient
+
+    Screen --> PrimaryActor: (15) show success message\n"Xóa khoa thành công"\nand refresh faculty list
+  end
+end
+
+deactivate Screen
+deactivate PrimaryActor
+
+@enduml

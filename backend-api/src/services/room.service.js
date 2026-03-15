@@ -195,6 +195,42 @@ class RoomService {
       throw error;
     }
   }
+
+  // Get room usage history
+  async getRoomUsageHistory(roomId) {
+    try {
+      const ClassSection = require('../models/classSection.model');
+      
+      const classSections = await ClassSection.find({ room: roomId })
+        .populate('subject', 'subjectCode subjectName')
+        .populate('lecturer', 'fullName')
+        .populate('semester', 'name academicYear')
+        .sort({ 'schedule.startTime': -1 })
+        .lean();
+
+      return classSections.map(cs => ({
+        classSectionId: cs._id,
+        classCode: cs.classCode,
+        subject: cs.subject ? {
+          subjectCode: cs.subject.subjectCode,
+          subjectName: cs.subject.subjectName
+        } : null,
+        lecturer: cs.lecturer ? {
+          fullName: cs.lecturer.fullName
+        } : null,
+        semester: cs.semester ? {
+          name: cs.semester.name,
+          academicYear: cs.semester.academicYear
+        } : null,
+        schedule: cs.schedule,
+        studentCount: cs.enrolledStudents?.length || 0,
+        maxCapacity: cs.maxCapacity,
+        status: cs.status
+      }));
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = new RoomService();

@@ -212,12 +212,11 @@ const getSuggestedClassSection = async (req, res) => {
   }
 };
 
-// GET /api/students/:id/curriculum - Lấy khung chương trình của sinh viên
+// GET /api/students/:id/curriculum - Lấy khung chương trình của sinh viên (admin/staff)
 const getStudentCurriculum = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Lấy thông tin sinh viên
     const student = await studentService.getStudentById(id);
     if (!student) {
       return res.status(404).json({
@@ -226,56 +225,68 @@ const getStudentCurriculum = async (req, res) => {
       });
     }
 
-    // Tìm khung chương trình phù hợp
-    const curriculum = await curriculumService.getCurriculumForStudent({
-      majorCode: student.majorCode,
-      enrollmentYear: student.enrollmentYear,
-      cohort: student.cohort,
-    });
+    const intakeYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
 
-    // Tính năm nhập học (nếu chưa có)
-    const enrollmentYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
-
-    // Tính học kỳ hiện tại trong khung chương trình (1-9)
-    let currentSemesterInCurriculum = null;
-    let currentAcademicYear = null;
-    let currentSemesterOrder = null;
-
-    if (curriculum && enrollmentYear) {
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1; // 1-12
-      currentAcademicYear = currentMonth >= 8 
-        ? `${currentYear}-${currentYear + 1}` 
-        : `${currentYear - 1}-${currentYear}`;
-
-      const startYear = curriculumService.parseAcademicYearRange(curriculum.academicYear)?.startYear;
-      if (startYear) {
-        const yearsSinceEnrollment = currentYear - startYear;
-        const isSecondSemester = currentMonth >= 1 && currentMonth <= 5;
-        
-        currentSemesterOrder = isSecondSemester 
-          ? yearsSinceEnrollment * 2 + 2 
-          : yearsSinceEnrollment * 2 + 1;
-        
-        currentSemesterInCurriculum = Math.min(Math.max(currentSemesterOrder, 1), 9);
-      }
+    let curriculum = null;
+    if (student.curriculumId) {
+      const Curriculum = require('../models/curriculum.model');
+      curriculum = await Curriculum.findById(student.curriculumId).lean();
     }
+    if (!curriculum) {
+      curriculum = await curriculumService.getCurriculumForStudent({
+        majorCode: student.majorCode,
+        enrollmentYear: student.enrollmentYear,
+        cohort: student.cohort,
+      });
+    }
+
+    const currentSemester = student.currentCurriculumSemester ?? 1;
+
+    let currentCurriculumSemester = null;
+    if (intakeYear) {
+      const semesterInYear = currentSemester % 2 === 0 ? 2 : 1;
+      const studyYear = Math.ceil(currentSemester / 2);
+      const academicYearStart = intakeYear + (studyYear - 1);
+      const academicYearEnd = academicYearStart + 1;
+
+      currentCurriculumSemester = {
+        semesterNumber: currentSemester,
+        semesterLabel: `Học kỳ ${semesterInYear} — Năm ${studyYear}`,
+        academicYear: `${academicYearStart}-${academicYearEnd}`,
+        progress: `${currentSemester}/9`,
+      };
+    }
+
+    const Semester = require('../models/semester.model');
+    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
 
     return res.status(200).json({
       success: true,
       data: {
-        student: {
+        studentInfo: {
           _id: student._id,
           studentCode: student.studentCode,
           fullName: student.fullName,
           majorCode: student.majorCode,
-          enrollmentYear,
+          enrollmentYear: intakeYear,
           cohort: student.cohort,
+          currentCurriculumSemester: currentSemester,
         },
-        curriculum: curriculum || null,
-        currentSemesterInCurriculum,
-        currentAcademicYear,
-        currentSemesterOrder,
+        curriculum: curriculum ? {
+          _id: curriculum._id,
+          code: curriculum.code,
+          name: curriculum.name,
+          academicYear: curriculum.academicYear,
+          major: curriculum.major,
+        } : null,
+        currentCurriculumSemester,
+        activeSystemSemester: activeSystemSemester ? {
+          _id: activeSystemSemester._id,
+          code: activeSystemSemester.code,
+          name: activeSystemSemester.name,
+          academicYear: activeSystemSemester.academicYear,
+          semesterNum: activeSystemSemester.semesterNum,
+        } : null,
       },
     });
   } catch (error) {
@@ -293,7 +304,6 @@ const getMyCurriculum = async (req, res) => {
   try {
     const userId = req.auth.sub || req.auth.id;
 
-    // Tìm sinh viên qua userId
     const student = await studentService.getStudentByUserId(userId);
     if (!student) {
       return res.status(404).json({
@@ -302,60 +312,275 @@ const getMyCurriculum = async (req, res) => {
       });
     }
 
-    // Tìm khung chương trình phù hợp
-    const curriculum = await curriculumService.getCurriculumForStudent({
-      majorCode: student.majorCode,
-      enrollmentYear: student.enrollmentYear,
-      cohort: student.cohort,
-    });
+    const intakeYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
 
-    // Tính năm nhập học
-    const enrollmentYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
-
-    // Tính học kỳ hiện tại trong khung chương trình
-    let currentSemesterInCurriculum = null;
-    let currentAcademicYear = null;
-    let currentSemesterOrder = null;
-
-    if (curriculum && enrollmentYear) {
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1;
-      currentAcademicYear = currentMonth >= 8 
-        ? `${currentYear}-${currentYear + 1}` 
-        : `${currentYear - 1}-${currentYear}`;
-
-      const startYear = curriculumService.parseAcademicYearRange(curriculum.academicYear)?.startYear;
-      if (startYear) {
-        const yearsSinceEnrollment = currentYear - startYear;
-        const isSecondSemester = currentMonth >= 1 && currentMonth <= 5;
-        
-        currentSemesterOrder = isSecondSemester 
-          ? yearsSinceEnrollment * 2 + 2 
-          : yearsSinceEnrollment * 2 + 1;
-        
-        currentSemesterInCurriculum = Math.min(Math.max(currentSemesterOrder, 1), 9);
-      }
+    // Lấy curriculum: ưu tiên curriculumId, fallback getCurriculumForStudent
+    let curriculum = null;
+    if (student.curriculumId) {
+      const Curriculum = require('../models/curriculum.model');
+      curriculum = await Curriculum.findById(student.curriculumId).lean();
     }
+    if (!curriculum) {
+      curriculum = await curriculumService.getCurriculumForStudent({
+        majorCode: student.majorCode,
+        enrollmentYear: student.enrollmentYear,
+        cohort: student.cohort,
+      });
+    }
+
+    // Kỳ hiện tại trong khung chương trình - lấy từ student.currentCurriculumSemester
+    const currentSemester = student.currentCurriculumSemester ?? 1;
+
+    // Tính hiển thị đúng: semesterLabel, academicYear từ intakeYear + currentSemester
+    let currentCurriculumSemester = null;
+    if (intakeYear) {
+      const semesterInYear = currentSemester % 2 === 0 ? 2 : 1;
+      const studyYear = Math.ceil(currentSemester / 2);
+      const academicYearStart = intakeYear + (studyYear - 1);
+      const academicYearEnd = academicYearStart + 1;
+
+      currentCurriculumSemester = {
+        semesterNumber: currentSemester,
+        semesterLabel: `Học kỳ ${semesterInYear} — Năm ${studyYear}`,
+        academicYear: `${academicYearStart}-${academicYearEnd}`,
+        progress: `${currentSemester}/9`,
+      };
+    }
+
+    // Kỳ hệ thống đang mở đăng ký (tách biệt)
+    const Semester = require('../models/semester.model');
+    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
 
     return res.status(200).json({
       success: true,
+      data: {
+        studentInfo: {
+          _id: student._id,
+          studentCode: student.studentCode,
+          fullName: student.fullName,
+          majorCode: student.majorCode,
+          enrollmentYear: intakeYear,
+          cohort: student.cohort,
+          currentCurriculumSemester: currentSemester,
+        },
+        curriculum: curriculum ? {
+          _id: curriculum._id,
+          code: curriculum.code,
+          name: curriculum.name,
+          academicYear: curriculum.academicYear,
+          major: curriculum.major,
+        } : null,
+        currentCurriculumSemester,
+        activeSystemSemester: activeSystemSemester ? {
+          _id: activeSystemSemester._id,
+          code: activeSystemSemester.code,
+          name: activeSystemSemester.name,
+          academicYear: activeSystemSemester.academicYear,
+          semesterNum: activeSystemSemester.semesterNum,
+          startDate: activeSystemSemester.startDate,
+          endDate: activeSystemSemester.endDate,
+        } : null,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyCurriculum error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me/current-semester-courses - Lấy môn học kỳ hiện tại của SV đang đăng nhập
+// ─────────────────────────────────────────────────────────────
+const getMyCurrentSemesterCourses = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    const result = await curriculumService.getStudentCurrentCurriculumSemester(student);
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        curriculumSemester: result.curriculumSemester,
+        semesterDoc: result.semesterDoc,
+        subjects: result.subjects,
+        curriculum: result.curriculum ? {
+          _id: result.curriculum._id,
+          code: result.curriculum.code,
+          name: result.curriculum.name,
+          academicYear: result.curriculum.academicYear,
+        } : null,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyCurrentSemesterCourses error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/:id/current-semester-courses - Lấy môn học kỳ hiện tại của SV (staff/admin)
+// ─────────────────────────────────────────────────────────────
+const getStudentCurrentSemesterCourses = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    const result = await curriculumService.getStudentCurrentCurriculumSemester(student);
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
       data: {
         student: {
           _id: student._id,
           studentCode: student.studentCode,
           fullName: student.fullName,
           majorCode: student.majorCode,
-          enrollmentYear,
-          cohort: student.cohort,
+          currentCurriculumSemester: student.currentCurriculumSemester,
+          curriculumId: student.curriculumId,
         },
-        curriculum: curriculum || null,
-        currentSemesterInCurriculum,
-        currentAcademicYear,
-        currentSemesterOrder,
+        curriculumSemester: result.curriculumSemester,
+        semesterDoc: result.semesterDoc,
+        subjects: result.subjects,
+        curriculum: result.curriculum ? {
+          _id: result.curriculum._id,
+          code: result.curriculum.code,
+          name: result.curriculum.name,
+          academicYear: result.curriculum.academicYear,
+        } : null,
       },
     });
   } catch (error) {
-    console.error('[StudentController] getMyCurriculum error:', error);
+    console.error('[StudentController] getStudentCurrentSemesterCourses error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// PUT /api/students/:id/curriculum-semester - Cập nhật kỳ trong CT cho SV (staff/admin)
+// ─────────────────────────────────────────────────────────────
+const updateStudentCurriculumSemester = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentCurriculumSemester: newSemester } = req.body;
+
+    if (!newSemester || newSemester < 1 || newSemester > 9) {
+      return res.status(400).json({
+        success: false,
+        message: 'Kỳ phải nằm trong khoảng 1-9',
+      });
+    }
+
+    const updatedStudent = await curriculumService.updateStudentCurriculumSemester(id, newSemester);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cập nhật kỳ khung chương trình thành công',
+      data: {
+        _id: updatedStudent._id,
+        studentCode: updatedStudent.studentCode,
+        fullName: updatedStudent.fullName,
+        currentCurriculumSemester: updatedStudent.currentCurriculumSemester,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] updateStudentCurriculumSemester error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/:id/next-curriculum-semester - Lấy kỳ tiếp theo trong CT
+// ─────────────────────────────────────────────────────────────
+const getStudentNextCurriculumSemester = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const student = await studentService.getStudentById(id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    const result = await curriculumService.getNextCurriculumSemester(student);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        currentCurriculumSemester: student.currentCurriculumSemester,
+        nextCurriculumSemester: result.nextCurriculumSemester,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getStudentNextCurriculumSemester error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me/next-curriculum-semester - Lấy kỳ tiếp theo của SV đang đăng nhập
+// ─────────────────────────────────────────────────────────────
+const getMyNextCurriculumSemester = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+
+    const student = await studentService.getStudentByUserId(userId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    const result = await curriculumService.getNextCurriculumSemester(student);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        currentCurriculumSemester: student.currentCurriculumSemester,
+        nextCurriculumSemester: result.nextCurriculumSemester,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyNextCurriculumSemester error:', error);
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({
       success: false,
@@ -375,4 +600,9 @@ module.exports = {
   getSuggestedClassSection,
   getStudentCurriculum,
   getMyCurriculum,
+  getMyCurrentSemesterCourses,
+  getStudentCurrentSemesterCourses,
+  updateStudentCurriculumSemester,
+  getStudentNextCurriculumSemester,
+  getMyNextCurriculumSemester,
 };

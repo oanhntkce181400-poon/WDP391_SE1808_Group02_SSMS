@@ -137,6 +137,17 @@ const curriculumService = {
     try {
       // Lọc bỏ các field không hợp lệ
       const { startYear, endYear, ...validData } = data;
+      
+      // Tính version tự động nếu không cung cấp
+      if (!validData.version) {
+        const maxVersion = await Curriculum.findOne({
+          major: validData.major,
+          academicYear: validData.academicYear
+        }).sort({ version: -1 }).lean();
+        
+        validData.version = (maxVersion?.version || 0) + 1;
+      }
+      
       const curriculum = new Curriculum(validData);
       await curriculum.save();
 
@@ -193,16 +204,10 @@ const curriculumService = {
       }
       
       // If using relational structure, handle semesters/courses separately
-      // Always ensure we process semesters - convert to relational if needed
-      if (curriculum.useRelationalStructure || semesters) {
+      // Chỉ xử lý semesters khi có gửi lên (tránh .map trên undefined)
+      if (curriculum.useRelationalStructure && Array.isArray(semesters) && semesters.length > 0) {
         const CurriculumSemester = require('../models/curriculumSemester.model');
         const CurriculumCourse = require('../models/curriculumCourse.model');
-        
-        // If not using relational structure yet, mark it as using it
-        if (!curriculum.useRelationalStructure) {
-          curriculum.useRelationalStructure = true;
-          await curriculum.save();
-        }
         
         // Get existing semester IDs
         const existingSemesters = await CurriculumSemester.find({ curriculum: id });
@@ -293,12 +298,10 @@ const curriculumService = {
           }
         });
       } else {
-        // Traditional embedded structure
-        await Curriculum.findByIdAndUpdate(
-          id,
-          { $set: data },
-          { new: true, runValidators: true }
-        );
+        // Chỉ cập nhật các field cơ bản (không có semesters hoặc không dùng relational)
+        if (Object.keys(curriculumData).length > 0) {
+          await Curriculum.findByIdAndUpdate(id, { $set: curriculumData }, { new: true, runValidators: true });
+        }
       }
       
       // Return full curriculum with populated semesters and courses so client can refresh view
@@ -472,6 +475,118 @@ const curriculumService = {
 
   // Tìm khung chương trình cho sinh viên theo majorCode + năm nhập học (trong khoảng academicYear)
   getCurriculumForStudent,
+
+  /**
+   * Lấy kỳ hiện tại của sinh viên trong khung chương trình
+   * Sử dụng student.currentCurriculumSemester thay vì tính toán từ system semester
+   *
+   * @param {Object} student - student document (có curriculumId, currentCurriculumSemester)
+   * @returns {Object} - { curriculumSemester: Number, semesterDoc, subjects: [], curriculum }
+   */
+  async getStudentCurrentCurriculumSemester(student) {
+    if (!student) {
+      return {
+        curriculumSemester: 1,
+        semesterDoc: null,
+        subjects: [],
+        curriculum: null,
+        message: 'Thiếu thông tin sinh viên'
+      };
+    }
+
+    // Ưu tiên sử dụng curriculumId nếu có, hoặc tìm theo majorCode + enrollmentYear
+    let curriculum = null;
+    
+    if (student.curriculumId) {
+      const Curriculum = require('../models/curriculum.model');
+      curriculum = await Curriculum.findById(student.curriculumId).lean();
+    }
+
+    // Nếu không có curriculumId hoặc không tìm thấy, tìm theo majorCode + enrollmentYear
+    if (!curriculum) {
+      curriculum = await getCurriculumForStudent(student);
+    }
+
+    if (!curriculum) {
+      return {
+        curriculumSemester: student.currentCurriculumSemester || 1,
+        semesterDoc: null,
+        subjects: [],
+        curriculum: null,
+        message: 'Không tìm thấy khung chương trình cho sinh viên'
+      };
+    }
+
+    // Lấy kỳ hiện tại từ student
+    const curriculumSemesterOrder = student.currentCurriculumSemester || 1;
+
+    // Lấy thông tin kỳ trong curriculum
+    const CurriculumSemester = require('../models/curriculumSemester.model');
+    const semesterDoc = await CurriculumSemester.findOne({
+      curriculum: curriculum._id,
+      semesterOrder: curriculumSemesterOrder
+    });
+
+    // Lấy danh sách môn học trong kỳ
+    const subjects = await this.getSubjectsBySemester(curriculum._id, curriculumSemesterOrder);
+
+    return {
+      curriculumSemester: curriculumSemesterOrder,
+      semesterDoc,
+      subjects,
+      curriculum,
+      message: 'Tính toán thành công'
+    };
+  },
+
+  /**
+   * Cập nhật kỳ hiện tại của sinh viên trong khung chương trình
+   * Dùng để staff chuyển sinh viên sang kỳ tiếp theo
+   *
+   * @param {string} studentId - ID của sinh viên
+   * @param {number} newSemester - Kỳ mới (1-9)
+   * @returns {Object} - Student document đã cập nhật
+   */
+  async updateStudentCurriculumSemester(studentId, newSemester) {
+    const Student = require('../models/student.model');
+    
+    if (newSemester < 1 || newSemester > 9) {
+      throw new Error('Kỳ phải nằm trong khoảng 1-9');
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      { 
+        currentCurriculumSemester: newSemester,
+        updatedBy: null // Có thể thêm user ID nếu cần
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      throw new Error('Không tìm thấy sinh viên');
+    }
+
+    return student;
+  },
+
+  /**
+   * Lấy kỳ tiếp theo trong khung chương trình cho SV
+   * Dựa trên student.currentCurriculumSemester
+   *
+   * @param {Object} student - student document (có currentCurriculumSemester)
+   * @returns {Object} - { nextCurriculumSemester: Number }
+   */
+  async getNextCurriculumSemester(student) {
+    if (!student) {
+      return { nextCurriculumSemester: 1 };
+    }
+
+    const currentSemester = student.currentCurriculumSemester || 1;
+    const nextSemester = currentSemester + 1;
+
+    return { nextCurriculumSemester: Math.min(nextSemester, 9) };
+  }
 };
 
 module.exports = curriculumService;
