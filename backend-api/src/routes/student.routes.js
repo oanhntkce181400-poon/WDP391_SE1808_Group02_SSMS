@@ -4,6 +4,7 @@
 
 const express = require('express');
 const studentController = require('../controllers/student.controller');
+const gradesController = require('../controllers/grades.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
 const rbacMiddleware = require('../middlewares/rbac.middleware');
 
@@ -84,6 +85,18 @@ router.get(
   authMiddleware,
   rbacMiddleware(['student']),
   studentController.getMyGPABySemester
+);
+
+// ─────────────────────────────────────────────────────────────
+// GRADES ENDPOINTS (Điểm thi / Quản lý điểm)
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/students/me/grades/details - Lấy chi tiết điểm của sinh viên hiện tại
+router.get(
+  '/me/grades/details',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  gradesController.getMyGradeDetails
 );
 
 // ─────────────────────────────────────────────────────────────
@@ -183,6 +196,18 @@ router.get(
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
   studentController.getStudentGPABySemester
+);
+
+// ─────────────────────────────────────────────────────────────
+// GRADES ENDPOINTS (Admin/Staff)
+// ─────────────────────────────────────────────────────────────
+
+// GET /api/students/:id/grades/details - Lấy chi tiết điểm của sinh viên (admin/staff)
+router.get(
+  '/:id/grades/details',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  gradesController.getStudentGradeDetails
 );
 
 module.exports = router;

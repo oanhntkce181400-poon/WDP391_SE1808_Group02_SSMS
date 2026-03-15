@@ -51,6 +51,7 @@ import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
+import ViewGradesPage from "./pages/student/ViewGradesPage";
 export default function App() {
   return (
     <Routes>
@@ -126,6 +127,7 @@ export default function App() {
         <Route path="registration" element={<ClassRegistrationPage />} />
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
+        <Route path="grades" element={<ViewGradesPage />} />
         <Route path="waitlist" element={<WaitlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
         <Route path="finance" element={<TuitionPage />} />

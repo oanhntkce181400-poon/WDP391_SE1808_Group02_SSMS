@@ -21,6 +21,32 @@ const classEnrollmentSchema = new mongoose.Schema(
       enum: ['enrolled', 'dropped', 'completed'], 
       default: 'enrolled' 
     },
+    // Grade components
+    midtermScore: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: null
+    },
+    finalScore: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: null
+    },
+    assignmentScore: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: null
+    },
+    continuousScore: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: null
+    },
+    // Final grade calculated from components
     grade: { 
       type: Number,
       min: 0,

@@ -72,6 +72,7 @@ app.use("/api/finance", require("./routes/finance.routes"));
 app.use("/api/wallet", require("./routes/wallet.routes"));
 app.use("/api/payment", require("./routes/payment.routes"));
 app.use("/api/students", require("./routes/student.routes"));
+app.use("/api/grades", require("./routes/grades.routes"));
 app.use(
   "/api/registration-periods",
   require("./routes/registrationPeriod.routes"),

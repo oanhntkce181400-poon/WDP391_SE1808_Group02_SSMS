@@ -1,0 +1,412 @@
+// grades.service.js
+// Service xử lý tính toán điểm và quản lý grade
+// Tác giả: Group02 - WDP391
+
+const ClassEnrollment = require('../models/classEnrollment.model');
+
+class GradesService {
+  /**
+   * Cấu hình trọng số tính điểm
+   * GK (Midterm): 30%, CK (Final): 50%, BT (Assignment): 20%
+   * Quá trình (Continuous): được tính trong bài tập hoặc riêng biệt
+   */
+  static GRADE_WEIGHTS = {
+    midtermScore: 0.30,      // GK - Giữa kỳ: 30%
+    finalScore: 0.50,        // CK - Cuối kỳ: 50%
+    assignmentScore: 0.20    // BT - Bài tập/Thực hành: 20%
+  };
+
+  /**
+   * Tính điểm cuối cùng dựa trên các thành phần điểm
+   * Final Grade = (GK × 0.3) + (CK × 0.5) + (BT × 0.2)
+   * 
+   * @param {string} enrollmentId - ID của enrollment
+   * @returns {Promise<Object>} { success: boolean, enrollment: Object, grade: number, components: Object }
+   */
+  async calculateFinalGrade(enrollmentId) {
+    try {
+      // Lấy enrollment chi tiết
+      const enrollment = await ClassEnrollment.findById(enrollmentId)
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName');
+
+      if (!enrollment) {
+        throw new Error('Enrollment not found');
+      }
+
+      // Check if have all required score components
+      const { midtermScore, finalScore, assignmentScore } = enrollment;
+      
+      // If not all scores are entered, return current state
+      if (midtermScore === null || finalScore === null || assignmentScore === null) {
+        return {
+          success: false,
+          message: 'Một hoặc nhiều thành phần điểm chưa được nhập đủ',
+          enrollment,
+          components: {
+            midtermScore,
+            finalScore,
+            assignmentScore,
+            continuousScore: enrollment.continuousScore
+          },
+          grade: enrollment.grade
+        };
+      }
+
+      // Tính điểm cuối cùng
+      const calculatedGrade = 
+        (midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore) +
+        (finalScore * this.constructor.GRADE_WEIGHTS.finalScore) +
+        (assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore);
+
+      // Round to 2 decimal places
+      const finalGrade = parseFloat(calculatedGrade.toFixed(2));
+
+      // Cập nhật grade field
+      enrollment.grade = finalGrade;
+      await enrollment.save();
+
+      return {
+        success: true,
+        message: 'Tính điểm thành công',
+        enrollment,
+        components: {
+          midtermScore,
+          finalScore,
+          assignmentScore,
+          continuousScore: enrollment.continuousScore,
+          weights: this.constructor.GRADE_WEIGHTS
+        },
+        grade: finalGrade
+      };
+    } catch (error) {
+      console.error('Error calculating final grade:', error);
+      throw new Error(`Lỗi tính điểm cuối cùng: ${error.message}`);
+    }
+  }
+
+  /**
+   * Cập nhật một thành phần điểm
+   * 
+   * @param {string} enrollmentId - ID của enrollment
+   * @param {Object} scoreData - { componentType, score }
+   * @returns {Promise<Object>} Updated enrollment
+   */
+  async updateGradeComponent(enrollmentId, scoreData) {
+    try {
+      const { componentType, score } = scoreData;
+
+      // Validate component type
+      const validComponents = ['midtermScore', 'finalScore', 'assignmentScore', 'continuousScore'];
+      if (!validComponents.includes(componentType)) {
+        throw new Error(`Invalid component type: ${componentType}`);
+      }
+
+      // Validate score value
+      if (score < 0 || score > 10) {
+        throw new Error('Điểm phải nằm trong khoảng 0-10');
+      }
+
+      // Update component score
+      const enrollment = await ClassEnrollment.findByIdAndUpdate(
+        enrollmentId,
+        { [componentType]: score },
+        { new: true, runValidators: true }
+      )
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName');
+
+      return {
+        success: true,
+        message: `Cập nhật ${componentType} thành công`,
+        enrollment
+      };
+    } catch (error) {
+      console.error('Error updating grade component:', error);
+      throw new Error(`Lỗi cập nhật thành phần điểm: ${error.message}`);
+    }
+  }
+
+  /**
+   * Lấy chi tiết các thành phần điểm của một enrollment
+   * 
+   * @param {string} enrollmentId - ID của enrollment
+   * @returns {Promise<Object>} Grade components with details
+   */
+  async getGradeDetails(enrollmentId) {
+    try {
+      const enrollment = await ClassEnrollment.findById(enrollmentId)
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName');
+
+      if (!enrollment) {
+        throw new Error('Enrollment not found');
+      }
+
+      const { midtermScore, finalScore, assignmentScore, continuousScore, grade } = enrollment;
+      const allComponentsProvided = midtermScore !== null && finalScore !== null && assignmentScore !== null;
+
+      return {
+        success: true,
+        enrollment,
+        gradeDetails: {
+          components: {
+            GK: { // Giữa kỳ
+              name: 'Giữa kỳ',
+              score: midtermScore,
+              weight: this.constructor.GRADE_WEIGHTS.midtermScore * 100 + '%'
+            },
+            CK: { // Cuối kỳ
+              name: 'Cuối kỳ',
+              score: finalScore,
+              weight: this.constructor.GRADE_WEIGHTS.finalScore * 100 + '%'
+            },
+            BT: { // Bài tập
+              name: 'Bài tập/Thực hành',
+              score: assignmentScore,
+              weight: this.constructor.GRADE_WEIGHTS.assignmentScore * 100 + '%'
+            },
+            'Quá trình': {
+              name: 'Điểm quá trình',
+              score: continuousScore,
+              weight: 'Thông tin thêm'
+            }
+          },
+          finalGrade: grade,
+          allComponentsProvided,
+          weights: this.constructor.GRADE_WEIGHTS
+        }
+      };
+    } catch (error) {
+      console.error('Error getting grade details:', error);
+      throw new Error(`Lỗi lấy chi tiết điểm: ${error.message}`);
+    }
+  }
+
+  /**
+   * Lấy tất cả các enrollment với chi tiết điểm của một sinh viên
+   * 
+   * @param {string} studentId - ID của sinh viên
+   * @param {Object} filters - { status, semester, academicYear }
+   * @returns {Promise<Array>} Array of enrollments with grade details
+   */
+  async getStudentGradeDetails(studentId, filters = {}) {
+    try {
+      const queryFilter = {
+        student: studentId
+      };
+
+      if (filters.status) {
+        queryFilter.status = filters.status;
+      }
+
+      const enrollments = await ClassEnrollment.find(queryFilter)
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName')
+        .lean();
+
+      // Filter by semester if provided
+      let result = enrollments;
+      if (filters.semester && filters.academicYear) {
+        result = enrollments.filter(e => 
+          e.classSection &&
+          e.classSection.semester === filters.semester &&
+          e.classSection.academicYear === filters.academicYear
+        );
+      }
+
+      // Add processed grade details to each enrollment
+      const detailedEnrollments = result.map(e => ({
+        ...e,
+        gradeComponents: {
+          GK: e.midtermScore,
+          CK: e.finalScore,
+          BT: e.assignmentScore,
+          'Quá trình': e.continuousScore
+        },
+        finalGrade: e.grade,
+        allComponentsProvided: e.midtermScore !== null && e.finalScore !== null && e.assignmentScore !== null
+      }));
+
+      return {
+        success: true,
+        enrollments: detailedEnrollments,
+        count: detailedEnrollments.length
+      };
+    } catch (error) {
+      console.error('Error getting student grade details:', error);
+      throw new Error(`Lỗi lấy chi tiết điểm sinh viên: ${error.message}`);
+    }
+  }
+
+  /**
+   * Batch tính điểm final cho tất cả enrollments của một lớp học
+   * 
+   * @param {string} classSectionId - ID của class section
+   * @returns {Promise<Object>} { success: boolean, calculated: number, errors: Array }
+   */
+  async calculateFinalGradesForClass(classSectionId) {
+    try {
+      const enrollments = await ClassEnrollment.find({
+        classSection: classSectionId,
+        status: 'completed'
+      });
+
+      let successCount = 0;
+      const errors = [];
+
+      for (const enrollment of enrollments) {
+        try {
+          const result = await this.calculateFinalGrade(enrollment._id);
+          if (result.success) {
+            successCount++;
+          }
+        } catch (err) {
+          errors.push({
+            enrollmentId: enrollment._id,
+            error: err.message
+          });
+        }
+      }
+
+      return {
+        success: true,
+        message: `Tính điểm cho ${successCount} enrollments thành công`,
+        calculated: successCount,
+        errors,
+        total: enrollments.length
+      };
+    } catch (error) {
+      console.error('Error calculating grades for class:', error);
+      throw new Error(`Lỗi tính điểm cho lớp: ${error.message}`);
+    }
+  }
+
+  /**
+   * Lấy tất cả các enrollment có điểm của một sinh viên, group by semester
+   * 
+   * @param {string} studentId - ID của sinh viên
+   * @returns {Promise<Object>} { success: boolean, enrollments: Array, groupedBySemester: Object }
+   */
+  async getMyGrades(studentId) {
+    try {
+      const enrollments = await ClassEnrollment.find({
+        student: studentId,
+        grade: { $exists: true, $ne: null },
+        status: 'completed'
+      })
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (!enrollments || enrollments.length === 0) {
+        return {
+          success: true,
+          message: 'Chưa có dữ liệu điểm',
+          enrollments: [],
+          groupedBySemester: {},
+          semesters: []
+        };
+      }
+
+      // Group by semester
+      const groupedBySemester = {};
+      const semesterSet = new Set();
+
+      for (const enrollment of enrollments) {
+        if (!enrollment.classSection) continue;
+
+        const semesterNumber = enrollment.classSection.semester;
+        const academicYear = enrollment.classSection.academicYear;
+        const semesterKey = `${semesterNumber}-${academicYear}`;
+        const semesterDisplay = `Kỳ ${semesterNumber} - ${academicYear}`;
+
+        semesterSet.add(semesterKey);
+
+        if (!groupedBySemester[semesterKey]) {
+          groupedBySemester[semesterKey] = {
+            semesterNumber,
+            academicYear,
+            semesterDisplay,
+            enrollments: []
+          };
+        }
+
+        groupedBySemester[semesterKey].enrollments.push({
+          _id: enrollment._id,
+          subjectCode: enrollment.classSection.subject?.subjectCode || 'N/A',
+          subjectName: enrollment.classSection.subject?.subjectName || 'N/A',
+          credits: enrollment.classSection.subject?.credits || 0,
+          grade: enrollment.grade,
+          midtermScore: enrollment.midtermScore,
+          finalScore: enrollment.finalScore,
+          assignmentScore: enrollment.assignmentScore,
+          continuousScore: enrollment.continuousScore,
+          classCode: enrollment.classSection.classCode,
+          gradeComponents: {
+            GK: enrollment.midtermScore,
+            CK: enrollment.finalScore,
+            BT: enrollment.assignmentScore,
+            'Quá trình': enrollment.continuousScore
+          }
+        });
+      }
+
+      // Sort semesters (most recent first)
+      const semesters = Array.from(semesterSet)
+        .sort((a, b) => {
+          const [semA, yearA] = a.split('-');
+          const [semB, yearB] = b.split('-');
+          const yearDiff = yearB.localeCompare(yearA);
+          if (yearDiff !== 0) return yearDiff;
+          return parseInt(semB) - parseInt(semA);
+        });
+
+      return {
+        success: true,
+        message: 'Lấy dữ liệu điểm thành công',
+        enrollments,
+        groupedBySemester,
+        semesters,
+        totalGrades: enrollments.length
+      };
+    } catch (error) {
+      console.error('Error getting my grades:', error);
+      throw new Error(`Lỗi lấy dữ liệu điểm: ${error.message}`);
+    }
+  }
+}
+
+// Export instance
+module.exports = new GradesService();

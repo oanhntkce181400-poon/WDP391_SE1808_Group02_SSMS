@@ -1,0 +1,235 @@
+// grades.controller.js
+// Controller xử lý HTTP requests cho Grade Management
+// Tác giả: Group02 - WDP391
+
+const gradesService = require('../services/grades.service');
+
+class GradesController {
+  /**
+   * POST /api/grades/:enrollmentId/calculate
+   * Tính điểm cuối cùng dựa trên các thành phần điểm
+   */
+  async calculateFinalGrade(req, res) {
+    try {
+      const { enrollmentId } = req.params;
+
+      if (!enrollmentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'enrollmentId is required'
+        });
+      }
+
+      const result = await gradesService.calculateFinalGrade(enrollmentId);
+
+      const statusCode = result.success ? 200 : 400;
+      return res.status(statusCode).json(result);
+    } catch (error) {
+      console.error('[GradesController] calculateFinalGrade error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to calculate final grade'
+      });
+    }
+  }
+
+  /**
+   * PATCH /api/grades/:enrollmentId/component
+   * Cập nhật một thành phần điểm (GK, CK, BT, Quá trình)
+   * Body: { componentType: 'midtermScore|finalScore|assignmentScore|continuousScore', score: number }
+   */
+  async updateGradeComponent(req, res) {
+    try {
+      const { enrollmentId } = req.params;
+      const scoreData = req.body;
+
+      if (!enrollmentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'enrollmentId is required'
+        });
+      }
+
+      if (!scoreData.componentType || scoreData.score === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'componentType and score are required'
+        });
+      }
+
+      const result = await gradesService.updateGradeComponent(enrollmentId, scoreData);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] updateGradeComponent error:', error);
+      const statusCode = error.message.includes('Invalid') ? 400 : 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to update grade component'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/:enrollmentId/details
+   * Lấy chi tiết các thành phần điểm của một enrollment
+   */
+  async getGradeDetails(req, res) {
+    try {
+      const { enrollmentId } = req.params;
+
+      if (!enrollmentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'enrollmentId is required'
+        });
+      }
+
+      const result = await gradesService.getGradeDetails(enrollmentId);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] getGradeDetails error:', error);
+      const statusCode = error.message.includes('not found') ? 404 : 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to get grade details'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/my-grades/details
+   * Lấy chi tiết điểm của sinh viên hiện tại
+   * Query params: status, semester, academicYear
+   */
+  async getMyGradeDetails(req, res) {
+    try {
+      const studentId = req.auth?.sub || req.auth?.id;
+      if (!studentId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const filters = {
+        status: req.query.status,
+        semester: req.query.semester ? parseInt(req.query.semester) : null,
+        academicYear: req.query.academicYear
+      };
+
+      const result = await gradesService.getStudentGradeDetails(studentId, filters);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Lấy chi tiết điểm thành công',
+        data: result
+      });
+    } catch (error) {
+      console.error('[GradesController] getMyGradeDetails error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get grade details'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/:studentId/details
+   * Lấy chi tiết điểm của một sinh viên (Admin/Staff)
+   * Query params: status, semester, academicYear
+   */
+  async getStudentGradeDetails(req, res) {
+    try {
+      const { studentId } = req.params;
+
+      if (!studentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'studentId is required'
+        });
+      }
+
+      const filters = {
+        status: req.query.status,
+        semester: req.query.semester ? parseInt(req.query.semester) : null,
+        academicYear: req.query.academicYear
+      };
+
+      const result = await gradesService.getStudentGradeDetails(studentId, filters);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Lấy chi tiết điểm thành công',
+        data: result
+      });
+    } catch (error) {
+      console.error('[GradesController] getStudentGradeDetails error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get grade details'
+      });
+    }
+  }
+
+  /**
+   * POST /api/grades/class/:classSectionId/calculate-all
+   * Tính điểm cuối cùng cho tất cả enrollments của một lớp học
+   */
+  async calculateFinalGradesForClass(req, res) {
+    try {
+      const { classSectionId } = req.params;
+
+      if (!classSectionId) {
+        return res.status(400).json({
+          success: false,
+          message: 'classSectionId is required'
+        });
+      }
+
+      const result = await gradesService.calculateFinalGradesForClass(classSectionId);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] calculateFinalGradesForClass error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to calculate grades for class'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/my-grades
+   * Lấy tất cả enrollment có điểm của sinh viên, group by semester
+   */
+  async getMyGrades(req, res) {
+    try {
+      const studentId = req.auth?.sub || req.auth?.id;
+      if (!studentId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const result = await gradesService.getMyGrades(studentId);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result
+      });
+    } catch (error) {
+      console.error('[GradesController] getMyGrades error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to get grades'
+      });
+    }
+  }
+}
+
+// Export instance
+module.exports = new GradesController();

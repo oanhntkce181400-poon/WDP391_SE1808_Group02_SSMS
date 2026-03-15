@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import userService from '../services/userService';
 import gpaService from '../services/gpaService';
+import gradesService from '../services/gradesService';
 import AvatarUploader from '../components/features/AvatarUploader';
 
 const StudentProfilePage = () => {
@@ -15,36 +16,29 @@ const StudentProfilePage = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [cumulativeGPA, setCumulativeGPA] = useState(null);
   const [gpaLoading, setGpaLoading] = useState(true);
-
-  // Mock data for enrolled courses
-  const enrolledCourses = [
-    {
-      id: 1,
-      name: 'Lập trình ứng dụng Web',
-      instructor: 'TS. Trần Hoàng Ngoán',
-      status: 'ĐANG HỌC',
-      statusColor: 'bg-green-100 text-green-800',
-    },
-    {
-      id: 2,
-      name: 'Cơ sở dữ liệu nâng cao',
-      instructor: 'ThS. Nguyễn Thị Mái',
-      status: 'ĐANG HỌC',
-      statusColor: 'bg-green-100 text-green-800',
-    },
-    {
-      id: 3,
-      name: 'Kiến trúc phần mềm',
-      instructor: 'PGS. Đỗ Minh Đức',
-      status: 'ĐANG HỌC',
-      statusColor: 'bg-green-100 text-green-800',
-    },
-  ];
+  const [gradeDetails, setGradeDetails] = useState(null);
+  const [gradesLoading, setGradesLoading] = useState(true);
 
   useEffect(() => {
     fetchStudentProfile();
     fetchCumulativeGPA();
+    fetchGradeDetails();
   }, []);
+
+  const fetchGradeDetails = async () => {
+    try {
+      setGradesLoading(true);
+      const res = await gradesService.getMyGradeDetails({ status: 'completed' });
+      if (res?.data?.success) {
+        setGradeDetails(res.data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching grade details:', err);
+      // Silently fail - grades are optional
+    } finally {
+      setGradesLoading(false);
+    }
+  };
 
   const fetchCumulativeGPA = async () => {
     try {
@@ -287,49 +281,119 @@ const StudentProfilePage = () => {
       {/* Enrolled Courses Section */}
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Học phần hiện tại</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Chi tiết điểm học phần</h2>
           <a href="#" className="text-blue-500 hover:text-blue-600 font-medium">
             Xem tất cả
           </a>
         </div>
 
         {/* Courses Grid */}
-        <div className="space-y-3">
-          {enrolledCourses.map((course) => (
-            <div
-              key={course.id}
-              className="bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow p-4"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg
-                      className="w-5 h-5 text-blue-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6.253v13m0-13C6.248 6.253 2 10.537 2 15.75c0 5.213 4.248 9.5 10 9.5s10-4.287 10-9.5c0-5.213-4.248-9.5-10-9.5z"
-                      />
-                    </svg>
-                    <h3 className="font-semibold text-gray-800">
-                      {course.name}
-                    </h3>
-                  </div>
-                  <p className="text-sm text-gray-600 ml-7">{course.instructor}</p>
-                </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-4 ${course.statusColor}`}
-                >
-                  {course.status}
-                </span>
-              </div>
+        <div className="space-y-4">
+          {gradesLoading ? (
+            <div className="text-center text-gray-600 py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <p className="mt-2">Đang tải chi tiết điểm...</p>
             </div>
-          ))}
+          ) : gradeDetails && gradeDetails.enrollments && gradeDetails.enrollments.length > 0 ? (
+            gradeDetails.enrollments.map((enrollment) => (
+              <div
+                key={enrollment._id}
+                className="bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow overflow-hidden"
+              >
+                {/* Course Header */}
+                <div className="p-4 border-b border-gray-100">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg
+                          className="w-5 h-5 text-blue-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 6.253v13m0-13C6.248 6.253 2 10.537 2 15.75c0 5.213 4.248 9.5 10 9.5s10-4.287 10-9.5c0-5.213-4.248-9.5-10-9.5z"
+                          />
+                        </svg>
+                        <h3 className="font-semibold text-gray-800 text-lg">
+                          {enrollment.classSection?.subject?.subjectName || 'N/A'}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-gray-600 ml-7">
+                        <span className="font-mono text-gray-500">
+                          {enrollment.classSection?.subject?.subjectCode || 'N/A'}
+                        </span>
+                        {' '}({enrollment.classSection?.subject?.credits || 0} tín chỉ)
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 mb-1">Điểm cuối cùng</p>
+                      <p className={`text-2xl font-bold ${gradesService.getScoreColor(enrollment.finalGrade)}`}>
+                        {gradesService.formatScore(enrollment.finalGrade)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grade Components */}
+                <div className="px-4 py-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {/* GK - Giữa kỳ */}
+                    <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                      <p className="text-xs text-blue-700 font-semibold mb-1">GK (30%)</p>
+                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.GK)}`}>
+                        {gradesService.formatScore(enrollment.gradeComponents?.GK)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Giữa kỳ</p>
+                    </div>
+
+                    {/* CK - Cuối kỳ */}
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                      <p className="text-xs text-green-700 font-semibold mb-1">CK (50%)</p>
+                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.CK)}`}>
+                        {gradesService.formatScore(enrollment.gradeComponents?.CK)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Cuối kỳ</p>
+                    </div>
+
+                    {/* BT - Bài tập */}
+                    <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                      <p className="text-xs text-purple-700 font-semibold mb-1">BT (20%)</p>
+                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.BT)}`}>
+                        {gradesService.formatScore(enrollment.gradeComponents?.BT)}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Bài tập</p>
+                    </div>
+
+                    {/* Quá trình */}
+                    <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                      <p className="text-xs text-orange-700 font-semibold mb-1">Quá trình</p>
+                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.['Quá trình'])}`}>
+                        {gradesService.formatScore(enrollment.gradeComponents?.['Quá trình'])}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Thêm thông tin</p>
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  {!enrollment.allComponentsProvided && (
+                    <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-xs text-yellow-800">
+                        ⚠️ Chưa nhập đủ thành phần điểm để tính điểm cuối cùng
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-8 text-center">
+              <p className="text-gray-600">Chưa có dữ liệu điểm</p>
+            </div>
+          )}
         </div>
       </div>
 
