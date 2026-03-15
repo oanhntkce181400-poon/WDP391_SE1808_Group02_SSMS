@@ -165,10 +165,71 @@ async function deleteRegistrationPeriod(periodId) {
  * Lấy đợt đăng ký đang active hiện tại
  */
 async function getCurrentActivePeriod() {
-  const period = await RegistrationPeriod.findOne({ status: 'active' })
+  const now = new Date();
+  const period = await RegistrationPeriod.findOne({
+    status: 'active',
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+  })
+    .sort({ startDate: -1, createdAt: -1 })
     .lean();
 
   return period;
+}
+
+/**
+ * Check cohort access for a registration period.
+ * Empty allowedCohorts means all cohorts are allowed.
+ */
+function checkCohortAccess(studentCohort, periodAllowedCohorts = []) {
+  if (!Array.isArray(periodAllowedCohorts) || periodAllowedCohorts.length === 0) {
+    return {
+      allowed: true,
+      message: 'All cohorts are allowed in this period',
+    };
+  }
+
+  const normalizedStudentCohort = Number(studentCohort);
+  if (Number.isNaN(normalizedStudentCohort)) {
+    return {
+      allowed: false,
+      message: 'Student cohort is missing or invalid',
+      allowedCohorts: periodAllowedCohorts
+        .map((c) => Number(c))
+        .filter((c) => !Number.isNaN(c)),
+    };
+  }
+  const normalizedAllowed = periodAllowedCohorts.map((c) => Number(c)).filter((c) => !Number.isNaN(c));
+  const allowed = normalizedAllowed.includes(normalizedStudentCohort);
+
+  return {
+    allowed,
+    message: allowed
+      ? `Cohort K${normalizedStudentCohort} is allowed`
+      : `Cohort K${normalizedStudentCohort} is not allowed`,
+    allowedCohorts: normalizedAllowed,
+  };
+}
+
+async function validateCurrentPeriodCohort(studentCohort) {
+  const currentPeriod = await getCurrentActivePeriod();
+  if (!currentPeriod) {
+    return {
+      hasActivePeriod: false,
+      allowed: true,
+      message: 'No active registration period configured',
+      period: null,
+    };
+  }
+
+  const cohortResult = checkCohortAccess(studentCohort, currentPeriod.allowedCohorts);
+  return {
+    hasActivePeriod: true,
+    allowed: cohortResult.allowed,
+    message: cohortResult.message,
+    allowedCohorts: cohortResult.allowedCohorts || [],
+    period: currentPeriod,
+  };
 }
 
 /**
@@ -208,5 +269,7 @@ module.exports = {
   togglePeriodStatus,
   deleteRegistrationPeriod,
   getCurrentActivePeriod,
+  checkCohortAccess,
+  validateCurrentPeriodCohort,
   autoUpdatePeriodStatuses,
 };

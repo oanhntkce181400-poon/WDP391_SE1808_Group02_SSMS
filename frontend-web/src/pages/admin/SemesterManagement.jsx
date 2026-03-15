@@ -1,381 +1,403 @@
-// Semester Management Page - CRUD operations for Semester (Kỳ học)
-import { useState, useEffect, useCallback } from 'react';
-import semesterService from '../../services/semesterService';
-import nextIcon from '../../assets/next.png';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import addIcon from '../../assets/circle.png';
+import nextIcon from '../../assets/next.png';
+import semesterService from '../../services/semesterService';
+
+const INITIAL_FORM = {
+  code: '',
+  name: '',
+  semesterNum: '1',
+  academicYear: '',
+  startDate: '',
+  endDate: '',
+  description: '',
+  isCurrent: false,
+  isActive: true,
+};
+
+function Field({ label, required = false, children }) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-slate-700">
+        {label} {required ? <span className="text-red-500">*</span> : null}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function formatDateRange(startDate, endDate) {
+  if (!startDate || !endDate) return '-';
+  return `${new Date(startDate).toLocaleDateString('vi-VN')} - ${new Date(endDate).toLocaleDateString('vi-VN')}`;
+}
 
 export default function SemesterManagement() {
-  // State for semesters data
   const [semesters, setSemesters] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // State for pagination
+  const [error, setError] = useState('');
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
     limit: 10,
   });
-
-  // State for filters
   const [filters, setFilters] = useState({
-    keyword: '',
-    isActive: 'all',
+    academicYear: '',
+    status: 'all',
   });
-
-  // State for modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [formData, setFormData] = useState(INITIAL_FORM);
   const [selectedSemester, setSelectedSemester] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
-
-  // State for form data
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    semesterNum: '1',
-    startDate: '',
-    endDate: '',
-    description: '',
-    isCurrent: false,
-    isActive: true,
-  });
-
-  // State for toast notifications
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [autoEnrollmentResult, setAutoEnrollmentResult] = useState(null);
 
-  // Fetch semesters from API
-  const fetchSemesters = useCallback(async (page = 1) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = {
-        page,
-        limit: pagination.limit,
-        ...(filters.keyword && { keyword: filters.keyword }),
-        ...(filters.isActive !== 'all' && { isActive: filters.isActive === 'active' }),
-      };
-
-      const response = await semesterService.getAll(params);
-      
-      if (response?.data?.success) {
-        setSemesters(response.data.data || []);
-        setPagination(prev => ({
-          ...prev,
-          currentPage: response.data.pagination?.page || 1,
-          totalPages: response.data.pagination?.totalPages || 1,
-          totalItems: response.data.pagination?.total || 0,
-        }));
-      }
-    } catch (err) {
-      console.error('Error fetching semesters:', err);
-      setError('Không thể tải danh sách kỳ học');
-      showToast('Không thể tải danh sách kỳ học', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, pagination.limit]);
-
-  // Load semesters on mount and when filters change
-  useEffect(() => {
-    fetchSemesters(1);
-  }, [filters]);
-
-  // Show toast notification
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   };
 
-  // Handle create/edit modal
+  const fetchSemesters = useCallback(
+    async (page = 1) => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const params = {
+          page,
+          limit: pagination.limit,
+        };
+
+        if (filters.academicYear.trim()) params.academicYear = filters.academicYear.trim();
+        if (filters.status === 'active') params.isActive = true;
+        if (filters.status === 'inactive') params.isActive = false;
+        if (filters.status === 'current') params.isCurrent = true;
+
+        const response = await semesterService.getAll(params);
+        setSemesters(response?.data?.data || []);
+        setPagination((prev) => ({
+          ...prev,
+          currentPage: response?.data?.pagination?.page || page,
+          totalPages: response?.data?.pagination?.totalPages || 1,
+          totalItems: response?.data?.pagination?.total || 0,
+        }));
+      } catch (err) {
+        console.error('Error fetching semesters:', err);
+        setError('Khong the tai danh sach hoc ky.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters, pagination.limit],
+  );
+
+  useEffect(() => {
+    fetchSemesters(1);
+  }, [fetchSemesters]);
+
+  const currentSemester = useMemo(
+    () => semesters.find((semester) => semester.isCurrent),
+    [semesters],
+  );
+
   const handleOpenModal = (semester = null) => {
     if (semester) {
       setSelectedSemester(semester);
       setFormData({
         code: semester.code || '',
         name: semester.name || '',
-        semesterNum: String(semester.semesterNum || '1'),
+        semesterNum: String(semester.semesterNum || 1),
+        academicYear: semester.academicYear || '',
         startDate: semester.startDate ? semester.startDate.split('T')[0] : '',
         endDate: semester.endDate ? semester.endDate.split('T')[0] : '',
         description: semester.description || '',
-        isCurrent: semester.isCurrent || false,
+        isCurrent: Boolean(semester.isCurrent),
         isActive: semester.isActive !== false,
       });
     } else {
       setSelectedSemester(null);
-      setFormData({
-        code: '',
-        name: '',
-        semesterNum: '1',
-        startDate: '',
-        endDate: '',
-        description: '',
-        isCurrent: false,
-        isActive: true,
-      });
+      setFormData(INITIAL_FORM);
     }
+
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedSemester(null);
-    setFormData({
-      code: '',
-      name: '',
-      semesterNum: '1',
-      startDate: '',
-      endDate: '',
-      description: '',
-      isCurrent: false,
-      isActive: true,
-    });
+    setFormData(INITIAL_FORM);
   };
 
-  // Auto-generate code and name when semesterNum changes
-  useEffect(() => {
-    if (!selectedSemester && formData.semesterNum) {
-      const name = `Kỳ ${formData.semesterNum}`;
-      const code = `HK${formData.semesterNum}`;
-      
-      setFormData(prev => ({
-        ...prev,
-        name,
-        code
-      }));
-    }
-  }, [formData.semesterNum, selectedSemester]);
-
-  // Handle form submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setModalLoading(true);
 
     try {
+      const shouldTriggerAutoEnrollment = formData.isCurrent && !selectedSemester?.isCurrent;
+      if (
+        shouldTriggerAutoEnrollment &&
+        !window.confirm('Dat hoc ky nay la hoc ky hien tai va chay auto-enrollment ngay bay gio?')
+      ) {
+        setModalLoading(false);
+        return;
+      }
+
       const payload = {
-        code: formData.code,
-        name: formData.name,
-        semesterNum: parseInt(formData.semesterNum, 10),
+        code: formData.code.trim(),
+        name: formData.name.trim(),
+        semesterNum: Number.parseInt(formData.semesterNum, 10),
+        academicYear: formData.academicYear.trim() || null,
         startDate: formData.startDate || null,
         endDate: formData.endDate || null,
-        description: formData.description || null,
+        description: formData.description.trim() || null,
         isCurrent: formData.isCurrent,
         isActive: formData.isActive,
       };
 
-      if (selectedSemester) {
-        await semesterService.update(selectedSemester.id, payload);
-        showToast('Cập nhật kỳ học thành công', 'success');
-      } else {
-        await semesterService.create(payload);
-        showToast('Thêm kỳ học thành công', 'success');
+      const response = selectedSemester
+        ? await semesterService.update(selectedSemester.id, payload)
+        : await semesterService.create(payload);
+
+      showToast(selectedSemester ? 'Cap nhat hoc ky thanh cong.' : 'Tao hoc ky moi thanh cong.');
+
+      const autoResult = response?.data?.data?.autoEnrollment || null;
+      setAutoEnrollmentResult(autoResult);
+      if (autoResult?.summary) {
+        showToast(
+          `Auto-enrollment: ${autoResult.summary.totalEnrollments} dang ky, ${autoResult.summary.waitlisted} waitlist.`,
+        );
+      } else if (autoResult && autoResult.success === false) {
+        showToast(autoResult.message || 'Auto-enrollment khong thanh cong.', 'error');
       }
+
       handleCloseModal();
       fetchSemesters(pagination.currentPage);
     } catch (err) {
       console.error('Error saving semester:', err);
-      showToast(err.response?.data?.message || 'Có lỗi xảy ra', 'error');
+      showToast(err.response?.data?.message || 'Co loi xay ra khi luu hoc ky.', 'error');
     } finally {
       setModalLoading(false);
     }
-  };
-
-  // Handle delete
-  const handleOpenDeleteModal = (semester) => {
-    setSelectedSemester(semester);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleCloseDeleteModal = () => {
-    setIsDeleteModalOpen(false);
-    setSelectedSemester(null);
   };
 
   const handleDelete = async () => {
+    if (!selectedSemester) return;
+
     setModalLoading(true);
     try {
       await semesterService.remove(selectedSemester.id);
-      showToast('Xóa kỳ học thành công', 'success');
-      handleCloseDeleteModal();
+      showToast('Xoa hoc ky thanh cong.');
+      setIsDeleteModalOpen(false);
+      setSelectedSemester(null);
       fetchSemesters(pagination.currentPage);
     } catch (err) {
       console.error('Error deleting semester:', err);
-      showToast(err.response?.data?.message || 'Không thể xóa kỳ học', 'error');
+      showToast(err.response?.data?.message || 'Khong the xoa hoc ky.', 'error');
     } finally {
       setModalLoading(false);
     }
   };
 
-  // Handle pagination
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= pagination.totalPages) {
-      fetchSemesters(page);
-    }
-  };
-
-  // Handle filter change
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  // Apply filters
-  const handleApplyFilters = () => {
-    fetchSemesters(1);
-  };
+  const currentStart =
+    pagination.totalItems === 0 ? 0 : (pagination.currentPage - 1) * pagination.limit + 1;
+  const currentEnd = Math.min(pagination.currentPage * pagination.limit, pagination.totalItems);
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Toast Notification */}
-      {toast.show && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white`}>
+      {toast.show ? (
+        <div
+          className={`fixed right-4 top-4 z-50 rounded-lg px-6 py-3 text-white shadow-lg ${
+            toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+          }`}
+        >
           {toast.message}
         </div>
-      )}
+      ) : null}
 
-      {/* Header Section */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="border-b border-slate-200 bg-white">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">Quản lý Kỳ học</h1>
-              <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
-                <span className="hover:text-blue-600 cursor-pointer">🏠 Cấu hình</span>
-                <img src={nextIcon} alt="/" className="w-3 h-3" />
-                <span className="text-slate-700 font-medium">Kỳ học</span>
+              <h1 className="text-2xl font-bold text-slate-800">Quan ly hoc ky</h1>
+              <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                <span>Cau hinh</span>
+                <img src={nextIcon} alt="/" className="h-3 w-3" />
+                <span className="font-medium text-slate-700">Hoc ky</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleOpenModal()}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+
+            <button
+              onClick={() => handleOpenModal()}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+            >
+              <img src={addIcon} alt="+" className="h-4 w-4 invert" />
+              <span className="font-medium">Them hoc ky moi</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {autoEnrollmentResult ? (
+        <div className="container mx-auto px-6 pb-2 pt-4">
+          <div
+            className={`rounded-lg p-4 ${
+              autoEnrollmentResult.success === false
+                ? 'border border-amber-200 bg-amber-50'
+                : 'border border-emerald-200 bg-emerald-50'
+            }`}
+          >
+            <div
+              className={`mb-2 text-sm font-semibold ${
+                autoEnrollmentResult.success === false ? 'text-amber-800' : 'text-emerald-800'
+              }`}
+            >
+              Ket qua auto-enrollment gan nhat
+            </div>
+            {autoEnrollmentResult.summary ? (
+              <div
+                className={`grid grid-cols-2 gap-3 text-sm md:grid-cols-5 ${
+                  autoEnrollmentResult.success === false ? 'text-amber-900' : 'text-emerald-900'
+                }`}
               >
-                <img src={addIcon} alt="+" className="w-4 h-4 invert" />
-                <span className="font-medium">Thêm kỳ học mới</span>
+                <div>Tong SV: {autoEnrollmentResult.summary.totalStudents}</div>
+                <div>Dang ky: {autoEnrollmentResult.summary.totalEnrollments}</div>
+                <div>Waitlist: {autoEnrollmentResult.summary.waitlisted}</div>
+                <div>Trung: {autoEnrollmentResult.summary.duplicates}</div>
+                <div>Loi: {autoEnrollmentResult.summary.failed}</div>
+              </div>
+            ) : (
+              <div className="text-sm text-amber-900">
+                {autoEnrollmentResult.message || 'Auto-enrollment khong tra ve summary.'}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="container mx-auto px-6 py-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Nam hoc</label>
+              <input
+                type="text"
+                placeholder="Vi du: 2025-2026"
+                value={filters.academicYear}
+                onChange={(event) => setFilters((prev) => ({ ...prev, academicYear: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Trang thai</label>
+              <select
+                value={filters.status}
+                onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Tat ca</option>
+                <option value="active">Dang hoat dong</option>
+                <option value="inactive">Ngung hoat dong</option>
+                <option value="current">Hoc ky hien tai</option>
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={() => fetchSemesters(1)}
+                className="w-full rounded-lg bg-slate-900 px-4 py-2 text-white transition-colors hover:bg-slate-800"
+              >
+                Ap dung bo loc
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters Section */}
-      <div className="container mx-auto px-6 py-6">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">TÌM KIẾM</label>
-              <input
-                type="text"
-                placeholder="Tên hoặc mã kỳ..."
-                value={filters.keyword}
-                onChange={(e) => handleFilterChange('keyword', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">TRẠNG THÁI</label>
-              <select
-                value={filters.isActive}
-                onChange={(e) => handleFilterChange('isActive', e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">Tất cả</option>
-                <option value="active">Hoạt động</option>
-                <option value="inactive">Không hoạt động</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Section */}
       <div className="container mx-auto px-6 pb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          {currentSemester ? (
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-3 text-sm text-slate-700">
+              Hoc ky hien tai: <span className="font-semibold">{currentSemester.name}</span> ({currentSemester.code})
+            </div>
+          ) : null}
+
           {loading ? (
-            <div className="p-12 text-center text-slate-500">Đang tải...</div>
+            <div className="p-12 text-center text-slate-500">Dang tai du lieu...</div>
           ) : error ? (
             <div className="p-12 text-center text-red-500">{error}</div>
           ) : (
             <>
               <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                      STT
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Mã kỳ</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tên kỳ học</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Số kỳ</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Thời gian</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Hiện tại</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Trạng Thái</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Thao Tác</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">STT</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Ma hoc ky</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Ten hoc ky</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">So ky</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Nam hoc</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thoi gian</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Hien tai</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Trang thai</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thao tac</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {semesters.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-12 text-center text-slate-500">
-                        Không có dữ liệu
+                      <td colSpan="9" className="px-6 py-12 text-center text-slate-500">
+                        Khong co du lieu hoc ky.
                       </td>
                     </tr>
                   ) : (
                     semesters.map((semester, index) => (
-                      <tr key={semester.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 text-center text-slate-700 font-medium">
+                      <tr key={semester.id} className="transition-colors hover:bg-slate-50">
+                        <td className="px-6 py-4 text-center font-medium text-slate-700">
                           {(pagination.currentPage - 1) * pagination.limit + index + 1}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="font-mono font-semibold text-slate-700">{semester.code}</span>
+                        <td className="px-6 py-4 font-mono font-semibold text-slate-700">{semester.code}</td>
+                        <td className="px-6 py-4 font-medium text-slate-900">{semester.name}</td>
+                        <td className="px-6 py-4 text-slate-700">Ky {semester.semesterNum}</td>
+                        <td className="px-6 py-4 text-slate-700">{semester.academicYear || '-'}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          {formatDateRange(semester.startDate, semester.endDate)}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-slate-900">{semester.name}</div>
-                        </td>
-                        <td className="px-6 py-4 text-slate-700">
-                          Kỳ {semester.semesterNum}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600 text-sm">
-                          {semester.startDate && semester.endDate ? (
-                            <>
-                              {new Date(semester.startDate).toLocaleDateString('vi-VN')} - 
-                              {new Date(semester.endDate).toLocaleDateString('vi-VN')}
-                            </>
+                          {semester.isCurrent ? (
+                            <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                              Hien tai
+                            </span>
                           ) : (
                             '-'
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          {semester.isCurrent && (
-                            <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                              Hiện tại
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                            semester.isActive 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {semester.isActive ? 'Hoạt động' : 'Không hoạt động'}
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              semester.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'
+                            }`}
+                          >
+                            {semester.isActive ? 'Dang hoat dong' : 'Ngung hoat dong'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleOpenModal(semester)}
-                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800"
                             >
-                              Sửa
+                              Sua
                             </button>
                             <span className="text-slate-300">|</span>
                             <button
-                              onClick={() => handleOpenDeleteModal(semester)}
-                              className="text-red-600 hover:text-red-800 font-medium text-sm"
+                              onClick={() => {
+                                setSelectedSemester(semester);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              className="text-sm font-medium text-red-600 hover:text-red-800"
                             >
-                              Xóa
+                              Xoa
                             </button>
                           </div>
                         </td>
@@ -385,19 +407,23 @@ export default function SemesterManagement() {
                 </tbody>
               </table>
 
-              {/* Pagination */}
-              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
                 <div className="text-sm text-slate-600">
-                  Hiển thị {((pagination.currentPage - 1) * pagination.limit) + 1} đến{' '}
-                  {Math.min(pagination.currentPage * pagination.limit, pagination.totalItems)} trong tổng số{' '}
-                  {pagination.totalItems} bản ghi
+                  Hien thi {currentStart} den {currentEnd} trong tong so {pagination.totalItems} ban ghi
                 </div>
                 <div className="flex items-center gap-2">
-                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    onClick={() => fetchSemesters(Math.max(1, pagination.currentPage - 1))}
+                    disabled={pagination.currentPage === 1}
+                    className="rounded bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    &lt;
+                  </button>
+                  {Array.from({ length: pagination.totalPages }, (_, index) => index + 1).map((page) => (
                     <button
                       key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`px-3 py-1 rounded ${
+                      onClick={() => fetchSemesters(page)}
+                      className={`rounded px-3 py-1 ${
                         page === pagination.currentPage
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -406,18 +432,13 @@ export default function SemesterManagement() {
                       {page}
                     </button>
                   ))}
-                  {pagination.totalPages > 3 && (
-                    <>
-                      <span className="text-slate-400">...</span>
-                      <button
-                        onClick={() => handlePageChange(pagination.currentPage + 1)}
-                        disabled={pagination.currentPage === pagination.totalPages}
-                        className="px-3 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-                      >
-                        &gt;
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => fetchSemesters(Math.min(pagination.totalPages, pagination.currentPage + 1))}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className="rounded bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    &gt;
+                  </button>
                 </div>
               </div>
             </>
@@ -425,175 +446,164 @@ export default function SemesterManagement() {
         </div>
       </div>
 
-      {/* Create/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-200">
+      {isModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
+            <div className="border-b border-slate-200 p-6">
               <h2 className="text-xl font-bold text-slate-800">
-                {selectedSemester ? 'Chỉnh sửa kỳ học' : 'Thêm kỳ học mới'}
+                {selectedSemester ? 'Chinh sua hoc ky' : 'Them hoc ky moi'}
               </h2>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Số kỳ <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={formData.semesterNum}
-                  onChange={(e) => setFormData({ ...formData, semesterNum: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="1"
-                />
+
+            <form onSubmit={handleSubmit} className="space-y-4 p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="So ky" required>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={formData.semesterNum}
+                    onChange={(event) => setFormData((prev) => ({ ...prev, semesterNum: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="1"
+                  />
+                </Field>
+                <Field label="Nam hoc">
+                  <input
+                    type="text"
+                    value={formData.academicYear}
+                    onChange={(event) => setFormData((prev) => ({ ...prev, academicYear: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="2025-2026"
+                  />
+                </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Mã kỳ <span className="text-red-500">*</span>
-                  </label>
+                <Field label="Ma hoc ky" required>
                   <input
                     type="text"
                     required
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, code: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                     placeholder="HK1"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Tên kỳ <span className="text-red-500">*</span>
-                  </label>
+                </Field>
+                <Field label="Ten hoc ky" required>
                   <input
                     type="text"
                     required
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Kỳ 1"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, name: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                    placeholder="Hoc ky 1"
                   />
-                </div>
+                </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Ngày bắt đầu
-                  </label>
+                <Field label="Ngay bat dau">
                   <input
                     type="date"
                     value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, startDate: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Ngày kết thúc
-                  </label>
+                </Field>
+                <Field label="Ngay ket thuc">
                   <input
                     type="date"
                     value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, endDate: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   />
-                </div>
+                </Field>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Mô tả
-                </label>
+              <Field label="Mo ta">
                 <textarea
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Mô tả về kỳ học..."
-                  rows={2}
+                  onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Mo ta ngan ve hoc ky..."
                 />
-              </div>
+              </Field>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
-                    id="isCurrent"
                     checked={formData.isCurrent}
-                    onChange={(e) => setFormData({ ...formData, isCurrent: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, isCurrent: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label htmlFor="isCurrent" className="text-sm text-slate-700">
-                    Kỳ hiện tại
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
+                  Dat la hoc ky hien tai
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
-                    id="isActive"
                     checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label htmlFor="isActive" className="text-sm text-slate-700">
-                    Hoạt động
-                  </label>
-                </div>
+                  Dang hoat dong
+                </label>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  Hủy
+                  Huy
                 </button>
                 <button
                   type="submit"
                   disabled={modalLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {modalLoading ? 'Đang lưu...' : (selectedSemester ? 'Cập nhật' : 'Thêm mới')}
+                  {modalLoading ? 'Dang luu...' : selectedSemester ? 'Cap nhat' : 'Them moi'}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Delete Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      {isDeleteModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
             <div className="p-6">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">Xác nhận xóa</h2>
-              <p className="text-slate-600 mb-6">
-                Bạn có chắc chắn muốn xóa kỳ học <strong>{selectedSemester?.name}</strong>?
-                Hành động này không thể hoàn tác.
+              <h2 className="mb-4 text-xl font-bold text-slate-800">Xac nhan xoa</h2>
+              <p className="mb-6 text-slate-600">
+                Ban co chac chan muon xoa hoc ky <strong>{selectedSemester?.name}</strong>? Hanh dong nay khong the
+                hoan tac.
               </p>
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex justify-end gap-3">
                 <button
-                  onClick={handleCloseDeleteModal}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setSelectedSemester(null);
+                  }}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  Hủy
+                  Huy
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={modalLoading}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="rounded-lg bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                 >
-                  {modalLoading ? 'Đang xóa...' : 'Xóa'}
+                  {modalLoading ? 'Dang xoa...' : 'Xoa'}
                 </button>
               </div>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

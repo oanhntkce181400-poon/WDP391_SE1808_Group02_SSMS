@@ -77,6 +77,8 @@ app.use(
   require("./routes/registrationPeriod.routes"),
 );
 app.use("/api/registrations", require("./routes/registration.routes"));
+app.use("/api/auto-enrollment", require("./modules/autoEnrollment/autoEnrollment.routes"));
+app.use("/api/lecturer", require("./modules/lecturer/teachingSchedule.routes"));
 
 // Health check endpoint
 app.get("/health", (req, res) => {

@@ -16,6 +16,7 @@ const {
   signRefreshToken,
   verifyRefreshToken,
 } = require('../../utils/token.util');
+const { normalizeRole, isValidUserRole } = require('../../utils/role.util');
 
 function extractRequestContext(req) {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -145,7 +146,7 @@ function sanitizeUser(user) {
     id: String(user._id),
     email: user.email,
     fullName: user.fullName,
-    role: user.role,
+    role: normalizeRole(user.role, 'student'),
     avatarUrl: user.avatarUrl,
     authProvider: user.authProvider,
     status: user.status,
@@ -155,7 +156,8 @@ function sanitizeUser(user) {
 
 async function upsertGoogleUser(googleProfile) {
   const { googleId, email, fullName, avatarUrl } = googleProfile;
-  const defaultRole = process.env.DEFAULT_USER_ROLE || 'student';
+  const configuredDefaultRole = normalizeRole(process.env.DEFAULT_USER_ROLE, 'student');
+  const defaultRole = isValidUserRole(configuredDefaultRole) ? configuredDefaultRole : 'student';
 
   let user = await repo.findUserByGoogleId(googleId);
 
@@ -190,11 +192,12 @@ async function upsertGoogleUser(googleProfile) {
 }
 
 function issueTokenPair({ userId, role, familyId }) {
+  const normalizedRole = normalizeRole(role, 'student');
   const accessJti = generateId(16);
   const refreshJti = generateId(16);
 
   const accessToken = signAccessToken(
-    buildAccessTokenPayload({ userId, role, familyId, jti: accessJti }),
+    buildAccessTokenPayload({ userId, role: normalizedRole, familyId, jti: accessJti }),
   );
 
   const refreshToken = signRefreshToken(

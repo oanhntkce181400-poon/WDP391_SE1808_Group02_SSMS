@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const ClassSection = require("../../models/classSection.model");
 const ClassEnrollment = require("../../models/classEnrollment.model");
 const Schedule = require("../../models/schedule.model");
+const Student = require("../../models/student.model");
+const User = require("../../models/user.model");
+const registrationService = require("../../services/registration.service");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -165,7 +168,7 @@ async function deleteClassSection(classId) {
 
 // ─── Enrollment ───────────────────────────────────
 
-async function enrollStudent(classId, studentId) {
+async function enrollStudent(classId, studentId, options = {}) {
   if (!classId || !studentId)
     throw new Error("Class ID and Student ID are required");
 
@@ -187,6 +190,8 @@ async function enrollStudent(classId, studentId) {
   const waitlistEntry = await waitlistRepo.findOne({
     student: studentId,
     subject: cls.subject,
+    targetSemester: cls.semester,
+    targetAcademicYear: cls.academicYear,
     status: 'WAITING'
   });
   if (waitlistEntry) {
@@ -197,9 +202,53 @@ async function enrollStudent(classId, studentId) {
     classSection: classId,
     student: studentId,
     status: "enrolled",
+    isOverload: options.isOverload === true,
   });
   await repo.incrementEnrollmentCount(classId);
   return enrollment;
+}
+
+async function selfEnroll(userId, classId) {
+  if (!userId) {
+    throw new Error("Unauthorized user");
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  let student = await Student.findOne({ userId }).lean();
+  if (!student && user.email) {
+    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
+  }
+
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  const [prerequisites, capacity, wallet, eligibility] = await Promise.all([
+    registrationService.validatePrerequisites(student._id, classId),
+    registrationService.validateClassCapacity(classId),
+    registrationService.validateWallet(student._id, classId),
+    registrationService.getStudentEligibilitySummary(student._id, classId),
+  ]);
+
+  const errors = [];
+  if (!prerequisites.eligible) errors.push(prerequisites.message);
+  if (capacity.isFull) errors.push(capacity.message);
+  if (!wallet.isSufficient) errors.push(wallet.message);
+  if (!eligibility.limits.overload.allowed) errors.push(eligibility.limits.overload.message);
+  if (!eligibility.limits.credit.allowed) errors.push(eligibility.limits.credit.message);
+  if (!eligibility.limits.cohortAccess.allowed) errors.push(eligibility.limits.cohortAccess.message);
+
+  if (errors.length > 0) {
+    throw new Error(errors.join(" | "));
+  }
+
+  return enrollStudent(classId, student._id, {
+    isOverload: eligibility.limits.overload.enrollingCourseIsOverload === true,
+  });
 }
 
 async function getStudentEnrollments(studentId, status) {
@@ -735,6 +784,7 @@ module.exports = {
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
+  selfEnroll,
   reassignClass,
   checkScheduleConflict,
   bulkUpdateStatus,

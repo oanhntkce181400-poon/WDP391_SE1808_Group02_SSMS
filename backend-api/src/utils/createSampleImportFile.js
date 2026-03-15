@@ -22,9 +22,9 @@ async function createSampleImportFile() {
       status: 'active',
     },
     {
-      email: 'staff1@example.com',
+      email: 'lecturer1@example.com',
       fullName: 'Lê Văn C',
-      role: 'staff',
+      role: 'lecturer',
       status: 'active',
     },
     {

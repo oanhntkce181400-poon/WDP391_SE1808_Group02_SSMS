@@ -14,7 +14,7 @@ const router = express.Router();
 router.post(
   '/',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.createFeedbackTemplate
 );
 
@@ -22,7 +22,7 @@ router.post(
 router.get(
   '/',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.getFeedbackTemplates
 );
 
@@ -37,7 +37,7 @@ router.get(
 router.get(
   '/:id',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.getFeedbackTemplateById
 );
 
@@ -45,7 +45,7 @@ router.get(
 router.patch(
   '/:id',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.updateFeedbackTemplate
 );
 
@@ -53,7 +53,7 @@ router.patch(
 router.delete(
   '/:id',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.deleteFeedbackTemplate
 );
 
@@ -61,7 +61,7 @@ router.delete(
 router.post(
   '/:id/questions',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.addQuestion
 );
 
@@ -69,7 +69,7 @@ router.post(
 router.delete(
   '/:templateId/questions/:questionId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.removeQuestion
 );
 
@@ -77,7 +77,7 @@ router.delete(
 router.patch(
   '/:templateId/questions/:questionId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.updateQuestion
 );
 
@@ -85,7 +85,7 @@ router.patch(
 router.patch(
   '/:id/status',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackTemplateController.changeFeedbackTemplateStatus
 );
 

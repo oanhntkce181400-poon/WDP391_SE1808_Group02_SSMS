@@ -49,6 +49,8 @@ import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
 import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
+import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
+import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 export default function App() {
   return (
     <Routes>
@@ -102,6 +104,8 @@ export default function App() {
         <Route path="students" element={<StudentManagementPage />} />
         <Route path="announcements" element={<AnnouncementManagement />} />
         <Route path="registration-periods" element={<RegistrationPeriodManagement />} />
+        <Route path="auto-enrollment" element={<AutoEnrollmentPage />} />
+        <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
       </Route>
@@ -131,6 +135,15 @@ export default function App() {
         <Route path="wallet/result" element={<WalletResultPage />} />
         <Route path="transactions" element={<MyTransactionsPage />} />
       </Route>
+
+      <Route
+        path="/lecturer/teaching-schedule"
+        element={
+          <ProtectedRoute allowedRoles={["lecturer"]}>
+            <TeachingSchedulePage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Legacy dashboard route - redirect to admin */}
       <Route
@@ -201,6 +214,9 @@ function ProtectedRoute({ children, allowedRoles }) {
     if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
+    if (user.role === "lecturer") {
+      return <Navigate to="/lecturer/teaching-schedule" replace />;
+    }
     return <Navigate to="/admin" replace />;
   }
 
@@ -211,6 +227,6 @@ const routes = [
     path: "/admin/feedback-management",
     element: <FeedbackManagementPage />,
     requiresAuth: true,
-    roles: ["admin", "staff", "academicAdmin"],
+    roles: ["admin", "staff"],
   },
 ];

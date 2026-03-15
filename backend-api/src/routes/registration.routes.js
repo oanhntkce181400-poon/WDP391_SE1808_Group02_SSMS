@@ -45,7 +45,12 @@ router.post(
   rbacMiddleware(['student']),
   registrationController.validateAll
 );
-
+router.get(
+  '/eligibility-summary',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  registrationController.getEligibilitySummary
+);
 // UC44 - Check Pending Tuition (kiểm tra nợ học phí)
 // GET /api/registrations/check-pending-tuition?semesterId=...
 router.get(
@@ -75,5 +80,4 @@ router.get(
     }
   }
 );
-
 module.exports = router;

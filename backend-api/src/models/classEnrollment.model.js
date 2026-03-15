@@ -26,6 +26,15 @@ const classEnrollmentSchema = new mongoose.Schema(
       min: 0,
       max: 10 
     },
+    isOverload: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    note: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

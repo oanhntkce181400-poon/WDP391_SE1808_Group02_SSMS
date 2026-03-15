@@ -1,9 +1,16 @@
 const UserRole = require('../models/userRole.model');
 const RolePermission = require('../models/rolePermission.model');
+const User = require('../models/user.model');
+const { normalizeRole } = require('../utils/role.util');
 
 function normalizePermissionKey(value) {
   if (!value || typeof value !== 'string') return null;
   return value.trim().toLowerCase();
+}
+
+function normalizeRoleKey(value) {
+  if (!value || typeof value !== 'string') return null;
+  return normalizeRole(value).replace(/[\s_-]+/g, '');
 }
 
 function buildModuleActionKey(permission) {
@@ -68,7 +75,8 @@ module.exports = function rbacMiddleware(requiredPermissions = []) {
         return res.status(401).json({ message: 'Unauthorized.' });
       }
 
-      const userRole = String(req.auth?.role || '').toLowerCase();
+      const currentUser = await User.findById(userId).select('role').lean();
+      const userRole = normalizeRole(currentUser?.role || req.auth?.role, '');
       
       // Enhanced logging for debugging
       console.log('🔐 RBAC Check:');
@@ -86,16 +94,19 @@ module.exports = function rbacMiddleware(requiredPermissions = []) {
       // Check if required permissions include a direct role match (e.g., 'student', 'staff')
       // This allows routes to use rbacMiddleware(['student']) instead of complex permission lookups
       if (required.length > 0) {
-        const commonRoles = ['admin', 'staff', 'student'];
-        const directRoleMatches = required.filter(perm => commonRoles.includes(perm));
+        const directRoleMatches = required.filter((perm) => !perm.includes(':'));
         
         // If all required permissions are direct role matches, check them against user role
         if (directRoleMatches.length > 0 && directRoleMatches.length === required.length) {
+          const normalizedUserRole = normalizeRoleKey(userRole);
+          const normalizedRequiredRoles = directRoleMatches
+            .map((perm) => normalizeRoleKey(perm))
+            .filter(Boolean);
           console.log('   📋 Direct Role Match Check:');
           console.log('      Direct Matches:', directRoleMatches);
-          console.log('      User Role Match:', directRoleMatches.includes(userRole));
+          console.log('      User Role Match:', normalizedRequiredRoles.includes(normalizedUserRole));
           
-          if (directRoleMatches.includes(userRole)) {
+          if (normalizedRequiredRoles.includes(normalizedUserRole)) {
             console.log('   ✅ Result: ROLE MATCHED');
             return next();
           } else {

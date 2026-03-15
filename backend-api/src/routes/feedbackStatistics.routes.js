@@ -8,7 +8,7 @@ const rbacMiddleware = require('../middlewares/rbac.middleware');
 router.get(
   '/teacher/:teacherId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackStatisticsController.getTeacherStatistics.bind(feedbackStatisticsController)
 );
 
@@ -16,7 +16,7 @@ router.get(
 router.get(
   '/template/:templateId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackStatisticsController.getTemplateStatistics.bind(feedbackStatisticsController)
 );
 
@@ -24,7 +24,7 @@ router.get(
 router.get(
   '/teachers/top',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackStatisticsController.getTeacherComparison.bind(feedbackStatisticsController)
 );
 
@@ -32,7 +32,7 @@ router.get(
 router.get(
   '/range',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackStatisticsController.getStatisticsByDateRange.bind(feedbackStatisticsController)
 );
 
@@ -40,7 +40,7 @@ router.get(
 router.get(
   '/question/:templateId/:questionId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'academicAdmin']),
+  rbacMiddleware(['admin', 'staff']),
   feedbackStatisticsController.analyzeQuestion.bind(feedbackStatisticsController)
 );
 

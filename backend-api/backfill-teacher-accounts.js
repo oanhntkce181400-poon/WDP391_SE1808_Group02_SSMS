@@ -51,7 +51,7 @@ async function backfillTeacherAccounts() {
         email: normalizedEmail,
         password: teacherPasswordHash,
         fullName: teacher.fullName,
-        role: 'staff',
+        role: 'lecturer',
         authProvider: 'local',
         status: teacher.isActive === false ? 'inactive' : 'active',
         isActive: teacher.isActive !== false,
@@ -85,4 +85,3 @@ backfillTeacherAccounts()
     await mongoose.connection.close();
     process.exit(1);
   });
-

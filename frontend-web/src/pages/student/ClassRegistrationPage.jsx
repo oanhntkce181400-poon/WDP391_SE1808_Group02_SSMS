@@ -1,361 +1,338 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import classService from '../../services/classService';
 import registrationService from '../../services/registrationService';
-import { 
-  Search, 
-  GraduationCap,
-  Users,
-  Clock,
-  MapPin,
-  CheckCircle,
-  XCircle,
+import {
   AlertTriangle,
+  CheckCircle,
+  Clock,
+  GraduationCap,
   Lock,
-  DollarSign
+  MapPin,
+  Search,
+  Users,
+  XCircle,
 } from 'lucide-react';
 
 export default function ClassRegistrationPage() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [filters, setFilters] = useState({
-    subject_id: '',
-    semester: '',
-  });
+  const [filters, setFilters] = useState({ semester: '' });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [validationResults, setValidationResults] = useState({});
+  const [eligibility, setEligibility] = useState(null);
   const [toast, setToast] = useState(null);
-  const navigate = useNavigate();
 
-  // Toast helper
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 5000);
+    setTimeout(() => setToast(null), 4000);
   };
 
-  // Fetch classes
+  const fetchEligibility = async () => {
+    try {
+      const response = await registrationService.getEligibilitySummary();
+      setEligibility(response?.data?.data || null);
+    } catch (error) {
+      setEligibility(null);
+    }
+  };
+
+  const preValidateClasses = async (classList) => {
+    if (!classList.length) {
+      setValidationResults({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      classList.map(async (cls) => {
+        try {
+          const response = await registrationService.validateAll(cls._id);
+          return [cls._id, response?.data?.data || null];
+        } catch (error) {
+          return [cls._id, null];
+        }
+      }),
+    );
+
+    setValidationResults(Object.fromEntries(entries));
+  };
+
   const fetchClasses = async () => {
     setLoading(true);
     try {
       const params = {
         keyword: searchKeyword,
-        ...filters,
+        semester: filters.semester,
         page,
-        limit: 12, // 12 cards per page
+        limit: 12,
         sortBy: 'createdAt',
         sortOrder: 'desc',
       };
 
       const response = await classService.searchClasses(params);
-      if (response.data.success) {
-        setClasses(response.data.classes || response.data.data || []);
-        setPagination(response.data.pagination);
-      }
+      const classList = response?.data?.classes || response?.data?.data || [];
+      setClasses(classList);
+      setPagination(response?.data?.pagination || null);
+      await preValidateClasses(classList);
     } catch (error) {
-      console.error('Error fetching classes:', error);
-      showToast('Không thể tải danh sách lớp', 'error');
+      showToast('Cannot load class list', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    fetchEligibility();
+  }, []);
+
+  useEffect(() => {
     fetchClasses();
   }, [page, filters]);
 
-  // Handle search with debounce
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchKeyword !== undefined) {
-        setPage(1);
-        fetchClasses();
-      }
-    }, 500);
+      setPage(1);
+      fetchClasses();
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [searchKeyword]);
 
-  // Validate registration for a class
-  const validateRegistration = async (classId) => {
+  const creditInfo = eligibility?.limits?.credit;
+  const overloadInfo = eligibility?.limits?.overload;
+  const cohortInfo = eligibility?.limits?.cohortAccess;
+
+  const creditPercent = useMemo(() => {
+    if (!creditInfo?.maxCredits) return 0;
+    return Math.min(100, Math.round((creditInfo.currentCredits / creditInfo.maxCredits) * 100));
+  }, [creditInfo]);
+
+  const getStatusColor = (occupancyPercentage) => {
+    if (occupancyPercentage >= 100) return 'bg-red-100 text-red-800';
+    if (occupancyPercentage >= 80) return 'bg-amber-100 text-amber-800';
+    return 'bg-emerald-100 text-emerald-800';
+  };
+
+  const getStatusLabel = (occupancyPercentage, isFull) => {
+    if (isFull) return 'Full';
+    if (occupancyPercentage >= 80) return 'Nearly full';
+    return 'Available';
+  };
+
+  const validateSingleClass = async (classId) => {
     try {
       const response = await registrationService.validateAll(classId);
-      if (response.data.success) {
-        setValidationResults((prev) => ({
-          ...prev,
-          [classId]: response.data.data,
-        }));
-
-        // Show validation result
-        const { isEligible, validationErrors } = response.data.data;
-        if (isEligible) {
-          showToast('Bạn đủ điều kiện đăng ký lớp này!', 'success');
-        } else {
-          showToast(validationErrors.join(', '), 'error');
-        }
-      }
+      const data = response?.data?.data || null;
+      setValidationResults((prev) => ({ ...prev, [classId]: data }));
+      return data;
     } catch (error) {
-      console.error('Error validating registration:', error);
-      showToast('Không thể kiểm tra điều kiện đăng ký', 'error');
+      showToast('Cannot validate this class now', 'error');
+      return null;
     }
   };
 
-  // Get status color based on occupancy
-  const getStatusColor = (occupancyPercentage) => {
-    if (occupancyPercentage >= 100) return 'bg-red-100 text-red-800';
-    if (occupancyPercentage >= 80) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-green-100 text-green-800';
+  const handleRegister = async (cls) => {
+    let validation = validationResults[cls._id];
+    if (!validation) {
+      validation = await validateSingleClass(cls._id);
+    }
+
+    if (!validation?.isEligible) {
+      const errMessage = validation?.validationErrors?.[0] || 'Class is not eligible for registration';
+      showToast(errMessage, 'error');
+      return;
+    }
+
+    try {
+      await classService.selfEnroll(cls._id);
+      showToast('Registration successful', 'success');
+      await fetchEligibility();
+      await fetchClasses();
+    } catch (error) {
+      showToast(error?.response?.data?.message || 'Registration failed', 'error');
+    }
   };
 
-  // Get status label
-  const getStatusLabel = (occupancyPercentage, isFull) => {
-    if (isFull) return 'Đã đầy';
-    if (occupancyPercentage >= 80) return 'Sắp đầy';
-    return 'Còn chỗ';
-  };
+  const isCohortBlocked = cohortInfo && !cohortInfo.allowed;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
+      <div className="mx-auto max-w-7xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Đăng ký tín chỉ
-          </h1>
-          <p className="text-gray-600">
-            Tìm kiếm và đăng ký lớp học phần
-          </p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">Course Registration</h1>
+          <p className="text-gray-600">Search and register class sections.</p>
         </div>
 
-        {/* Search and Filter Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search Bar */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tìm kiếm lớp học
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Nhập mã lớp, tên lớp..."
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+        <div className="mb-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Search className="h-4 w-4" />
+              Search classes
             </div>
-
-            {/* Semester Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Học kỳ
-              </label>
+            <input
+              type="text"
+              placeholder="Class code, class name"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div className="mt-3">
               <select
                 value={filters.semester}
                 onChange={(e) => setFilters({ ...filters, semester: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
               >
-                <option value="">Tất cả học kỳ</option>
-                <option value="1">Học kỳ 1</option>
-                <option value="2">Học kỳ 2</option>
-                <option value="3">Học kỳ 3 (Hè)</option>
+                <option value="">All semesters</option>
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+                <option value="3">Semester 3</option>
               </select>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-2 text-sm font-semibold text-slate-700">Your limits</div>
+            <div className="text-sm text-slate-600">
+              Cohort: <span className="font-semibold text-slate-900">K{eligibility?.student?.cohort || '-'}</span>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              Overload: <span className="font-semibold text-slate-900">{overloadInfo?.currentOverloadCount || 0}/2</span>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              Credits: <span className="font-semibold text-slate-900">{creditInfo?.currentCredits || 0}/{creditInfo?.maxCredits || 20}</span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded bg-slate-200">
+              <div className="h-2 rounded bg-blue-600" style={{ width: `${creditPercent}%` }} />
             </div>
           </div>
         </div>
 
-        {/* Classes List */}
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Đang tải danh sách lớp...</p>
+        {isCohortBlocked && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {cohortInfo?.message || 'Your cohort is not allowed in current registration period'}
           </div>
+        )}
+
+        {loading ? (
+          <div className="py-12 text-center text-slate-600">Loading classes...</div>
         ) : (
           <>
-            {/* Results Count */}
-            {pagination && (
-              <div className="mb-4 text-sm text-gray-600">
-                Tìm thấy {pagination.total} lớp học
-              </div>
-            )}
+            <div className="mb-4 text-sm text-slate-600">Found {pagination?.total || 0} classes</div>
 
-            {/* Class Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {classes.map((cls) => {
                 const validation = validationResults[cls._id];
+                const validationErrors = validation?.validationErrors || [];
+                const cannotRegister =
+                  cls.isFull ||
+                  isCohortBlocked ||
+                  (validation ? !validation.isEligible : false);
+
                 return (
-                  <div
-                    key={cls._id}
-                    className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-200 border border-gray-200"
-                  >
+                  <div key={cls._id} className="rounded-lg border border-gray-200 bg-white shadow-sm">
                     <div className="p-5">
-                      {/* Header */}
-                      <div className="mb-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="text-lg font-bold text-gray-900">
-                            {cls.classCode}
-                          </h3>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              cls.occupancyPercentage
-                            )}`}
-                          >
-                            {getStatusLabel(cls.occupancyPercentage, cls.isFull)}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm font-medium">{cls.className}</p>
+                      <div className="mb-4 flex items-start justify-between gap-2">
+                        <h3 className="text-lg font-bold text-gray-900">{cls.classCode}</h3>
+                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(cls.occupancyPercentage)}`}>
+                          {getStatusLabel(cls.occupancyPercentage, cls.isFull)}
+                        </span>
                       </div>
 
-                      {/* Class Info Grid */}
-                      <div className="space-y-2 mb-4">
-                        {/* Subject */}
-                        <div className="flex items-center gap-2">
-                          <GraduationCap className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs text-gray-500">Môn học</div>
-                            <div className="text-sm font-medium truncate">
-                              {cls.subject?.subjectCode}
-                            </div>
-                          </div>
-                        </div>
+                      <p className="mb-3 text-sm font-medium text-gray-800">{cls.className}</p>
 
-                        {/* Teacher */}
+                      <div className="mb-4 space-y-2 text-sm text-slate-600">
                         <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs text-gray-500">Giảng viên</div>
-                            <div className="text-sm font-medium truncate">
-                              {cls.teacher?.firstName} {cls.teacher?.lastName}
-                            </div>
-                          </div>
+                          <GraduationCap className="h-4 w-4" />
+                          <span>{cls.subject?.subjectCode}</span>
                         </div>
-
-                        {/* Time */}
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs text-gray-500">Thời gian</div>
-                            <div className="text-sm font-medium truncate">
-                              {cls.timeslot?.startTime} - {cls.timeslot?.endTime}
-                            </div>
-                          </div>
+                          <Users className="h-4 w-4" />
+                          <span>{cls.teacher?.fullName || 'TBA'}</span>
                         </div>
-
-                        {/* Room */}
                         <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs text-gray-500">Phòng học</div>
-                            <div className="text-sm font-medium truncate">
-                              {cls.room?.roomNumber || 'TBA'}
-                            </div>
-                          </div>
+                          <Clock className="h-4 w-4" />
+                          <span>{cls.timeslot?.startTime || '--'} - {cls.timeslot?.endTime || '--'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>{cls.room?.roomCode || cls.room?.roomNumber || 'TBA'}</span>
                         </div>
                       </div>
 
-                      {/* Progress Bar */}
                       <div className="mb-4">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>Sĩ số</span>
-                          <span className="font-medium">
-                            {cls.currentEnrollment}/{cls.maxCapacity}
-                          </span>
+                        <div className="mb-1 flex justify-between text-xs text-gray-600">
+                          <span>Enrollment</span>
+                          <span>{cls.currentEnrollment}/{cls.maxCapacity}</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="h-2 w-full rounded bg-gray-200">
                           <div
-                            className={`h-2 rounded-full transition-all duration-300 ${
+                            className={`h-2 rounded ${
                               cls.occupancyPercentage >= 100
                                 ? 'bg-red-600'
                                 : cls.occupancyPercentage >= 80
-                                ? 'bg-yellow-500'
-                                : 'bg-green-500'
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
                             }`}
-                            style={{ width: `${Math.min(cls.occupancyPercentage, 100)}%` }}
-                          ></div>
+                            style={{ width: `${Math.min(cls.occupancyPercentage || 0, 100)}%` }}
+                          />
                         </div>
                       </div>
 
-                      {/* Validation Status */}
-                      {validation && (
-                        <div className="mb-3">
-                          {validation.isEligible ? (
-                            <div className="flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <div className="text-sm font-semibold text-green-900">
-                                  ✓ Đủ điều kiện đăng ký
-                                </div>
-                                <div className="text-xs text-green-700 mt-1">
-                                  Bạn có thể đăng ký lớp học này
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                              <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <div className="text-sm font-semibold text-red-900 mb-1">
-                                  ✗ Không đủ điều kiện
-                                </div>
-                                <ul className="text-xs text-red-700 space-y-0.5">
-                                  {validation.validationErrors?.map((error, idx) => (
-                                    <li key={idx} className="flex items-start gap-1">
-                                      <span className="text-red-500 flex-shrink-0">•</span>
-                                      <span>{error}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Prerequisites Warning */}
-                      {cls.subject?.prerequisites && cls.subject.prerequisites.length > 0 && (
-                        <div className="mb-3">
-                          <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
-                            <Lock className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-medium text-yellow-800">
-                                Môn tiên quyết
-                              </div>
-                              <div className="text-xs text-yellow-700 mt-0.5 line-clamp-1">
-                                {cls.subject.prerequisites.map((p) => p.name).join(', ')}
-                              </div>
-                            </div>
+                      {validation?.isEligible && (
+                        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+                          <div className="flex items-center gap-1 font-semibold">
+                            <CheckCircle className="h-4 w-4" />
+                            Eligible to register
                           </div>
                         </div>
                       )}
 
-                      {/* Credits & Fee */}
-                      {cls.subject && (
-                        <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
-                          <DollarSign className="h-4 w-4 flex-shrink-0" />
-                          <span className="text-xs">
-                            {cls.subject.credits} tín chỉ -{' '}
-                            {((cls.subject.tuitionFee || 100) * cls.subject.credits).toLocaleString('vi-VN')} VNĐ
-                          </span>
+                      {!validation?.isEligible && validationErrors.length > 0 && (
+                        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                          <div className="mb-1 flex items-center gap-1 font-semibold">
+                            <XCircle className="h-4 w-4" />
+                            Registration blocked
+                          </div>
+                          <ul className="space-y-1">
+                            {validationErrors.slice(0, 2).map((err) => (
+                              <li key={err}>- {err}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
 
-                      {/* Actions */}
+                      {overloadInfo?.currentOverloadCount >= 2 && validation?.overload?.enrollingCourseIsOverload && (
+                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                          <div className="flex items-center gap-1 font-semibold">
+                            <AlertTriangle className="h-4 w-4" />
+                            You already registered 2 overload courses
+                          </div>
+                        </div>
+                      )}
+
+                      {cls.subject?.prerequisites?.length > 0 && (
+                        <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 p-2 text-xs text-yellow-700">
+                          <div className="flex items-center gap-1 font-semibold">
+                            <Lock className="h-4 w-4" />
+                            Prerequisites required
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
                         <button
-                          onClick={() => validateRegistration(cls._id)}
-                          className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={cls.isFull}
+                          onClick={() => validateSingleClass(cls._id)}
+                          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
-                          Kiểm tra
+                          Check
                         </button>
                         <button
-                          onClick={() => navigate(`/student/classes/${cls._id}`)}
-                          className="px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                          onClick={() => handleRegister(cls)}
+                          disabled={cannotRegister}
+                          className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
-                          Chi tiết
+                          Register
                         </button>
                       </div>
                     </div>
@@ -364,83 +341,43 @@ export default function ClassRegistrationPage() {
               })}
             </div>
 
-            {/* Pagination */}
             {pagination && pagination.totalPages > 1 && (
-              <div className="mt-8 flex justify-center gap-2">
+              <div className="mt-8 flex items-center justify-center gap-3">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
                 >
-                  Trước
+                  Prev
                 </button>
-                <span className="px-4 py-2 text-gray-700">
-                  Trang {page} / {pagination.totalPages}
+                <span className="text-sm text-slate-600">
+                  Page {page} / {pagination.totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={page === pagination.totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
                 >
-                  Sau
+                  Next
                 </button>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {classes.length === 0 && !loading && (
-              <div className="text-center py-12">
-                <GraduationCap className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg">Không tìm thấy lớp học nào</p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm
-                </p>
               </div>
             )}
           </>
         )}
       </div>
 
-      {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50">
           <div
-            className={`flex items-start gap-3 p-4 rounded-lg shadow-xl max-w-md transition-all transform ${
+            className={`max-w-md rounded-lg border px-4 py-3 text-sm shadow-lg ${
               toast.type === 'success'
-                ? 'bg-green-50 border border-green-200'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                 : toast.type === 'error'
-                ? 'bg-red-50 border border-red-200'
-                : 'bg-blue-50 border border-blue-200'
+                ? 'border-red-200 bg-red-50 text-red-800'
+                : 'border-blue-200 bg-blue-50 text-blue-800'
             }`}
           >
-            {toast.type === 'success' && (
-              <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
-            )}
-            {toast.type === 'error' && (
-              <XCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-            )}
-            {toast.type === 'info' && (
-              <AlertTriangle className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1">
-              <p
-                className={`text-sm font-medium ${
-                  toast.type === 'success'
-                    ? 'text-green-900'
-                    : toast.type === 'error'
-                    ? 'text-red-900'
-                    : 'text-blue-900'
-                }`}
-              >
-                {toast.message}
-              </p>
-            </div>
-            <button
-              onClick={() => setToast(null)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
+            {toast.message}
           </div>
         </div>
       )}

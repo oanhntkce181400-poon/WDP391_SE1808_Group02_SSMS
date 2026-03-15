@@ -1,4 +1,91 @@
 const Room = require('../models/room.model');
+const Schedule = require('../models/schedule.model');
+const Semester = require('../models/semester.model');
+
+const ACTIVE_CLASS_SECTION_STATUSES = ['scheduled', 'published', 'locked', 'active'];
+
+async function buildRoomUsageMap(roomIds = []) {
+  if (!Array.isArray(roomIds) || roomIds.length === 0) {
+    return new Map();
+  }
+
+  const currentSemester = await Semester.findOne({ isCurrent: true })
+    .select('semesterNum academicYear')
+    .lean();
+
+  const classSectionMatch = {
+    'classSection.status': { $in: ACTIVE_CLASS_SECTION_STATUSES },
+  };
+
+  if (currentSemester) {
+    classSectionMatch['classSection.semester'] = currentSemester.semesterNum;
+    classSectionMatch['classSection.academicYear'] = currentSemester.academicYear;
+  }
+
+  const usageRows = await Schedule.aggregate([
+    {
+      $match: {
+        room: { $in: roomIds },
+        status: 'active',
+      },
+    },
+    {
+      $lookup: {
+        from: 'classsections',
+        localField: 'classSection',
+        foreignField: '_id',
+        as: 'classSection',
+      },
+    },
+    { $unwind: '$classSection' },
+    { $match: classSectionMatch },
+    {
+      $group: {
+        _id: {
+          room: '$room',
+          classSection: '$classSection._id',
+        },
+        classCode: { $first: '$classSection.classCode' },
+        currentEnrollment: { $first: '$classSection.currentEnrollment' },
+        maxCapacity: { $first: '$classSection.maxCapacity' },
+      },
+    },
+    {
+      $group: {
+        _id: '$_id.room',
+        activeClassCount: { $sum: 1 },
+        totalCurrentEnrollment: { $sum: '$currentEnrollment' },
+        totalSeatCapacity: { $sum: '$maxCapacity' },
+        classCodes: { $push: '$classCode' },
+      },
+    },
+  ]);
+
+  return new Map(usageRows.map((row) => [String(row._id), row]));
+}
+
+function attachUsageToRoom(room, usageMap) {
+  const roomData = room?.toObject ? room.toObject() : { ...room };
+  const usage = usageMap.get(String(roomData._id)) || null;
+  const currentSemesterClassCount = Number(usage?.activeClassCount || 0);
+  const currentSemesterEnrollmentCount = Number(usage?.totalCurrentEnrollment || 0);
+  const currentSemesterSeatCapacity = Number(usage?.totalSeatCapacity || 0);
+  const currentSemesterOccupancyRate =
+    currentSemesterSeatCapacity > 0
+      ? Math.round((currentSemesterEnrollmentCount / currentSemesterSeatCapacity) * 100)
+      : 0;
+
+  return {
+    ...roomData,
+    operationalStatus:
+      roomData.status === 'occupied' || currentSemesterEnrollmentCount > 0 ? 'occupied' : 'available',
+    currentSemesterClassCount,
+    currentSemesterEnrollmentCount,
+    currentSemesterSeatCapacity,
+    currentSemesterOccupancyRate,
+    currentSemesterClassCodes: usage?.classCodes || [],
+  };
+}
 
 class RoomService {
   // Create new room with validation
@@ -82,9 +169,10 @@ class RoomService {
         .limit(limit);
 
       const total = await Room.countDocuments(query);
+      const usageMap = await buildRoomUsageMap(rooms.map((room) => room._id));
 
       return {
-        data: rooms,
+        data: rooms.map((room) => attachUsageToRoom(room, usageMap)),
         total,
         page: parseInt(page),
         totalPages: Math.ceil(total / limit),
@@ -101,7 +189,8 @@ class RoomService {
       if (!room) {
         throw new Error('Room not found');
       }
-      return room;
+      const usageMap = await buildRoomUsageMap([room._id]);
+      return attachUsageToRoom(room, usageMap);
     } catch (error) {
       throw error;
     }

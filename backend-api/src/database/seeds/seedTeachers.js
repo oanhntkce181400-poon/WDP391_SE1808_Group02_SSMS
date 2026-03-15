@@ -65,7 +65,7 @@ async function seed() {
             email: normalizedEmail,
             password: teacherPasswordHash,
             fullName: teacher.fullName,
-            role: 'staff',
+            role: 'lecturer',
             authProvider: 'local',
             status: 'active',
             isActive: true,

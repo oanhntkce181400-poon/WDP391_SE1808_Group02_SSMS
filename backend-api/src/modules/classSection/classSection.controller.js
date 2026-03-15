@@ -258,7 +258,7 @@ async function getClassDetails(req, res) {
     // Cho phép xem chi tiết nếu đã đăng nhập, hoặc không cần đăng nhập
     // Nếu có userId thì kiểm tra enrollment của user đó
     // Nếu không có userId thì vẫn cho xem (demo mode)
-    const userId = req.auth?._id;
+    const userId = req.auth?.sub;
     
     console.log('getClassDetails - auth:', req.auth);
     console.log('getClassDetails - classId:', classId);
@@ -317,7 +317,7 @@ async function getClassList(req, res) {
 }
 async function selfEnroll(req, res) {
   try {
-    const userId = req.user?.userId || req.user?._id;
+    const userId = req.auth?.sub;
     const { classId } = req.params;
     const data = await service.selfEnroll(userId, classId);
     return res.status(201).json({ success: true, message: "Đăng ký lớp thành công", data });
@@ -330,7 +330,7 @@ async function selfEnroll(req, res) {
 async function bulkCreate(req, res) {
   try {
     const { classes } = req.body; // Array of { subjectId, semester, academicYear, maxCapacity }
-    const userId = req.user?.userId || req.user?._id;
+    const userId = req.auth?.sub;
     
     if (!classes || !Array.isArray(classes) || classes.length === 0) {
       return res.status(400).json({ success: false, message: "Danh sach mon hoc khong hop le" });
@@ -366,3 +366,5 @@ module.exports = {
   getClassList,
   getClassDetails,
 };
+
+

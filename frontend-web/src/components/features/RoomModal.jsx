@@ -1,5 +1,4 @@
-// Room Modal Component - Popup form for Create/Edit Room
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import closeIcon from '../../assets/close.png';
 
 const ROOM_TYPES = [
@@ -12,8 +11,8 @@ const ROOM_TYPES = [
 ];
 
 const ROOM_STATUS = [
-  { value: 'available', label: 'Đang trống' },
-  { value: 'occupied', label: 'Đang hoạt động' },
+  { value: 'available', label: 'Sẵn sàng sử dụng' },
+  { value: 'occupied', label: 'Tạm khóa / đang sử dụng' },
 ];
 
 export default function RoomModal({ isOpen, onClose, onSubmit, room, loading }) {
@@ -24,24 +23,20 @@ export default function RoomModal({ isOpen, onClose, onSubmit, room, loading }) 
     capacity: '',
     status: 'available',
   });
-
   const [errors, setErrors] = useState({});
 
-  // Populate form when editing existing room
   useEffect(() => {
+    if (!isOpen) return;
+
     if (room) {
-      console.log('Room data received:', room);
-      const typeValue = room.roomType || room.building || '';
-      console.log('Setting type to:', typeValue);
       setFormData({
         code: room.code || '',
         name: room.name || '',
-        type: typeValue,
+        type: room.roomType || room.building || '',
         capacity: room.capacity || '',
-        status: room.status || 'available',
+        status: room.rawStatus || room.status || 'available',
       });
     } else {
-      // Reset form for new room
       setFormData({
         code: '',
         name: '',
@@ -50,206 +45,173 @@ export default function RoomModal({ isOpen, onClose, onSubmit, room, loading }) 
         status: 'available',
       });
     }
+
     setErrors({});
   }, [room, isOpen]);
 
+  if (!isOpen) return null;
+
   const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.code.trim()) {
-      newErrors.code = 'Mã phòng học là bắt buộc';
+    const nextErrors = {};
+
+    if (!formData.code.trim()) nextErrors.code = 'Mã phòng là bắt buộc.';
+    if (!formData.name.trim()) nextErrors.name = 'Tên phòng là bắt buộc.';
+    if (!formData.type) nextErrors.type = 'Loại phòng là bắt buộc.';
+    if (!formData.capacity || Number(formData.capacity) <= 0) {
+      nextErrors.capacity = 'Sức chứa phải lớn hơn 0.';
     }
-    
-    if (!formData.name.trim()) {
-      newErrors.name = 'Tên phòng học là bắt buộc';
-    }
-    
-    if (!formData.type) {
-      newErrors.type = 'Loại phòng là bắt buộc';
-    }
-    
-    if (!formData.capacity || formData.capacity <= 0) {
-      newErrors.capacity = 'Sức chứa phải lớn hơn 0';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (validateForm()) {
-      onSubmit({
-        code: formData.code,
-        name: formData.name,
-        type: formData.type,
-        capacity: parseInt(formData.capacity, 10),
-        status: formData.status,
-      });
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (event) => {
+    const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
-  if (!isOpen) return null;
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!validateForm()) return;
 
-  const isEditing = !!room;
+    onSubmit({
+      code: formData.code.trim(),
+      name: formData.name.trim(),
+      type: formData.type,
+      capacity: Number.parseInt(formData.capacity, 10),
+      status: formData.status,
+    });
+  };
+
+  const isEditing = Boolean(room);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-        {/* Modal Header */}
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-800">
           <h3 className="text-xl font-bold text-slate-900 dark:text-white">
             {isEditing ? 'Chỉnh sửa phòng học' : 'Tạo phòng học mới'}
           </h3>
           <button
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1"
+            className="p-1 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
             onClick={onClose}
             disabled={loading}
           >
-            <img src={closeIcon} alt="Đóng" className="w-6 h-6" />
+            <img src={closeIcon} alt="Đóng" className="h-6 w-6" />
           </button>
         </div>
 
-        {/* Modal Body - Form */}
         <form onSubmit={handleSubmit}>
-          <div className="p-6 flex flex-col gap-5">
-            {/* Room Code */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="code">
-                Mã phòng học <span className="text-red-500">*</span>
-              </label>
-              <input
-                className={`form-input rounded-lg border ${
-                  errors.code
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                id="code"
-                name="code"
-                placeholder="VD: A101, B202"
-                type="text"
-                value={formData.code}
-                onChange={handleChange}
-                disabled={loading}
-              />
-              {errors.code && <p className="text-sm text-red-500">{errors.code}</p>}
-            </div>
+          <div className="flex flex-col gap-5 p-6">
+            <FormField
+              label="Mã phòng"
+              required
+              error={errors.code}
+              input={
+                <input
+                  id="code"
+                  name="code"
+                  type="text"
+                  placeholder="Ví dụ: A101"
+                  value={formData.code}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className={inputClass(errors.code)}
+                />
+              }
+            />
 
-            {/* Room Name */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="name">
-                Tên phòng học <span className="text-red-500">*</span>
-              </label>
-              <input
-                className={`form-input rounded-lg border ${
-                  errors.name
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                id="name"
-                name="name"
-                placeholder="VD: Phòng A101"
-                type="text"
-                value={formData.name}
-                onChange={handleChange}
-                disabled={loading}
-              />
-              {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
-            </div>
+            <FormField
+              label="Tên phòng"
+              required
+              error={errors.name}
+              input={
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="Ví dụ: Phòng A101"
+                  value={formData.name}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className={inputClass(errors.name)}
+                />
+              }
+            />
 
-            {/* Room Type */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="type">
-                Loại phòng <span className="text-red-500">*</span>
-              </label>
-              <select
-                className={`form-select rounded-lg border ${
-                  errors.type
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                id="type"
-                name="type"
-                value={formData.type}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <option value="">-- Chọn loại phòng --</option>
-                {ROOM_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              {errors.type && <p className="text-sm text-red-500">{errors.type}</p>}
-            </div>
+            <FormField
+              label="Loại phòng"
+              required
+              error={errors.type}
+              input={
+                <select
+                  id="type"
+                  name="type"
+                  value={formData.type}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className={inputClass(errors.type)}
+                >
+                  <option value="">Chọn loại phòng</option>
+                  {ROOM_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
 
-            {/* Room Capacity */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="capacity">
-                Sức chứa <span className="text-red-500">*</span>
-              </label>
-              <input
-                className={`form-input rounded-lg border ${
-                  errors.capacity
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                id="capacity"
-                name="capacity"
-                placeholder="VD: 50"
-                type="number"
-                min="1"
-                value={formData.capacity}
-                onChange={handleChange}
-                disabled={loading}
-              />
-              {errors.capacity && <p className="text-sm text-red-500">{errors.capacity}</p>}
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                * Sức chứa phải là số nguyên dương
-              </p>
-            </div>
+            <FormField
+              label="Sức chứa"
+              required
+              error={errors.capacity}
+              helperText="Sức chứa phải là số nguyên dương."
+              input={
+                <input
+                  id="capacity"
+                  name="capacity"
+                  type="number"
+                  min="1"
+                  placeholder="Ví dụ: 50"
+                  value={formData.capacity}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className={inputClass(errors.capacity)}
+                />
+              }
+            />
 
-            {/* Room Status */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-white" htmlFor="status">
-                Trạng thái <span className="text-red-500">*</span>
-              </label>
-              <select
-                className={`form-select rounded-lg border ${
-                  errors.status
-                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-slate-200 dark:border-slate-700'
-                } dark:bg-slate-800 focus:border-[#1A237E] focus:ring-[#1A237E] w-full text-sm`}
-                id="status"
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                {ROOM_STATUS.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-              {errors.status && <p className="text-sm text-red-500">{errors.status}</p>}
-            </div>
+            <FormField
+              label="Trạng thái lưu trữ"
+              required
+              error={errors.status}
+              helperText="Trạng thái vận hành thực tế sẽ được tính tự động theo lớp và lịch học."
+              input={
+                <select
+                  id="status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  disabled={loading}
+                  className={inputClass(errors.status)}
+                >
+                  {ROOM_STATUS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
           </div>
 
-          {/* Modal Footer */}
-          <div className="p-6 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
+          <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800">
             <button
-              className="px-5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+              className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
               type="button"
               onClick={onClose}
               disabled={loading}
@@ -257,37 +219,36 @@ export default function RoomModal({ isOpen, onClose, onSubmit, room, loading }) 
               Hủy
             </button>
             <button
-              className="px-5 py-2.5 text-sm font-medium text-white bg-[#1A237E] rounded-lg hover:bg-[#0D147A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="rounded-lg bg-[#1A237E] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#0D147A] disabled:cursor-not-allowed disabled:opacity-50"
               type="submit"
               disabled={loading}
             >
-              {loading && (
-                <svg
-                  className="animate-spin h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              )}
-              {isEditing ? 'Cập nhật' : 'Tạo mới'}
+              {loading ? 'Đang lưu...' : isEditing ? 'Cập nhật' : 'Tạo mới'}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
+}
+
+function FormField({ label, required = false, error, helperText, input }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-bold text-slate-700 dark:text-white">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {input}
+      {error ? <p className="text-sm text-red-500">{error}</p> : null}
+      {!error && helperText ? <p className="text-xs text-slate-500 dark:text-slate-400">{helperText}</p> : null}
+    </div>
+  );
+}
+
+function inputClass(hasError) {
+  return `w-full rounded-lg border text-sm dark:bg-slate-800 ${
+    hasError
+      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+      : 'border-slate-200 focus:border-[#1A237E] focus:ring-[#1A237E] dark:border-slate-700'
+  }`;
 }

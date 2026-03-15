@@ -200,7 +200,7 @@ const ImportUsersModal = ({ isOpen, onClose, onImportSuccess }) => {
                     <li>Dòng đầu tiên là header: email, fullName, role, status</li>
                     <li>Email: bắt buộc, định dạng hợp lệ</li>
                     <li>fullName: bắt buộc, tối đa 255 ký tự</li>
-                    <li>role: admin, staff, hoặc student (mặc định: student)</li>
+                    <li>role: admin, staff, student, hoặc lecturer (mặc định: student)</li>
                     <li>status: active, inactive, blocked, pending (mặc định: active)</li>
                   </ul>
                 </div>
