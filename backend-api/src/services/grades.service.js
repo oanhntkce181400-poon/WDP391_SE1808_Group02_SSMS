@@ -548,6 +548,112 @@ class GradesService {
       throw new Error(`Lỗi lấy danh sách sinh viên: ${error.message}`);
     }
   }
+
+  /**
+   * Nộp điểm chính thức cho tất cả sinh viên trong lớp
+   * Tính grade cuối cùng, lock điểm, ghi log
+   * 
+   * @param {string} classSectionId - ID lớp học
+   * @returns {Promise<Object>} { success, message, processed, errors, classInfo }
+   */
+  async submitFinalClassGrades(classSectionId) {
+    try {
+      // Get all enrollments in class with incomplete grades
+      const enrollments = await ClassEnrollment.find({
+        classSection: classSectionId,
+        status: { $in: ['enrolled', 'active'] }
+      })
+        .populate({
+          path: 'classSection',
+          populate: {
+            path: 'subject',
+            select: 'subjectCode subjectName credits'
+          }
+        })
+        .populate('student', 'studentCode fullName');
+
+      if (!enrollments || enrollments.length === 0) {
+        return {
+          success: false,
+          message: 'Không có sinh viên để nộp điểm',
+          processed: 0,
+          errors: []
+        };
+      }
+
+      let successCount = 0;
+      const errors = [];
+      const processedEnrollments = [];
+
+      for (const enrollment of enrollments) {
+        try {
+          // Skip if no grades entered
+          if (enrollment.midtermScore === null && enrollment.finalScore === null && enrollment.assignmentScore === null) {
+            errors.push({
+              studentCode: enrollment.student?.studentCode,
+              error: 'Chưa nhập điểm nào'
+            });
+            continue;
+          }
+
+          // Skip if not all grades are entered (require all 3 components)
+          if (enrollment.midtermScore === null || enrollment.finalScore === null || enrollment.assignmentScore === null) {
+            errors.push({
+              studentCode: enrollment.student?.studentCode,
+              error: 'Chưa nhập đủ 3 thành phần điểm (GK, CK, BT)'
+            });
+            continue;
+          }
+
+          // Calculate final grade
+          const gk = enrollment.midtermScore;
+          const ck = enrollment.finalScore;
+          const bt = enrollment.assignmentScore;
+          const calculatedGrade = (gk * 0.3) + (ck * 0.5) + (bt * 0.2);
+          const finalGrade = Math.round(calculatedGrade * 100) / 100;
+
+          // Update enrollment
+          enrollment.grade = finalGrade;
+          enrollment.status = 'completed';
+          enrollment.submittedAt = new Date();
+          
+          await enrollment.save();
+
+          processedEnrollments.push({
+            studentCode: enrollment.student?.studentCode,
+            fullName: enrollment.student?.fullName,
+            grade: finalGrade,
+            components: {
+              GK: gk,
+              CK: ck,
+              BT: bt,
+              QT: enrollment.continuousScore
+            }
+          });
+
+          successCount++;
+        } catch (err) {
+          errors.push({
+            studentCode: enrollment.student?.studentCode,
+            error: err.message
+          });
+        }
+      }
+
+      return {
+        success: successCount > 0,
+        message: `Nộp điểm thành công cho ${successCount}/${enrollments.length} sinh viên`,
+        processed: successCount,
+        total: enrollments.length,
+        errors: errors.length > 0 ? errors : undefined,
+        processedEnrollments,
+        classInfo: enrollments[0]?.classSection
+      };
+    } catch (error) {
+      console.error('Error submitting final class grades:', error);
+      throw new Error(`Lỗi nộp điểm: ${error.message}`);
+    }
+  }
 }
 
 // Export instance

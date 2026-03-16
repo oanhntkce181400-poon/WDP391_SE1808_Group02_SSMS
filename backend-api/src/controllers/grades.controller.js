@@ -304,6 +304,33 @@ class GradesController {
       });
     }
   }
+
+  /**
+   * POST /api/grades/final-submit
+   * Nộp điểm chính thức cho tất cả sinh viên trong lớp
+   */
+  async submitFinalClassGrades(req, res) {
+    try {
+      const { classSectionId } = req.body;
+
+      if (!classSectionId) {
+        return res.status(400).json({
+          success: false,
+          message: 'classSectionId is required'
+        });
+      }
+
+      const result = await gradesService.submitFinalClassGrades(classSectionId);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] submitFinalClassGrades error:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to submit final grades'
+      });
+    }
+  }
 }
 
 // Export instance

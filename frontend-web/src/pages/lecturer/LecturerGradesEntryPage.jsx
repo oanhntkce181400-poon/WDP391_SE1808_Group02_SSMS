@@ -14,6 +14,8 @@ export default function LecturerGradesEntryPage() {
   const [success, setSuccess] = useState(null);
   const [editedGrades, setEditedGrades] = useState({});
   const [classInfo, setClassInfo] = useState(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!classSectionId) {
@@ -99,6 +101,31 @@ export default function LecturerGradesEntryPage() {
     if (score >= 6.5) return 'text-blue-600 font-semibold';
     if (score >= 5) return 'text-yellow-600 font-semibold';
     return 'text-red-600 font-semibold';
+  };
+
+  const handleSubmitFinalGrades = async () => {
+    try {
+      setSubmitting(true);
+      setError(null);
+      setSuccess(null);
+
+      const response = await gradesService.submitFinalClassGrades(classSectionId);
+      
+      setSuccess(`✅ Nộp điểm chính thức thành công: ${response.data.processed}/${response.data.total} sinh viên`);
+      setShowSubmitModal(false);
+      setEditedGrades({});
+      
+      // Refresh enrollments after successful submission
+      setTimeout(() => {
+        fetchEnrollments();
+      }, 1500);
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Lỗi nộp điểm chính thức';
+      setError(`❌ ${errorMsg}`);
+      console.error('Error submitting final grades:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveGrades = async () => {
@@ -313,20 +340,28 @@ export default function LecturerGradesEntryPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex justify-between">
+        <div className="mt-8 flex justify-between gap-4">
           <button
             onClick={() => navigate(-1)}
             className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition"
           >
             Quay Lại
           </button>
-          <button
-            onClick={handleSaveGrades}
-            disabled={saving || Object.keys(editedGrades).length === 0}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition"
-          >
-            {saving ? 'Đang Lưu...' : 'Lưu Điểm'}
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={handleSaveGrades}
+              disabled={saving || Object.keys(editedGrades).length === 0}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition"
+            >
+              {saving ? 'Đang Lưu...' : 'Lưu Điểm'}
+            </button>
+            <button
+              onClick={() => setShowSubmitModal(true)}
+              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition"
+            >
+              Nộp Điểm Chính Thức
+            </button>
+          </div>
         </div>
 
         {/* Info Section */}
@@ -337,6 +372,56 @@ export default function LecturerGradesEntryPage() {
             Điểm quá trình chỉ mang tính chất tham khảo.
           </p>
         </div>
+
+        {/* Submit Final Grades Modal */}
+        {showSubmitModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">Xác Nhận Nộp Điểm</h2>
+              </div>
+              
+              <div className="p-6">
+                <p className="text-gray-700 mb-4">
+                  Bạn sắp nộp điểm chính thức cho tất cả sinh viên trong lớp. 
+                  <strong> Hành động này không thể hoàn tác.</strong>
+                </p>
+                <ul className="text-sm text-gray-600 space-y-2 mb-6 bg-gray-50 p-4 rounded">
+                  <li>✓ Sẽ tính điểm cuối cùng cho các sinh viên có đủ 3 thành phần</li>
+                  <li>✓ Các sinh viên thiếu thành phần sẽ được bỏ qua</li>
+                  <li>✓ Điểm sẽ được khóa và không thể chỉnh sửa</li>
+                </ul>
+                <p className="text-gray-900 font-semibold">
+                  Tổng sinh viên: <span className="text-blue-600">{enrollments.length}</span>
+                </p>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-4">
+                <button
+                  onClick={() => setShowSubmitModal(false)}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleSubmitFinalGrades}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                      Đang Nộp...
+                    </>
+                  ) : (
+                    'Xác Nhận Nộp Điểm'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

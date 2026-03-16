@@ -42,6 +42,15 @@ router.post(
   gradesController.submitGrades
 );
 
+// POST /api/grades/final-submit
+// Nộp điểm chính thức cho tất cả sinh viên trong lớp
+router.post(
+  '/final-submit',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  gradesController.submitFinalClassGrades
+);
+
 // POST /api/grades/:enrollmentId/calculate
 // Tính điểm cuối cùng dựa trên các thành phần điểm
 router.post(

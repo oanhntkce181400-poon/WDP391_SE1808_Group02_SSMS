@@ -206,6 +206,23 @@ const gradesService = {
       continuousScore: 'Thông tin thêm'
     };
     return weights[componentType] || '—';
+  },
+
+  /**
+   * Nộp điểm chính thức cho tất cả sinh viên trong lớp
+   * POST /api/grades/final-submit
+   * Body: { classSectionId }
+   */
+  submitFinalClassGrades: async (classSectionId) => {
+    try {
+      const response = await axiosClient.post('/grades/final-submit', {
+        classSectionId
+      });
+      return response;
+    } catch (error) {
+      console.error('Error submitting final class grades:', error);
+      throw error;
+    }
   }
 };
 
