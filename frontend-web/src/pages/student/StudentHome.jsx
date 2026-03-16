@@ -18,7 +18,7 @@ const lookupItems = [
   { label: 'Tra cứu học phí',            badge: null, path: '/student/finance' },
   { label: 'Lịch thi & Địa điểm',        badge: 'MỚI', isLink: true, path: '/student/exams' },
   { label: 'Đề cương môn học',           badge: null, path: null },
-  { label: 'Danh sách wishlist môn học', badge: null, path: null },
+  { label: 'Danh sách wishlist môn học', badge: null, path: '/student/wishlist' },
   { label: 'Đánh giá lớp học',           badge: null, isLink: true, path: '/student/feedback' },
 ];
 

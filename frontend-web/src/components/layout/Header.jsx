@@ -73,6 +73,7 @@ export default function Header() {
     { label: null, href: null },
     { label: 'Kỳ đăng ký', href: '/admin/registration-periods' },
     { label: 'Tự động xếp lớp', href: '/admin/auto-enrollment' },
+    { label: 'Duyệt wishlist', href: '/admin/wishlist' },
     { label: 'Lịch giảng dạy', href: '/admin/teaching-schedule' },
     { label: 'Đánh giá', href: '/admin/feedback-management' },
     { label: 'Thống kê đánh giá', href: '/admin/feedback-statistics' },

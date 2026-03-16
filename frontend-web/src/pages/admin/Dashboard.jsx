@@ -51,6 +51,13 @@ const CARDS = [
     desc: 'Run and monitor automatic enrollment',
   },
   {
+    to: '/admin/wishlist',
+    emoji: 'WL',
+    color: 'bg-orange-100',
+    title: 'Wishlist Approval',
+    desc: 'Review and approve retake requests',
+  },
+  {
     to: '/admin/teaching-schedule',
     emoji: 'TS',
     color: 'bg-pink-100',

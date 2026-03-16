@@ -38,7 +38,7 @@ import FeedbackStatisticsPage from "./pages/admin/FeedbackStatisticsPage";
 import ClassManagement from "./pages/admin/ClassManagement";
 import LecturerManagement from "./pages/admin/LecturerManagement";
 import AnnouncementManagement from "./pages/admin/AnnouncementManagement";
-import WaitlistPage from "./pages/student/WaitlistPage";
+import CourseWishlistPage from "./pages/student/CourseWishlistPage";
 import PaymentPage from "./pages/student/PaymentPage";
 import PaymentResultPage from "./pages/student/PaymentResultPage";
 import MyTransactionsPage from "./pages/student/MyTransactionsPage";
@@ -51,6 +51,7 @@ import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
+import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
 import ViewGradesPage from "./pages/student/ViewGradesPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
 export default function App() {
@@ -107,6 +108,7 @@ export default function App() {
         <Route path="announcements" element={<AnnouncementManagement />} />
         <Route path="registration-periods" element={<RegistrationPeriodManagement />} />
         <Route path="auto-enrollment" element={<AutoEnrollmentPage />} />
+        <Route path="wishlist" element={<AdminWishlistPage />} />
         <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
@@ -129,7 +131,8 @@ export default function App() {
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="grades" element={<ViewGradesPage />} />
-        <Route path="waitlist" element={<WaitlistPage />} />
+        <Route path="wishlist" element={<CourseWishlistPage />} />
+        <Route path="waitlist" element={<CourseWishlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
         <Route path="finance" element={<TuitionPage />} />
         <Route path="payment" element={<PaymentPage />} />
