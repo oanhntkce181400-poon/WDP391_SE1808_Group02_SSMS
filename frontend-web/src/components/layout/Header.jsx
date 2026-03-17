@@ -65,6 +65,7 @@ export default function Header({ mode = 'admin' }) {
     ? [
         { label: 'Lịch giảng dạy', href: '/lecturer/teaching-schedule' },
         { label: 'Điểm danh', href: '/lecturer/attendance' },
+        { label: 'Lịch nghỉ năm', href: '/lecturer/academic-calendar' },
         { label: 'Hồ sơ cá nhân', href: '/lecturer/profile' },
       ]
     : [
