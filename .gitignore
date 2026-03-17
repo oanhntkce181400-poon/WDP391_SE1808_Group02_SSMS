@@ -49,3 +49,7 @@ uploads/
 # Local Codex / editor artifacts
 .codex/
 backend-api/Microsoft/
+
+# IDE and local runtime caches
+.idea/
+mobile-app/.expo/

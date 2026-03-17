@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "SSMS Mobile",
+    "slug": "ssms-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.wdp391.ssmsmobile"
+    }
+  }
+}

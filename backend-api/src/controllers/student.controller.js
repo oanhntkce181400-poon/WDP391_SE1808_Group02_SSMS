@@ -213,6 +213,53 @@ const getSuggestedClassSection = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/students/me - Lấy profile sinh viên hiện tại (mobile)
+// ─────────────────────────────────────────────────────────────
+const getMyProfile = async (req, res) => {
+  try {
+    const userId = req.auth.sub || req.auth.id;
+    const student = await studentService.getStudentByUserId(userId);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sinh viên không tìm thấy',
+      });
+    }
+
+    const gpaResult = await gpaService.calculateStudentGPA(student._id);
+    const enrollmentYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy thông tin sinh viên thành công',
+      data: {
+        _id: student._id,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        email: student.email,
+        majorCode: student.majorCode,
+        classSection: student.classSection || null,
+        cohort: student.cohort,
+        cohortLabel: student.cohort ? `K${student.cohort}` : null,
+        academicStatus: student.academicStatus,
+        enrollmentYear,
+        currentCurriculumSemester: student.currentCurriculumSemester,
+        gpa: gpaResult.gpa,
+        totalCredits: gpaResult.totalCredits,
+      },
+    });
+  } catch (error) {
+    console.error('[StudentController] getMyProfile error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
 // GET /api/students/:id/curriculum - Lấy khung chương trình của sinh viên (admin/staff)
 const getStudentCurriculum = async (req, res) => {
   try {
@@ -855,6 +902,7 @@ module.exports = {
   createStudent,
   getStudents,
   getStudentById,
+  getMyProfile,
   updateStudent,
   deleteStudent,
   getMajorsForFilter,

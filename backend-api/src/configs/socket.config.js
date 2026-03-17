@@ -11,9 +11,36 @@ function initializeSocketIO(httpServer) {
       .filter(Boolean);
   }
 
+  function isLocalDevOrigin(origin) {
+    try {
+      const parsed = new URL(origin);
+      return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    } catch {
+      return false;
+    }
+  }
+
+  function buildCorsOriginChecker(allowedOrigins) {
+    if (allowedOrigins === '*') {
+      return (_origin, callback) => callback(null, true);
+    }
+
+    return (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Socket CORS blocked for origin: ${origin}`));
+    };
+  }
+
+  const allowedOrigins = parseCorsOrigins();
+
   const io = new Server(httpServer, {
     cors: {
-      origin: parseCorsOrigins(),
+      origin: buildCorsOriginChecker(allowedOrigins),
       credentials: true,
       methods: ['GET', 'POST'],
     },
