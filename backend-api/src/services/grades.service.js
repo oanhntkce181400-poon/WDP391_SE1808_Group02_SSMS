@@ -3,6 +3,11 @@
 // Tác giả: Group02 - WDP391
 
 const ClassEnrollment = require('../models/classEnrollment.model');
+const ClassSection = require('../models/classSection.model');
+const Teacher = require('../models/teacher.model');
+const User = require('../models/user.model');
+const GradeChangeLog = require('../models/gradeChangeLog.model');
+const mailer = require('../external/mailer');
 
 class GradesService {
   /**
@@ -15,6 +20,308 @@ class GradesService {
     finalScore: 0.50,        // CK - Cuối kỳ: 50%
     assignmentScore: 0.20    // BT - Bài tập/Thực hành: 20%
   };
+
+  /**
+   * Resolve teacher profile from authenticated user id.
+   * We try userId first, then fallback to email mapping.
+   */
+  async resolveTeacherByUserId(userId) {
+    if (!userId) return null;
+
+    let teacher = await Teacher.findOne({ userId, isActive: true }).lean();
+    if (teacher) return teacher;
+
+    const user = await User.findById(userId).lean();
+    if (!user?.email) return null;
+
+    teacher = await Teacher.findOne({ email: user.email.toLowerCase(), isActive: true }).lean();
+    return teacher;
+  }
+
+  /**
+   * Check if current user can submit grade for a class.
+   * - admin/staff: always allowed
+   * - lecturer: only allowed when classSection.teacher matches teacher profile
+   */
+  async checkLecturerPermission({ userId, role, classSectionId }) {
+    if (!classSectionId) {
+      throw new Error('classSectionId is required');
+    }
+
+    if (role === 'admin' || role === 'staff') {
+      return { allowed: true };
+    }
+
+    const normalizedRole = role === 'teacher' ? 'lecturer' : role;
+
+    if (normalizedRole !== 'lecturer') {
+      return {
+        allowed: false,
+        message: 'Bạn không có quyền nhập điểm cho lớp này'
+      };
+    }
+
+    const teacher = await this.resolveTeacherByUserId(userId);
+    if (!teacher) {
+      return {
+        allowed: false,
+        message: 'Không tìm thấy hồ sơ giảng viên của tài khoản hiện tại'
+      };
+    }
+
+    const classSection = await ClassSection.findById(classSectionId).select('teacher');
+    if (!classSection) {
+      return {
+        allowed: false,
+        message: 'Lớp học không tồn tại'
+      };
+    }
+
+    const isOwnerLecturer = String(classSection.teacher) === String(teacher._id);
+    if (!isOwnerLecturer) {
+      return {
+        allowed: false,
+        message: 'Bạn không phải giảng viên phụ trách lớp này'
+      };
+    }
+
+    return { allowed: true, teacherId: teacher._id };
+  }
+
+  /**
+   * Validate score in range [0, 10].
+   */
+  validateScore(score, fieldName) {
+    if (score === null || score === undefined) return;
+    if (typeof score !== 'number' || Number.isNaN(score) || score < 0 || score > 10) {
+      throw new Error(`${fieldName} phải nằm trong khoảng 0-10`);
+    }
+  }
+
+  /**
+   * Apply score fields to enrollment and auto-calculate final grade if enough data.
+   */
+  applyScoresToEnrollment(enrollment, { midtermScore, finalScore, otherScore, continuousScore }, autoCalculate) {
+    if (midtermScore !== null && midtermScore !== undefined) {
+      enrollment.midtermScore = midtermScore;
+    }
+    if (finalScore !== null && finalScore !== undefined) {
+      enrollment.finalScore = finalScore;
+    }
+    if (otherScore !== null && otherScore !== undefined) {
+      // Keep backward compatibility with existing schema: otherScore -> assignmentScore
+      enrollment.assignmentScore = otherScore;
+    }
+    if (continuousScore !== null && continuousScore !== undefined) {
+      enrollment.continuousScore = continuousScore;
+    }
+
+    if (
+      autoCalculate &&
+      enrollment.midtermScore !== null &&
+      enrollment.finalScore !== null &&
+      enrollment.assignmentScore !== null
+    ) {
+      const calculatedGrade =
+        (enrollment.midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore) +
+        (enrollment.finalScore * this.constructor.GRADE_WEIGHTS.finalScore) +
+        (enrollment.assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore);
+      enrollment.grade = parseFloat(calculatedGrade.toFixed(2));
+    }
+  }
+
+  /**
+   * Check enrollment can still be edited.
+   */
+  ensureEnrollmentEditable(enrollment) {
+    const isFinalized = enrollment.isFinalized === true || enrollment.status === 'completed';
+    if (isFinalized) {
+      const error = new Error('Điểm đã finalized, không thể chỉnh sửa');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  buildGradePublishedEmail({ studentName, classCode, subjectName, grade, teacherName }) {
+    return `
+      <div style="font-family: Inter, sans-serif; background: #f8fafc; padding: 24px;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
+          <div style="background: #1A237E; padding: 18px 24px; color: #ffffff;">
+            <h2 style="margin: 0; font-size: 18px;">SSMS - Cong bo diem chinh thuc</h2>
+          </div>
+          <div style="padding: 24px; color: #334155;">
+            <p style="margin-top: 0;">Xin chao <strong>${studentName || 'Sinh vien'}</strong>,</p>
+            <p>Diem chinh thuc cua ban da duoc cong bo:</p>
+            <ul style="line-height: 1.8; padding-left: 18px;">
+              <li>Lop: <strong>${classCode || 'N/A'}</strong></li>
+              <li>Mon hoc: <strong>${subjectName || 'N/A'}</strong></li>
+              <li>Diem tong ket: <strong>${grade ?? 'N/A'}</strong></li>
+              <li>Giang vien: <strong>${teacherName || 'N/A'}</strong></li>
+            </ul>
+            <p style="margin-bottom: 0; color: #64748b; font-size: 13px;">Vui long dang nhap he thong de xem chi tiet thanh phan diem.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Build before/after snapshot for score logging.
+   */
+  buildScoreSnapshot(enrollment) {
+    return {
+      midtermScore: enrollment.midtermScore ?? null,
+      finalScore: enrollment.finalScore ?? null,
+      assignmentScore: enrollment.assignmentScore ?? null,
+      continuousScore: enrollment.continuousScore ?? null,
+      grade: enrollment.grade ?? null,
+    };
+  }
+
+  /**
+   * Return changed score fields between 2 snapshots.
+   */
+  getChangedFields(beforeScores, afterScores) {
+    const fields = ['midtermScore', 'finalScore', 'assignmentScore', 'continuousScore', 'grade'];
+    return fields.filter((field) => {
+      const beforeValue = beforeScores[field] ?? null;
+      const afterValue = afterScores[field] ?? null;
+      return beforeValue !== afterValue;
+    });
+  }
+
+  /**
+   * PATCH /api/grades/:enrollmentId
+   * Edit enrollment grades, check lecturer permission, and save change logs.
+   */
+  async updateEnrollmentGrade(enrollmentId, payload = {}, requester = {}) {
+    const { userId, role } = requester;
+    const { grade = {}, reason = '' } = payload;
+
+    if (!enrollmentId) {
+      const error = new Error('enrollmentId is required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const enrollment = await ClassEnrollment.findById(enrollmentId)
+      .populate('student', 'studentCode fullName')
+      .populate('classSection', 'classCode teacher');
+
+    if (!enrollment) {
+      const error = new Error('Enrollment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const permission = await this.checkLecturerPermission({
+      userId,
+      role,
+      classSectionId: enrollment.classSection?._id || enrollment.classSection,
+    });
+
+    if (!permission.allowed) {
+      const error = new Error(permission.message || 'Unauthorized');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    this.ensureEnrollmentEditable(enrollment);
+
+    const { midtermScore, finalScore, otherScore, continuousScore } = grade;
+    this.validateScore(midtermScore, 'midtermScore');
+    this.validateScore(finalScore, 'finalScore');
+    this.validateScore(otherScore, 'otherScore');
+    this.validateScore(continuousScore, 'continuousScore');
+
+    const beforeScores = this.buildScoreSnapshot(enrollment);
+
+    this.applyScoresToEnrollment(
+      enrollment,
+      { midtermScore, finalScore, otherScore, continuousScore },
+      true
+    );
+
+    const afterScores = this.buildScoreSnapshot(enrollment);
+    const changedFields = this.getChangedFields(beforeScores, afterScores);
+
+    if (changedFields.length === 0) {
+      const error = new Error('Không có thay đổi điểm để lưu');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const savedEnrollment = await enrollment.save();
+
+    const savedLog = await GradeChangeLog.create({
+      enrollment: savedEnrollment._id,
+      classSection: savedEnrollment.classSection?._id || savedEnrollment.classSection,
+      student: savedEnrollment.student?._id || savedEnrollment.student,
+      changedBy: userId,
+      changedByRole: role || 'lecturer',
+      reason: String(reason || '').trim(),
+      changedFields,
+      beforeScores,
+      afterScores,
+    });
+
+    return {
+      success: true,
+      message: 'Cập nhật điểm thành công',
+      data: {
+        enrollment: savedEnrollment,
+        logId: savedLog._id,
+        changedFields,
+      },
+    };
+  }
+
+  /**
+   * GET /api/grades/:enrollmentId/change-logs
+   * Get grade change logs of one enrollment.
+   */
+  async getEnrollmentGradeChangeLogs(enrollmentId, requester = {}) {
+    const { userId, role } = requester;
+
+    if (!enrollmentId) {
+      const error = new Error('enrollmentId is required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const enrollment = await ClassEnrollment.findById(enrollmentId)
+      .select('classSection')
+      .lean();
+
+    if (!enrollment) {
+      const error = new Error('Enrollment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const permission = await this.checkLecturerPermission({
+      userId,
+      role,
+      classSectionId: enrollment.classSection,
+    });
+
+    if (!permission.allowed) {
+      const error = new Error(permission.message || 'Unauthorized');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const logs = await GradeChangeLog.find({ enrollment: enrollmentId })
+      .populate('changedBy', 'fullName email role')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      success: true,
+      message: 'Lấy log thay đổi điểm thành công',
+      data: logs,
+    };
+  }
 
   /**
    * Tính điểm cuối cùng dựa trên các thành phần điểm
@@ -414,9 +721,74 @@ class GradesService {
    * @param {Object} options - { autoCalculate: boolean }
    * @returns {Promise<Object>} { success: boolean, updated: number, errors: Array }
    */
-  async submitGrades(gradesData, options = { autoCalculate: true }) {
+  async submitGrades(payload, options = {}) {
     try {
-      if (!Array.isArray(gradesData) || gradesData.length === 0) {
+      const autoCalculate = options.autoCalculate !== false;
+      const requester = options.requester || {};
+
+      // New format from requirement:
+      // { studentId, classSectionId, grade: { midtermScore, finalScore, otherScore } }
+      const isSinglePayload = payload && !Array.isArray(payload) && payload.studentId && payload.classSectionId;
+
+      // Old format (keep existing flow unchanged):
+      // [{ enrollmentId, midtermScore, finalScore, assignmentScore, continuousScore }, ...]
+      const isBatchPayload = Array.isArray(payload);
+
+      if (!isSinglePayload && !isBatchPayload) {
+        throw new Error('Dữ liệu điểm không hợp lệ');
+      }
+
+      // --- Single mode ---
+      if (isSinglePayload) {
+        const { studentId, classSectionId, grade = {} } = payload;
+        const { midtermScore, finalScore, otherScore } = grade;
+
+        const permission = await this.checkLecturerPermission({
+          userId: requester.userId,
+          role: requester.role,
+          classSectionId
+        });
+        if (!permission.allowed) {
+          const permissionError = new Error(permission.message || 'Unauthorized');
+          permissionError.statusCode = 403;
+          throw permissionError;
+        }
+
+        this.validateScore(midtermScore, 'midtermScore');
+        this.validateScore(finalScore, 'finalScore');
+        this.validateScore(otherScore, 'otherScore');
+
+        const enrollment = await ClassEnrollment.findOne({
+          student: studentId,
+          classSection: classSectionId,
+          status: { $in: ['enrolled', 'completed'] }
+        });
+
+        if (!enrollment) {
+          throw new Error('Không tìm thấy enrollment của sinh viên trong lớp này');
+        }
+
+        this.ensureEnrollmentEditable(enrollment);
+
+        this.applyScoresToEnrollment(
+          enrollment,
+          { midtermScore, finalScore, otherScore },
+          autoCalculate
+        );
+
+        const saved = await enrollment.save();
+
+        return {
+          success: true,
+          message: 'Nhập điểm thành công',
+          updated: 1,
+          total: 1,
+          updatedEnrollment: saved
+        };
+      }
+
+      // --- Batch mode (backward compatible) ---
+      if (!isBatchPayload || payload.length === 0) {
         throw new Error('Dữ liệu điểm không hợp lệ');
       }
 
@@ -424,7 +796,7 @@ class GradesService {
       const errors = [];
       const updatedEnrollments = [];
 
-      for (const gradeUpdate of gradesData) {
+      for (const gradeUpdate of payload) {
         try {
           const { enrollmentId, midtermScore, finalScore, assignmentScore, continuousScore } = gradeUpdate;
 
@@ -433,52 +805,42 @@ class GradesService {
             continue;
           }
 
-          // Find enrollment
           const enrollment = await ClassEnrollment.findById(enrollmentId);
           if (!enrollment) {
             errors.push({ enrollmentId, error: 'Enrollment not found' });
             continue;
           }
 
-          // Validate scores are within range
-          const scores = { midtermScore, finalScore, assignmentScore, continuousScore };
-          for (const [key, score] of Object.entries(scores)) {
-            if (score !== null && score !== undefined && (score < 0 || score > 10)) {
-              errors.push({ 
-                enrollmentId, 
-                error: `${key} phải nằm trong khoảng 0-10` 
-              });
+          this.ensureEnrollmentEditable(enrollment);
+
+          if (requester.role === 'lecturer' || requester.role === 'teacher') {
+            const permission = await this.checkLecturerPermission({
+              userId: requester.userId,
+              role: requester.role,
+              classSectionId: enrollment.classSection
+            });
+            if (!permission.allowed) {
+              errors.push({ enrollmentId, error: permission.message || 'Unauthorized' });
               continue;
             }
           }
 
-          // Update only provided scores (не перезаписывать существующие)
-          if (midtermScore !== null && midtermScore !== undefined) {
-            enrollment.midtermScore = midtermScore;
-          }
-          if (finalScore !== null && finalScore !== undefined) {
-            enrollment.finalScore = finalScore;
-          }
-          if (assignmentScore !== null && assignmentScore !== undefined) {
-            enrollment.assignmentScore = assignmentScore;
-          }
-          if (continuousScore !== null && continuousScore !== undefined) {
-            enrollment.continuousScore = continuousScore;
-          }
+          this.validateScore(midtermScore, 'midtermScore');
+          this.validateScore(finalScore, 'finalScore');
+          this.validateScore(assignmentScore, 'assignmentScore');
+          this.validateScore(continuousScore, 'continuousScore');
 
-          // Auto-calculate final grade if all components are provided
-          if (options.autoCalculate && 
-              enrollment.midtermScore !== null && 
-              enrollment.finalScore !== null && 
-              enrollment.assignmentScore !== null) {
-            const calculatedGrade = 
-              (enrollment.midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore) +
-              (enrollment.finalScore * this.constructor.GRADE_WEIGHTS.finalScore) +
-              (enrollment.assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore);
-            enrollment.grade = parseFloat(calculatedGrade.toFixed(2));
-          }
+          this.applyScoresToEnrollment(
+            enrollment,
+            {
+              midtermScore,
+              finalScore,
+              otherScore: assignmentScore,
+              continuousScore
+            },
+            autoCalculate
+          );
 
-          // Save enrollment
           const saved = await enrollment.save();
           updatedEnrollments.push(saved);
           successCount++;
@@ -492,9 +854,9 @@ class GradesService {
 
       return {
         success: successCount > 0,
-        message: `Cập nhật điểm cho ${successCount}/${gradesData.length} sinh viên thành công`,
+        message: `Cập nhật điểm cho ${successCount}/${payload.length} sinh viên thành công`,
         updated: successCount,
-        total: gradesData.length,
+        total: payload.length,
         updatedEnrollments,
         errors: errors.length > 0 ? errors : undefined
       };
@@ -510,8 +872,20 @@ class GradesService {
    * @param {string} classSectionId - ID của class section
    * @returns {Promise<Array>} Array of enrollments with student info
    */
-  async getClassEnrollmentsForGrading(classSectionId) {
+  async getClassEnrollmentsForGrading(classSectionId, requester = {}) {
     try {
+      const permission = await this.checkLecturerPermission({
+        userId: requester.userId,
+        role: requester.role,
+        classSectionId
+      });
+
+      if (!permission.allowed) {
+        const permissionError = new Error(permission.message || 'Unauthorized');
+        permissionError.statusCode = 403;
+        throw permissionError;
+      }
+
       const enrollments = await ClassEnrollment.find({
         classSection: classSectionId,
         status: { $in: ['enrolled', 'completed'] }
@@ -524,7 +898,7 @@ class GradesService {
           }
         })
         .populate('student', 'studentCode fullName email')
-        .select('student classSection midtermScore finalScore assignmentScore continuousScore grade status')
+        .select('student classSection midtermScore finalScore assignmentScore continuousScore grade status isFinalized submittedAt')
         .lean();
 
       if (!enrollments || enrollments.length === 0) {
@@ -556,12 +930,28 @@ class GradesService {
    * @param {string} classSectionId - ID lớp học
    * @returns {Promise<Object>} { success, message, processed, errors, classInfo }
    */
-  async submitFinalClassGrades(classSectionId) {
+  async submitFinalClassGrades(classSectionId, options = {}) {
     try {
-      // Get all enrollments in class with incomplete grades
+      const requester = options.requester || {};
+      const io = options.io;
+
+      const permission = await this.checkLecturerPermission({
+        userId: requester.userId,
+        role: requester.role,
+        classSectionId
+      });
+
+      if (!permission.allowed) {
+        const permissionError = new Error(permission.message || 'Unauthorized');
+        permissionError.statusCode = 403;
+        throw permissionError;
+      }
+
+      // Get all not-yet-finalized enrollments in class.
       const enrollments = await ClassEnrollment.find({
         classSection: classSectionId,
-        status: { $in: ['enrolled', 'active'] }
+        status: { $in: ['enrolled', 'completed'] },
+        isFinalized: { $ne: true }
       })
         .populate({
           path: 'classSection',
@@ -570,7 +960,7 @@ class GradesService {
             select: 'subjectCode subjectName credits'
           }
         })
-        .populate('student', 'studentCode fullName');
+        .populate('student', 'studentCode fullName email userId');
 
       if (!enrollments || enrollments.length === 0) {
         return {
@@ -582,6 +972,8 @@ class GradesService {
       }
 
       let successCount = 0;
+      let emailCount = 0;
+      let notificationCount = 0;
       const errors = [];
       const processedEnrollments = [];
 
@@ -615,9 +1007,50 @@ class GradesService {
           // Update enrollment
           enrollment.grade = finalGrade;
           enrollment.status = 'completed';
+          enrollment.isFinalized = true;
           enrollment.submittedAt = new Date();
           
           await enrollment.save();
+
+          const studentName = enrollment.student?.fullName || 'Sinh vien';
+          const studentEmail = enrollment.student?.email;
+          const studentUserId = enrollment.student?.userId;
+          const classCode = enrollment.classSection?.classCode || 'N/A';
+          const subjectName = enrollment.classSection?.subject?.subjectName || 'N/A';
+
+          if (studentUserId && io && typeof io.sendToUser === 'function') {
+            io.sendToUser(String(studentUserId), 'grade-finalized', {
+              type: 'grade-finalized',
+              title: 'Cong bo diem chinh thuc',
+              message: `${subjectName} (${classCode}) da duoc cong bo diem`,
+              classSectionId,
+              grade: finalGrade,
+              studentCode: enrollment.student?.studentCode,
+              publishedAt: enrollment.submittedAt,
+            });
+            notificationCount += 1;
+          }
+
+          if (studentEmail) {
+            const emailHtml = this.buildGradePublishedEmail({
+              studentName,
+              classCode,
+              subjectName,
+              grade: finalGrade,
+              teacherName: requester.role || 'Giang vien',
+            });
+
+            const emailResult = await mailer.sendMail({
+              to: studentEmail,
+              subject: `[SSMS] Cong bo diem ${subjectName}`,
+              text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
+              html: emailHtml,
+            });
+
+            if (emailResult?.sent) {
+              emailCount += 1;
+            }
+          }
 
           processedEnrollments.push({
             studentCode: enrollment.student?.studentCode,
@@ -645,6 +1078,8 @@ class GradesService {
         message: `Nộp điểm thành công cho ${successCount}/${enrollments.length} sinh viên`,
         processed: successCount,
         total: enrollments.length,
+        notificationsSent: notificationCount,
+        emailsSent: emailCount,
         errors: errors.length > 0 ? errors : undefined,
         processedEnrollments,
         classInfo: enrollments[0]?.classSection

@@ -91,6 +91,36 @@ function buildOtpEmailTemplate({ otp }) {
 }
 
 module.exports = {
+  async sendMail({ to, subject, text, html }) {
+    const config = getMailConfig();
+    const transporter = getTransporter();
+
+    if (!to || !subject) {
+      return { sent: false, reason: 'missing-to-or-subject' };
+    }
+
+    if (!transporter) {
+      // eslint-disable-next-line no-console
+      console.log(`[mailer] Email to ${to}: ${subject}`);
+      return { sent: false, reason: 'mailer-not-configured' };
+    }
+
+    try {
+      const info = await transporter.sendMail({
+        from: `${config.fromName} <${config.fromEmail}>`,
+        to,
+        subject,
+        text,
+        html,
+      });
+      return { sent: true, messageId: info?.messageId };
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[mailer] Failed to send email:', err?.message || err);
+      return { sent: false, reason: 'send-failed' };
+    }
+  },
+
   async sendOtpMail(to, otp) {
     const config = getMailConfig();
     const transporter = getTransporter();

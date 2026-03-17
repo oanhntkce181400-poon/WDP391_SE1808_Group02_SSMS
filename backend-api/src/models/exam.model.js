@@ -28,6 +28,12 @@ const examSchema = new mongoose.Schema(
       ref: "Timeslot",
       required: true,
     },
+    invigilators: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Teacher",
+      },
+    ],
     examDate: {
       type: Date,
       required: true,

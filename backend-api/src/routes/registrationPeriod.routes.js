@@ -8,12 +8,33 @@ const rbacMiddleware = require('../middlewares/rbac.middleware');
 
 const router = express.Router();
 
-// Tất cả routes đều cần authentication và admin/staff role
+// ─────────────────────────────────────────────────────────────
+// ROUTE CHO SINH VIÊN: CHECK REGISTRATION PERIOD THEO LOẠI ĐƠN
+// ─────────────────────────────────────────────────────────────
+// GET /api/registration-periods/check-request
+// Chỉ cần login và role = student
+router.get(
+	'/check-request',
+	authMiddleware,
+	rbacMiddleware(['student']),
+	registrationPeriodController.checkRequestRegistrationOpen,
+);
+
+router.get(
+	'/open-request-types',
+	authMiddleware,
+	rbacMiddleware(['student']),
+	registrationPeriodController.getOpenRequestTypes,
+);
+
+// GET /api/registration-periods/current - Cho tất cả user đã đăng nhập
+router.get('/current', authMiddleware, registrationPeriodController.getCurrentPeriod);
+
+// ─────────────────────────────────────────────────────────────
+// CÁC ROUTE CÒN LẠI: CHỈ DÀNH CHO ADMIN / STAFF
+// ─────────────────────────────────────────────────────────────
 router.use(authMiddleware);
 router.use(rbacMiddleware(['admin', 'staff']));
-
-// GET /api/registration-periods/current - Lấy đợt đăng ký hiện tại
-router.get('/current', registrationPeriodController.getCurrentPeriod);
 
 // POST /api/registration-periods - Tạo đợt đăng ký mới
 router.post('/', registrationPeriodController.createPeriod);

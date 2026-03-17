@@ -15,6 +15,10 @@ const actorsRoutes = require("./modules/actors/actors.routes");
 
 const app = express();
 const httpServer = http.createServer(app);
+const io = initializeSocketIO(httpServer);
+
+// Lưu io vào app để controller có thể dùng req.app.get('io')
+app.set("io", io);
 
 function parseCorsOrigins() {
   const raw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN;

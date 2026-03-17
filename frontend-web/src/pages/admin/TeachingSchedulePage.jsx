@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import lecturerService from '../../services/lecturerService';
 import scheduleService from '../../services/scheduleService';
+import authService from '../../services/authService';
 
 function normalizeLecturerOptions(response) {
   const list = response?.data?.data || response?.data || [];
@@ -13,6 +14,25 @@ function normalizeLecturerOptions(response) {
   }));
 }
 
+async function fetchAllLecturerOptions() {
+  // API list giang vien dang phan trang, can gom tat ca trang de khong bi thieu account.
+  const pageSize = 100;
+  let currentPage = 1;
+  let totalPages = 1;
+  let allOptions = [];
+
+  do {
+    const response = await lecturerService.getAll({ limit: pageSize, page: currentPage });
+    const options = normalizeLecturerOptions(response);
+    allOptions = [...allOptions, ...options];
+
+    totalPages = response?.data?.pagination?.totalPages || 1;
+    currentPage += 1;
+  } while (currentPage <= totalPages);
+
+  return allOptions;
+}
+
 export default function TeachingSchedulePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -22,6 +42,10 @@ export default function TeachingSchedulePage() {
   const [data, setData] = useState(null);
   const [lecturers, setLecturers] = useState([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [isLecturerRole, setIsLecturerRole] = useState(false);
+  const [canEnterGrades, setCanEnterGrades] = useState(false);
+  const [gradeEntryBasePath, setGradeEntryBasePath] = useState('/lecturer');
+  const [currentAccountLabel, setCurrentAccountLabel] = useState('Tai khoan hien tai');
 
   const fetchSchedule = async (teacherId = '') => {
     setLoading(true);
@@ -29,15 +53,29 @@ export default function TeachingSchedulePage() {
     setHint('');
 
     try {
-      const params = teacherId ? { teacherId } : {};
+      // includeAllClasses=true de backend tra ve day du lop cua giang vien,
+      // khong bi gioi han boi hoc ky hien tai.
+      const params = {
+        includeAllClasses: true,
+        ...(teacherId ? { teacherId } : {}),
+      };
       const response = await scheduleService.getTeachingSchedule(params);
-      setData(response?.data?.data || null);
+      const scheduleData = response?.data?.data || null;
+      setData(scheduleData);
+
+      // Neu la lecturer thi label dropdown lay tu teacher profile (model Teacher)
+      // thay vi lay tu user profile de dam bao dung teacherCode/fullName.
+      if (isLecturerRole && scheduleData?.teacher) {
+        const teacherCode = scheduleData.teacher.teacherCode || 'GV';
+        const fullName = scheduleData.teacher.fullName || 'Giảng viên';
+        setCurrentAccountLabel(`${teacherCode} - ${fullName}`);
+      }
     } catch (err) {
-      const message = err?.response?.data?.message || 'Khong tai duoc lich giang day';
+      const message = err?.response?.data?.message || 'Không thể tải lịch giảng dạy. Vui lòng thử lại sau.';
       setData(null);
 
       if (!teacherId && message.includes('Please select a lecturer')) {
-        setHint('Tai khoan hien tai khong gan voi ho so giang vien. Hay chon mot giang vien de xem lich.');
+        setHint('Tài khoản hiện tại không gắn với hồ sơ giảng viên. Hay chọn một giảng viên để xem lịch.');
       } else {
         setError(message);
       }
@@ -47,20 +85,44 @@ export default function TeachingSchedulePage() {
   };
 
   useEffect(() => {
-    const loadLecturers = async () => {
-      setLoadingLecturers(true);
+    const initPage = async () => {
       try {
-        const response = await lecturerService.getAll({ limit: 100 });
-        setLecturers(normalizeLecturerOptions(response));
+        // Xac dinh role hien tai
+        const meResponse = await authService.me();
+        const currentRole = meResponse?.data?.user?.role;
+        const currentUser = meResponse?.data?.user;
+        const currentIsLecturer = currentRole === 'lecturer' || currentRole === 'teacher';
+        setIsLecturerRole(currentIsLecturer);
+        setCanEnterGrades(currentIsLecturer);
+        setGradeEntryBasePath('/lecturer');
+
+        if (currentIsLecturer) {
+          const displayName = currentUser?.fullName || currentUser?.email || 'Tài khoản hiện tại';
+          setCurrentAccountLabel(displayName);
+        } else {
+          setCurrentAccountLabel('Tìm giảng viên để xem lịch');
+        }
+
+        // Chi admin/staff moi can danh sach tat ca giang vien
+        if (!currentIsLecturer) {
+          setLoadingLecturers(true);
+          const allLecturers = await fetchAllLecturerOptions();
+          setLecturers(allLecturers);
+        } else {
+          setLecturers([]);
+          setSelectedTeacherId('');
+        }
       } catch (err) {
-        console.error('Failed to load lecturers for filter', err);
+        console.error('Failed to initialize teaching schedule page', err);
       } finally {
         setLoadingLecturers(false);
       }
+
+      // Load du lieu lich ngay sau khi init
+      fetchSchedule('');
     };
 
-    loadLecturers();
-    fetchSchedule('');
+    initPage();
   }, []);
 
   useEffect(() => {
@@ -72,49 +134,48 @@ export default function TeachingSchedulePage() {
     <div className="mx-auto max-w-7xl px-6 py-6">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Lich giang day</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Lịch giảng dạy</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Xem cac lop hoc phan duoc phan cong cho giang vien trong hoc ky hien tai.
+            Xem các lớp học phần được phân công cho giảng viên trong học kỳ hiện tại.
           </p>
         </div>
 
-        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="teacherId">
-            Giang vien
-          </label>
-          <div className="flex gap-3">
-            <select
-              id="teacherId"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-              value={selectedTeacherId}
-              onChange={(event) => setSelectedTeacherId(event.target.value)}
-              disabled={loadingLecturers}
-            >
-              <option value="">Tai khoan hien tai</option>
-              {lecturers.map((lecturer) => (
-                <option key={lecturer.id} value={lecturer.id}>
-                  {lecturer.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-              onClick={() => fetchSchedule(selectedTeacherId)}
-              disabled={loading}
-            >
-              {loading ? 'Dang tai...' : 'Xem lich'}
-            </button>
+        {!isLecturerRole && (
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="teacherId">
+              Giảng viên
+            </label>
+            <div className="flex gap-3">
+              <select
+                id="teacherId"
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
+                value={selectedTeacherId}
+                onChange={(event) => setSelectedTeacherId(event.target.value)}
+                disabled={loadingLecturers}
+              >
+                <option value="">{currentAccountLabel}</option>
+                {lecturers.map((lecturer) => (
+                  <option key={lecturer.id} value={lecturer.id}>
+                    {lecturer.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                onClick={() => fetchSchedule(selectedTeacherId)}
+                disabled={loading}
+              >
+                {loading ? 'Đang tải...' : 'Xem lịch'}
+              </button>
+            </div>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Neu dang nhap bang tai khoan giang vien, ban co the de trong bo loc nay.
-          </p>
-        </div>
+        )}
       </div>
 
       {loading && (
         <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
-          Dang tai lich giang day...
+          Đang tải lịch giảng dạy...
         </div>
       )}
 
@@ -133,39 +194,36 @@ export default function TeachingSchedulePage() {
       {!loading && !error && data && (
         <div className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Giang vien</div>
+            <div className="text-sm text-slate-500">Giảng viên</div>
             <div className="text-lg font-bold text-slate-900">{data.teacher?.fullName || '-'}</div>
             <div className="text-sm text-slate-600">{data.teacher?.teacherCode || '-'}</div>
             <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
               <div>
-                <span className="font-medium text-slate-700">Bo mon:</span> {data.teacher?.department || '-'}
+                <span className="font-medium text-slate-700">Bộ môn:</span> {data.teacher?.department || '-'}
               </div>
               <div>
-                <span className="font-medium text-slate-700">Hoc ky:</span> {data.semester?.semesterNum || '-'}
+                <span className="font-medium text-slate-700">Học kỳ:</span> {data.semester?.semesterNum || '-'}
               </div>
               <div>
-                <span className="font-medium text-slate-700">Nam hoc:</span> {data.semester?.academicYear || '-'}
+                <span className="font-medium text-slate-700">Năm học:</span> {data.semester?.academicYear || '-'}
               </div>
             </div>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-700">Danh sach lop phu trach</div>
-              <div className="text-sm text-slate-500">{(data.classes || []).length} lop</div>
+              <div className="text-sm font-semibold text-slate-700">Danh sách lớp phụ trách</div>
+              <div className="text-sm text-slate-500">{(data.classes || []).length} lớp</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                    <th className="px-3 py-2">Ma lop</th>
-                    <th className="px-3 py-2">Mon hoc</th>
-                    <th className="px-3 py-2">Hoc ky</th>
-                    <th className="px-3 py-2">Phong</th>
-                    <th className="px-3 py-2">Ca hoc</th>
-                    <th className="px-3 py-2">Si so</th>
-                    <th className="px-3 py-2">Lich</th>
-                    <th className="px-3 py-2">Thao tac</th>
+                    <th className="px-3 py-2">Mã lớp</th>
+                    <th className="px-3 py-2">Môn học</th>
+                    <th className="px-3 py-2">Học kỳ</th>
+                    <th className="px-3 py-2">Sĩ số</th>
+                    <th className="px-3 py-2">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -179,42 +237,27 @@ export default function TeachingSchedulePage() {
                       <td className="px-3 py-2">
                         {item.semester} / {item.academicYear}
                       </td>
-                      <td className="px-3 py-2">{item.room?.roomCode || '-'}</td>
-                      <td className="px-3 py-2">{item.timeslot?.groupName || '-'}</td>
                       <td className="px-3 py-2">
                         {item.currentEnrollment}/{item.maxCapacity}
                       </td>
                       <td className="px-3 py-2">
-                        {(item.schedules || []).length === 0 ? (
-                          <span className="text-slate-400">Chua co lich</span>
+                        {canEnterGrades ? (
+                          <button
+                            onClick={() => navigate(`${gradeEntryBasePath}/grades/${item._id}`)}
+                            className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
+                          >
+                            Nhập Điểm
+                          </button>
                         ) : (
-                          <div className="space-y-1">
-                            {item.schedules.map((schedule) => (
-                              <div
-                                key={schedule._id}
-                                className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600"
-                              >
-                                Thu {schedule.dayOfWeek} | Tiet {schedule.startPeriod}-{schedule.endPeriod} |{' '}
-                                {schedule.room?.roomCode || 'Chua co phong'}
-                              </div>
-                            ))}
-                          </div>
+                          <span className="text-xs text-slate-400">-</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <button
-                          onClick={() => navigate(`/lecturer/grades/${item._id}`)}
-                          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition"
-                        >
-                          Nhập Điểm
-                        </button>
                       </td>
                     </tr>
                   ))}
                   {(data.classes || []).length === 0 && (
                     <tr>
-                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={8}>
-                        Khong co lop nao phu hop voi bo loc hien tai.
+                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={5}>
+                        Không có lớp nào phù hợp với bộ lọc hiện tại.
                       </td>
                     </tr>
                   )}

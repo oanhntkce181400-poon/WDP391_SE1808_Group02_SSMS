@@ -12,6 +12,9 @@ const examService = {
 
   updateExam: (examId, updates) => axiosClient.patch(`/exams/${examId}`, updates),
 
+  assignInvigilator: (examId, payload) =>
+    axiosClient.patch(`/exams/${examId}/assign-invigilator`, payload),
+
   deleteExam: (examId) => axiosClient.delete(`/exams/${examId}`),
 
   registerStudentForExam: (examId, registrationData) =>

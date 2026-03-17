@@ -25,6 +25,27 @@ const registrationPeriodSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Loại đợt đăng ký / loại đơn
+    // Dùng để phân biệt các luồng:
+    // - repeat: đăng ký học lại
+    // - overload: đăng ký học vượt
+    // - change_class: xin chuyển lớp
+    // - drop: hủy môn / rút môn
+    // - all: áp dụng cho tất cả loại đơn / đăng ký chung
+    requestType: {
+      type: String,
+      enum: ['repeat', 'overload', 'change_class', 'drop', 'all'],
+      default: 'all',
+      index: true,
+    },
+
+    // Học kỳ áp dụng cho đợt đăng ký này
+    // Liên kết tới collection Semester
+    semester: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Semester',
+    },
+
     // Các khóa được phép đăng ký (VD: [17, 18, 19, 20])
     // Để trống [] nghĩa là tất cả các khóa
     allowedCohorts: {
@@ -71,6 +92,7 @@ const registrationPeriodSchema = new mongoose.Schema(
 
 // Index để tìm kiếm nhanh
 registrationPeriodSchema.index({ semester: 1, status: 1 });
+registrationPeriodSchema.index({ requestType: 1, status: 1 });
 registrationPeriodSchema.index({ startDate: 1, endDate: 1 });
 
 // Validate: endDate phải sau startDate

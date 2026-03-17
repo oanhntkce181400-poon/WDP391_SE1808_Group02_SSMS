@@ -3,6 +3,12 @@
 
 const registrationPeriodService = require('../services/registrationPeriod.service');
 
+function resolveHttpStatusCode(error) {
+  if (error?.statusCode) return error.statusCode;
+  if (error?.name === 'ValidationError' || error?.name === 'CastError') return 400;
+  return 500;
+}
+
 /**
  * POST /api/registration-periods - Tạo đợt đăng ký mới
  */
@@ -12,6 +18,17 @@ const createPeriod = async (req, res) => {
     const payload = req.body;
 
     const period = await registrationPeriodService.createRegistrationPeriod(payload, userId);
+    const realtimePayload = await registrationPeriodService.buildRegistrationPeriodRealtimePayload(period);
+
+    // Gửi realtime event cho tất cả client đang online
+    const io = req.app.get('io');
+    if (io && io.broadcastToAll) {
+      io.broadcastToAll('registration-period-updated', {
+        action: 'created',
+        ...realtimePayload,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -20,7 +37,7 @@ const createPeriod = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] createPeriod error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -48,7 +65,7 @@ const getPeriods = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] getPeriods error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -70,7 +87,7 @@ const getCurrentPeriod = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] getCurrentPeriod error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -94,7 +111,7 @@ const getPeriodById = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] getPeriodById error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -112,6 +129,17 @@ const updatePeriod = async (req, res) => {
     const payload = req.body;
 
     const period = await registrationPeriodService.updateRegistrationPeriod(id, payload, userId);
+    const realtimePayload = await registrationPeriodService.buildRegistrationPeriodRealtimePayload(period);
+
+    // Gửi realtime event cho tất cả client đang online
+    const io = req.app.get('io');
+    if (io && io.broadcastToAll) {
+      io.broadcastToAll('registration-period-updated', {
+        action: 'updated',
+        ...realtimePayload,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -120,7 +148,7 @@ const updatePeriod = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] updatePeriod error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -145,6 +173,17 @@ const toggleStatus = async (req, res) => {
     }
 
     const period = await registrationPeriodService.togglePeriodStatus(id, status);
+    const realtimePayload = await registrationPeriodService.buildRegistrationPeriodRealtimePayload(period);
+
+    // Gửi realtime event cho tất cả client đang online
+    const io = req.app.get('io');
+    if (io && io.broadcastToAll) {
+      io.broadcastToAll('registration-period-updated', {
+        action: 'status-updated',
+        ...realtimePayload,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -153,7 +192,7 @@ const toggleStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] toggleStatus error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -176,7 +215,68 @@ const deletePeriod = async (req, res) => {
     });
   } catch (error) {
     console.error('[RegistrationPeriodController] deletePeriod error:', error);
-    const statusCode = error.statusCode || 500;
+    const statusCode = resolveHttpStatusCode(error);
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+/**
+ * GET /api/registration-periods/check-request
+ * Query: ?requestType=repeat&studentCohort=18
+ * → Dùng cho trang sinh viên trước khi mở form đơn (học lại, học vượt...)
+ */
+const checkRequestRegistrationOpen = async (req, res) => {
+  try {
+    const { requestType, studentCohort } = req.query;
+
+    if (!requestType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu requestType',
+      });
+    }
+
+    const result = await registrationPeriodService.isRegistrationOpen(requestType, studentCohort);
+
+    return res.status(200).json({
+      success: true,
+      message: result.isOpen
+        ? 'Registration period is open'
+        : 'Registration period is not open',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[RegistrationPeriodController] checkRequestRegistrationOpen error:', error);
+    const statusCode = resolveHttpStatusCode(error);
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+/**
+ * GET /api/registration-periods/open-request-types
+ * Lấy các loại đơn đang mở + danh sách periods đang active để student render menu.
+ */
+const getOpenRequestTypes = async (req, res) => {
+  try {
+    const { studentCohort } = req.query;
+    const result = await registrationPeriodService.getOpenRequestTypeSummary(studentCohort);
+
+    return res.status(200).json({
+      success: true,
+      message: result.isOpen
+        ? 'Open request types retrieved successfully'
+        : 'No open request type at this moment',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[RegistrationPeriodController] getOpenRequestTypes error:', error);
+    const statusCode = resolveHttpStatusCode(error);
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
@@ -192,4 +292,6 @@ module.exports = {
   updatePeriod,
   toggleStatus,
   deletePeriod,
+  checkRequestRegistrationOpen,
+  getOpenRequestTypes,
 };

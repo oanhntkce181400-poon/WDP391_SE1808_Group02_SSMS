@@ -1,4 +1,6 @@
 const examRepository = require("../modules/exam/exam.repository");
+const Teacher = require("../models/teacher.model");
+const mongoose = require("mongoose");
 
 /**
  * ExamService - Business logic layer for Exam management
@@ -178,6 +180,16 @@ async function validateExamCreation(examDto) {
 async function validateExamUpdate(examId, updates) {
   const validationErrors = [];
 
+  // Keep update validation simple and student-friendly.
+  // Only validate fields that are present in request body.
+  if (updates.startTime && updates.endTime && updates.startTime >= updates.endTime) {
+    validationErrors.push("End time must be after start time");
+  }
+
+  if (updates.maxCapacity !== undefined && Number(updates.maxCapacity) <= 0) {
+    validationErrors.push("Max capacity must be greater than 0");
+  }
+
   // If room, date, or slot is being updated, check conflicts
   if (updates.room || updates.examDate || updates.slot) {
     const currentExam = await examRepository.findById(examId);
@@ -228,6 +240,114 @@ async function validateExamUpdate(examId, updates) {
   return {
     isValid: validationErrors.length === 0,
     errors: validationErrors,
+  };
+}
+
+/**
+ * Assign invigilators (teachers) to an exam
+ * @param {String} examId - Exam ID
+ * @param {Array<String>} teacherIds - Teacher IDs
+ * @param {Object} options - Extra options
+ * @returns {Promise<Object>} Updated exam and teacher data
+ */
+async function assignInvigilators(examId, teacherIds, options = {}) {
+  if (!mongoose.Types.ObjectId.isValid(examId)) {
+    const error = new Error("Invalid exam ID");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!Array.isArray(teacherIds) || teacherIds.length === 0) {
+    const error = new Error("teacherIds must be a non-empty array");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Remove duplicates to avoid storing the same teacher multiple times.
+  const uniqueTeacherIds = [...new Set(teacherIds.map((id) => String(id)))].filter(Boolean);
+
+  const invalidTeacherIds = uniqueTeacherIds.filter(
+    (id) => !mongoose.Types.ObjectId.isValid(id)
+  );
+
+  if (invalidTeacherIds.length > 0) {
+    const error = new Error("Some teacherIds are invalid ObjectIds");
+    error.statusCode = 400;
+    error.invalidTeacherIds = invalidTeacherIds;
+    throw error;
+  }
+
+  const exam = await examRepository.findById(examId);
+  if (!exam) {
+    const error = new Error("Exam not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Business rule: only exams in "scheduled" status can be assigned/updated invigilators.
+  if (exam.status !== "scheduled") {
+    const error = new Error("Only scheduled exams can assign or update invigilators");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const teachers = await Teacher.find({
+    _id: { $in: uniqueTeacherIds },
+    isActive: true,
+  })
+    .select("teacherCode fullName email department")
+    .lean()
+    .exec();
+
+  if (teachers.length !== uniqueTeacherIds.length) {
+    const foundTeacherIds = teachers.map((teacher) => teacher._id.toString());
+    const missingTeacherIds = uniqueTeacherIds.filter((id) => !foundTeacherIds.includes(id));
+
+    const error = new Error("Some teachers not found or inactive");
+    error.statusCode = 400;
+    error.missingTeacherIds = missingTeacherIds;
+    throw error;
+  }
+
+  let invigilatorConflicts = [];
+
+  if (options.checkConflict) {
+    // Legacy data can contain null slot/date. In that case, skip conflict check to avoid cast errors.
+    const rawSlotId = exam.slot?._id || exam.slot;
+    const hasValidSlotId =
+      rawSlotId && mongoose.Types.ObjectId.isValid(String(rawSlotId));
+    const hasValidExamDate = !!exam.examDate;
+
+    if (hasValidSlotId && hasValidExamDate) {
+      const existingConflicts = await examRepository.findByInvigilatorsAndSlot(
+        uniqueTeacherIds,
+        exam.examDate,
+        String(rawSlotId),
+        examId
+      );
+
+      if (existingConflicts.length > 0) {
+        invigilatorConflicts = existingConflicts;
+        const error = new Error("Invigilator schedule conflict detected");
+        error.statusCode = 400;
+        error.invigilatorConflicts = invigilatorConflicts;
+        throw error;
+      }
+    } else {
+      console.warn(
+        `[ExamService] Skip invigilator conflict check for exam ${examId}: invalid slot/date data`
+      );
+    }
+  }
+
+  const updatedExam = await examRepository.update(examId, {
+    invigilators: uniqueTeacherIds,
+  });
+
+  return {
+    exam: updatedExam,
+    assignedTeachers: teachers,
+    invigilatorConflicts,
   };
 }
 
@@ -340,6 +460,7 @@ module.exports = {
   checkStudentConflict,
   validateExamCreation,
   validateExamUpdate,
+  assignInvigilators,
   getEnrolledStudents,
   notifyStudents,
 };

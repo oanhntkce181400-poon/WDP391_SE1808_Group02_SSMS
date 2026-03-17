@@ -147,7 +147,7 @@ const gradesService = {
   },
 
   /**
-   * Nhập điểm cho các sinh viên
+    * Nhập điểm cho các sinh viên (batch cũ)
    * POST /api/grades/submit
    * Body: { grades: [{ enrollmentId, midtermScore, finalScore, assignmentScore }], autoCalculate: true }
    */
@@ -160,6 +160,58 @@ const gradesService = {
       return response;
     } catch (error) {
       console.error('Error submitting grades:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Nhập điểm theo format mới cho 1 sinh viên
+   * POST /api/grades/submit
+   * Body: {
+   *   studentId,
+   *   classSectionId,
+   *   grade: { midtermScore, finalScore, otherScore }
+   * }
+   */
+  submitSingleStudentGrade: async ({ studentId, classSectionId, grade }) => {
+    try {
+      const response = await axiosClient.post('/grades/submit', {
+        studentId,
+        classSectionId,
+        grade
+      });
+      return response;
+    } catch (error) {
+      console.error('Error submitting single student grade:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Sửa điểm theo enrollment
+   * PATCH /api/grades/:enrollmentId
+   * Body: { grade: { midtermScore, finalScore, otherScore, continuousScore }, reason }
+   */
+  updateEnrollmentGrade: async (enrollmentId, payload) => {
+    try {
+      const response = await axiosClient.patch(`/grades/${enrollmentId}`, payload);
+      return response;
+    } catch (error) {
+      console.error('Error updating enrollment grade:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy log thay đổi điểm theo enrollment
+   * GET /api/grades/:enrollmentId/change-logs
+   */
+  getEnrollmentGradeChangeLogs: async (enrollmentId) => {
+    try {
+      const response = await axiosClient.get(`/grades/${enrollmentId}/change-logs`);
+      return response;
+    } catch (error) {
+      console.error('Error fetching enrollment grade change logs:', error);
       throw error;
     }
   },
@@ -209,13 +261,13 @@ const gradesService = {
   },
 
   /**
-   * Nộp điểm chính thức cho tất cả sinh viên trong lớp
-   * POST /api/grades/final-submit
+   * Công bố điểm chính thức cho tất cả sinh viên trong lớp
+   * POST /api/grades/finalize
    * Body: { classSectionId }
    */
   submitFinalClassGrades: async (classSectionId) => {
     try {
-      const response = await axiosClient.post('/grades/final-submit', {
+      const response = await axiosClient.post('/grades/finalize', {
         classSectionId
       });
       return response;

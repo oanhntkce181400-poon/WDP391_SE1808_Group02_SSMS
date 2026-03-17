@@ -2,8 +2,10 @@
 // Features: Create, Read, Update, Delete exams with filtering by Subject, ExamDate, Room
 import { useState, useEffect, useCallback } from 'react';
 import examService from '../../services/examService';
+import lecturerService from '../../services/lecturerService';
 import ExamModal from '../../components/features/ExamModal';
 import ExamDeleteModal from '../../components/features/ExamDeleteModal';
+import AssignInvigilatorModal from '../../components/features/AssignInvigilatorModal';
 import nextIcon from '../../assets/next.png';
 import addIcon from '../../assets/circle.png';
 
@@ -26,7 +28,10 @@ export default function ExamScheduling() {
   // State for modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [teachers, setTeachers] = useState([]);
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
 
   // State for selected exam
   const [selectedExam, setSelectedExam] = useState(null);
@@ -123,6 +128,65 @@ export default function ExamScheduling() {
   const handleDelete = (exam) => {
     setSelectedExam(exam);
     setIsDeleteModalOpen(true);
+  };
+
+  // Load active teachers for assign invigilator modal
+  const loadTeachers = async () => {
+    try {
+      const response = await lecturerService.getAll({ page: 1, limit: 200, status: 'active' });
+      setTeachers(response.data?.data || []);
+    } catch (err) {
+      console.error('Error loading teachers:', err);
+      showToast('Không tải được danh sách giáo viên', 'error');
+      setTeachers([]);
+    }
+  };
+
+  const handleOpenAssignModal = async (exam) => {
+    if (exam.status !== 'scheduled') {
+      showToast('Chỉ lịch thi ở trạng thái Đã lên lịch mới được gán/cập nhật giám thị.', 'warning');
+      return;
+    }
+
+    setSelectedExam(exam);
+
+    // Support both populated object and plain id formats from backend.
+    const existingInvigilatorIds = (exam.invigilators || []).map((item) =>
+      typeof item === 'string' ? item : item._id
+    );
+    setSelectedTeacherIds(existingInvigilatorIds);
+
+    await loadTeachers();
+    setIsAssignModalOpen(true);
+  };
+
+  const handleAssignInvigilator = async (teacherIds, checkConflict) => {
+    if (!selectedExam) return;
+
+    setModalLoading(true);
+    try {
+      await examService.assignInvigilator(selectedExam._id, {
+        teacherIds,
+        checkConflict,
+      });
+
+      showToast('Gán giáo viên coi thi thành công!', 'success');
+      setIsAssignModalOpen(false);
+      fetchExams(pagination.currentPage, searchQuery, filters);
+    } catch (err) {
+      console.error('Error assigning invigilator:', err);
+
+      const conflictCount = err.response?.data?.invigilatorConflicts?.length || 0;
+      if (conflictCount > 0) {
+        showToast(`Có ${conflictCount} xung đột lịch giáo viên. Vui lòng chọn lại.`, 'warning');
+        return;
+      }
+
+      const errorMessage = err.response?.data?.message || 'Gán giáo viên coi thi thất bại';
+      showToast(errorMessage, 'error');
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   // Handle submit form (create/update)
@@ -341,6 +405,9 @@ export default function ExamScheduling() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       Trạng thái
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Giám thị
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                       Thao tác
                     </th>
@@ -349,13 +416,13 @@ export default function ExamScheduling() {
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                   {loading ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                      <td colSpan="8" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         Đang tải...
                       </td>
                     </tr>
                   ) : exams.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                      <td colSpan="8" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                         Không có lịch thi nào
                       </td>
                     </tr>
@@ -411,8 +478,27 @@ export default function ExamScheduling() {
                               : 'Đã hủy'}
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                          {exam.invigilators && exam.invigilators.length > 0
+                            ? exam.invigilators
+                                .map((teacher) => teacher.fullName || teacher.teacherCode || 'Giáo viên')
+                                .join(', ')
+                            : 'Chưa gán'}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleOpenAssignModal(exam)}
+                              disabled={exam.status !== 'scheduled'}
+                              className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-300 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={
+                                exam.status === 'scheduled'
+                                  ? 'Gán giáo viên coi thi'
+                                  : 'Chỉ cho phép khi lịch thi ở trạng thái Đã lên lịch'
+                              }
+                            >
+                              {exam.status === 'scheduled' ? 'Gán GV' : 'Đã khóa'}
+                            </button>
                             <button
                               onClick={() => handleEdit(exam)}
                               className="p-1.5 text-slate-500 hover:text-green-600 dark:hover:text-green-400 transition-colors"
@@ -541,6 +627,16 @@ export default function ExamScheduling() {
         onConfirm={handleConfirmDelete}
         exam={selectedExam}
         loading={modalLoading}
+      />
+
+      <AssignInvigilatorModal
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        onSave={handleAssignInvigilator}
+        exam={selectedExam}
+        teachers={teachers}
+        loading={modalLoading}
+        initialSelectedIds={selectedTeacherIds}
       />
 
       {/* Toast Notification */}
