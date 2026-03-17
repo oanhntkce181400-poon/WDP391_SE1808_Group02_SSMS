@@ -44,6 +44,7 @@ import PaymentPage from "./pages/student/PaymentPage";
 import PaymentResultPage from "./pages/student/PaymentResultPage";
 import MyTransactionsPage from "./pages/student/MyTransactionsPage";
 import StudentCurriculumPage from "./pages/student/StudentCurriculumPage";
+import AcademicCalendarPage from "./pages/student/AcademicCalendarPage";
 import WalletPage from "./pages/student/WalletPage";
 import WalletResultPage from "./pages/student/WalletResultPage";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
@@ -53,8 +54,10 @@ import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManage
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
+import AcademicCalendarManagementPage from "./pages/admin/AcademicCalendarManagementPage";
 import ViewGradesPage from "./pages/student/ViewGradesPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
+import LecturerAcademicCalendarPage from "./pages/lecturer/LecturerAcademicCalendarPage";
 export default function App() {
   return (
     <>
@@ -111,6 +114,7 @@ export default function App() {
         <Route path="registration-periods" element={<RegistrationPeriodManagement />} />
         <Route path="auto-enrollment" element={<AutoEnrollmentPage />} />
         <Route path="wishlist" element={<AdminWishlistPage />} />
+        <Route path="academic-calendar" element={<AcademicCalendarManagementPage />} />
         <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
@@ -133,6 +137,7 @@ export default function App() {
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="grades" element={<ViewGradesPage />} />
+        <Route path="academic-calendar" element={<AcademicCalendarPage />} />
         <Route path="wishlist" element={<CourseWishlistPage />} />
         <Route path="waitlist" element={<CourseWishlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />
@@ -155,6 +160,7 @@ export default function App() {
         <Route index element={<Navigate to="teaching-schedule" replace />} />
         <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
         <Route path="attendance" element={<AttendancePage />} />
+        <Route path="academic-calendar" element={<LecturerAcademicCalendarPage />} />
         <Route path="grades/:classSectionId" element={<LecturerGradesEntryPage />} />
         <Route path="profile" element={<DashboardPage />} />
       </Route>

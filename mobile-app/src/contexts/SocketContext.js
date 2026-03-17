@@ -1,6 +1,21 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { Platform } from 'react-native';
 import { io } from 'socket.io-client';
 import useAuthStore from '../stores/useAuthStore';
+
+function resolveSocketUrl(explicitUrl) {
+  if (explicitUrl) return explicitUrl;
+
+  const envSocket = process.env.EXPO_PUBLIC_SOCKET_URL;
+  if (envSocket) return envSocket;
+
+  const envApi = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (envApi) {
+    return String(envApi).replace(/\/api\/?$/, '');
+  }
+
+  return Platform.OS === 'web' ? 'http://localhost:3000' : 'http://10.0.2.2:3000';
+}
 
 /**
  * SocketContext - Context để quản lý Socket.IO connection cho React Native
@@ -76,9 +91,8 @@ export const SocketProvider = ({ url, children }) => {
       return;
     }
 
-    // Socket server URL - đọc từ environment variable hoặc default
-    // TODO: Thay đổi URL này thành URL production khi deploy
-    const socketUrl = url || process.env.API_BASE_URL || 'http://localhost:3000';
+    // Socket server URL cho emulator: ưu tiên EXPO_PUBLIC_SOCKET_URL hoặc suy ra từ EXPO_PUBLIC_API_BASE_URL
+    const socketUrl = resolveSocketUrl(url);
 
     console.log('🔌 Connecting to socket server:', socketUrl);
 
@@ -87,10 +101,11 @@ export const SocketProvider = ({ url, children }) => {
       auth: {
         token: accessToken, // Gửi JWT token qua handshake
       },
-      transports: ['websocket', 'polling'], // Ưu tiên websocket, fallback polling
-      reconnection: true, // Tự động reconnect
+      transports: ['polling', 'websocket'],
+      reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 10000,
     });
 
     // Event: Kết nối thành công
@@ -113,8 +128,8 @@ export const SocketProvider = ({ url, children }) => {
 
     // Event: Lỗi kết nối
     newSocket.on('connect_error', (err) => {
-      console.error('❌ Socket connection error:', err.message);
-      setError(err.message);
+      console.warn('Socket connection issue:', err.message);
+      setError(err.message || 'Socket connection failed');
       setIsConnected(false);
     });
 
@@ -132,7 +147,7 @@ export const SocketProvider = ({ url, children }) => {
 
     // Event: Reconnect thất bại
     newSocket.on('reconnect_failed', () => {
-      console.error('❌ Reconnection failed');
+      console.warn('Socket reconnection failed');
       setError('Failed to reconnect');
     });
 

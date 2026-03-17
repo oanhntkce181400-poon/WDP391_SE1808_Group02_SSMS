@@ -41,6 +41,15 @@ router.get(
 // GET /api/students/me/curriculum - Lấy khung chương trình của sinh viên hiện tại (qua token)
 // Phải đặt TRƯỚC /:id để không bị match nhầm id = "me"
 router.get(
+  '/me',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  studentController.getMyProfile
+);
+
+// GET /api/students/me/curriculum - Lấy khung chương trình của sinh viên hiện tại (qua token)
+// Phải đặt TRƯỚC /:id để không bị match nhầm id = "me"
+router.get(
   '/me/curriculum',
   authMiddleware,
   rbacMiddleware(['student']),

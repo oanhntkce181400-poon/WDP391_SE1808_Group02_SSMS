@@ -29,10 +29,37 @@ function parseCorsOrigins() {
     .filter(Boolean);
 }
 
+function isLocalDevOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function buildCorsOriginChecker(allowedOrigins) {
+  if (allowedOrigins === true) {
+    return (_origin, callback) => callback(null, true);
+  }
+
+  return (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  };
+}
+
+const allowedOrigins = parseCorsOrigins();
+
 // Middlewares chung
 app.use(
   cors({
-    origin: parseCorsOrigins(),
+    origin: buildCorsOriginChecker(allowedOrigins),
     credentials: true,
   }),
 );
@@ -58,6 +85,7 @@ app.use("/api/classes", require("./modules/classSection/classSection.routes"));
 app.use("/api/class-sections", require("./routes/classSectionRoster.routes"));
 app.use("/api/waitlist", require("./modules/waitlist/waitlist.routes"));
 app.use("/api/wishlist", require("./modules/wishlist/wishlist.routes"));
+app.use("/api/academic-calendar", require("./modules/academicCalendar/academicCalendar.routes"));
 app.use("/api/classes", require("./modules/schedule/schedule.routes"));
 app.use("/api/semesters", require("./modules/semester/semester.routes"));
 app.use("/api/lecturers", require("./modules/lecturer/lecturer.routes"));
@@ -112,7 +140,11 @@ async function startServer() {
 
     return new Promise((resolve, reject) => {
       const server = httpServer.listen(PORT, () => {
+        const io = initializeSocketIO(httpServer);
+        app.set('io', io);
+
         console.log(`🚀 Server is running on http://localhost:${PORT}`);
+        console.log('✅ Socket server is attached');
         console.log("✅ Server startup complete");
         resolve();
       });

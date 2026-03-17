@@ -104,6 +104,7 @@ export default function StudentLayout() {
     { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📄' },
     { name: 'Thời khóa biểu', path: '/student/schedule', icon: '📋' },
+    { name: 'Lịch nghỉ năm', path: '/student/academic-calendar', icon: '🗓️' },
     { name: 'Wishlist', path: '/student/wishlist', icon: '⏳' },
     { name: 'Kết quả học tập', path: '/student/grades', icon: '📊' },
     { name: 'Tài chính', path: '/student/finance', icon: '💰' },

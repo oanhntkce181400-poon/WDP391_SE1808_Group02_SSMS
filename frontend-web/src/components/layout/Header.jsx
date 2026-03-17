@@ -61,7 +61,6 @@ export default function Header({ mode = 'admin' }) {
   const isTeacherMode = mode === 'teacher';
   const isAdminLike = normalizedUserRole === 'admin' || normalizedUserRole === 'staff';
 
-
   const primaryNav = isTeacherMode
     ? [
         { label: 'Lịch giảng dạy', href: '/lecturer/teaching-schedule' },
@@ -85,6 +84,7 @@ export default function Header({ mode = 'admin' }) {
         { label: 'Lịch thi', href: '/admin/exam-scheduling' },
         { label: 'Khoa', href: '/admin/faculties' },
         { label: 'Học kỳ', href: '/admin/semesters' },
+      { label: 'Lịch nghỉ năm', href: '/admin/academic-calendar' },
         { label: 'Chuyên ngành', href: '/admin/majors' },
         { label: 'Giảng viên', href: '/admin/lecturers' },
         { label: 'Giờ học', href: '/admin/timeslots' },

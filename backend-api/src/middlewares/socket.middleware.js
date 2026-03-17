@@ -16,11 +16,16 @@ function socketAuthMiddleware(socket, next) {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    socket.userId = decoded.userId;
-    socket.email = decoded.email;
-    socket.role = decoded.role;
+    const userId = decoded.userId || decoded.sub || decoded.id;
+    if (!userId) {
+      return next(new Error('Authentication error: Invalid token payload'));
+    }
 
-    console.log(`✅ Socket authenticated: User ${decoded.email} (${decoded.userId})`);
+    socket.userId = String(userId);
+    socket.email = decoded.email || null;
+    socket.role = decoded.role || null;
+
+    console.log(`✅ Socket authenticated: User ${socket.email || 'unknown'} (${socket.userId})`);
 
     next();
   } catch (error) {

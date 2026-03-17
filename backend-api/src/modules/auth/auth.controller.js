@@ -25,6 +25,7 @@ async function googleLogin(req, res) {
     return res.json({
       message: 'Login with Google successful.',
       user: result.user,
+      tokens: result.tokens,
       meta: result.meta,
     });
   } catch (err) {
@@ -41,6 +42,7 @@ async function passwordLogin(req, res) {
     return res.json({
       message: 'Login successful.',
       user: result.user,
+      tokens: result.tokens,
       meta: result.meta,
     });
   } catch (err) {
@@ -52,7 +54,7 @@ async function passwordLogin(req, res) {
 
 async function refresh(req, res) {
   const refreshCookieName = getRefreshTokenConfig().cookieName;
-  const refreshToken = req.cookies?.[refreshCookieName];
+  const refreshToken = req.cookies?.[refreshCookieName] || req.body?.refreshToken;
 
   try {
     const result = await authService.refreshTokens(req, { refreshToken });
@@ -61,6 +63,7 @@ async function refresh(req, res) {
     return res.json({
       message: 'Token refreshed.',
       user: result.user,
+      tokens: result.tokens,
       meta: result.meta,
     });
   } catch (err) {
@@ -71,7 +74,7 @@ async function refresh(req, res) {
 
 async function logout(req, res) {
   const refreshCookieName = getRefreshTokenConfig().cookieName;
-  const refreshToken = req.cookies?.[refreshCookieName];
+  const refreshToken = req.cookies?.[refreshCookieName] || req.body?.refreshToken;
 
   try {
     await authService.logout(req, { refreshToken });
