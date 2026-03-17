@@ -6,6 +6,86 @@ const gradesService = require('../services/grades.service');
 
 class GradesController {
   /**
+   * PATCH /api/grades/:enrollmentId
+   * Sửa điểm theo enrollment, có kiểm tra quyền + lưu log thay đổi
+   */
+  async updateEnrollmentGrade(req, res) {
+    try {
+      const { enrollmentId } = req.params;
+      const userId = req.auth?.sub || req.auth?.id;
+      const role = req.auth?.role;
+
+      if (!enrollmentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'enrollmentId is required'
+        });
+      }
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const result = await gradesService.updateEnrollmentGrade(enrollmentId, req.body, {
+        userId,
+        role
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] updateEnrollmentGrade error:', error);
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to update enrollment grade'
+      });
+    }
+  }
+
+  /**
+   * GET /api/grades/:enrollmentId/change-logs
+   * Lấy lịch sử thay đổi điểm của enrollment
+   */
+  async getGradeChangeLogs(req, res) {
+    try {
+      const { enrollmentId } = req.params;
+      const userId = req.auth?.sub || req.auth?.id;
+      const role = req.auth?.role;
+
+      if (!enrollmentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'enrollmentId is required'
+        });
+      }
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const result = await gradesService.getEnrollmentGradeChangeLogs(enrollmentId, {
+        userId,
+        role
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('[GradesController] getGradeChangeLogs error:', error);
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to get grade change logs'
+      });
+    }
+  }
+
+  /**
    * POST /api/grades/:enrollmentId/calculate
    * Tính điểm cuối cùng dựa trên các thành phần điểm
    */
@@ -238,6 +318,7 @@ class GradesController {
   async submitGrades(req, res) {
     try {
       const userId = req.auth?.sub || req.auth?.id;
+      const role = req.auth?.role;
       if (!userId) {
         return res.status(401).json({
           success: false,
@@ -245,16 +326,24 @@ class GradesController {
         });
       }
 
-      const { grades = [], autoCalculate = true } = req.body;
+      const isSinglePayload = req.body?.studentId && req.body?.classSectionId && req.body?.grade;
+      const isBatchPayload = Array.isArray(req.body?.grades);
 
-      if (!Array.isArray(grades) || grades.length === 0) {
+      if (!isSinglePayload && !isBatchPayload) {
         return res.status(400).json({
           success: false,
-          message: 'Dữ liệu điểm không hợp lệ'
+          message: 'Dữ liệu điểm không hợp lệ. Cần gửi single payload hoặc grades[]'
         });
       }
 
-      const result = await gradesService.submitGrades(grades, { autoCalculate });
+      const autoCalculate = req.body?.autoCalculate !== false;
+
+      const submitPayload = isSinglePayload ? req.body : req.body.grades;
+
+      const result = await gradesService.submitGrades(submitPayload, {
+        autoCalculate,
+        requester: { userId, role }
+      });
 
       return res.status(200).json({
         success: result.success,
@@ -267,7 +356,8 @@ class GradesController {
       });
     } catch (error) {
       console.error('[GradesController] submitGrades error:', error);
-      return res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to submit grades'
       });
@@ -281,6 +371,8 @@ class GradesController {
   async getClassEnrollmentsForGrading(req, res) {
     try {
       const { classSectionId } = req.params;
+      const userId = req.auth?.sub || req.auth?.id;
+      const role = req.auth?.role;
 
       if (!classSectionId) {
         return res.status(400).json({
@@ -289,7 +381,10 @@ class GradesController {
         });
       }
 
-      const result = await gradesService.getClassEnrollmentsForGrading(classSectionId);
+      const result = await gradesService.getClassEnrollmentsForGrading(classSectionId, {
+        userId,
+        role
+      });
 
       return res.status(200).json({
         success: result.success,
@@ -298,7 +393,8 @@ class GradesController {
       });
     } catch (error) {
       console.error('[GradesController] getClassEnrollmentsForGrading error:', error);
-      return res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to get class enrollments'
       });
@@ -312,6 +408,9 @@ class GradesController {
   async submitFinalClassGrades(req, res) {
     try {
       const { classSectionId } = req.body;
+      const userId = req.auth?.sub || req.auth?.id;
+      const role = req.auth?.role;
+      const io = req.app?.get('io');
 
       if (!classSectionId) {
         return res.status(400).json({
@@ -320,12 +419,23 @@ class GradesController {
         });
       }
 
-      const result = await gradesService.submitFinalClassGrades(classSectionId);
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const result = await gradesService.submitFinalClassGrades(classSectionId, {
+        requester: { userId, role },
+        io
+      });
 
       return res.status(200).json(result);
     } catch (error) {
       console.error('[GradesController] submitFinalClassGrades error:', error);
-      return res.status(500).json({
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to submit final grades'
       });

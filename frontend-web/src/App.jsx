@@ -7,6 +7,7 @@ import StudentProfilePage from "./pages/StudentProfilePage";
 import SocketTestPage from "./pages/SocketTestPage";
 import AdminLayout from "./components/layout/AdminLayout";
 import StudentLayout from "./components/layout/StudentLayout";
+import TeacherLayout from "./components/layout/TeacherLayout";
 import Dashboard from "./pages/admin/Dashboard";
 import SubjectManagement from "./pages/admin/SubjectManagement";
 import SubjectPrerequisites from "./pages/admin/SubjectPrerequisites";
@@ -56,9 +57,10 @@ import ViewGradesPage from "./pages/student/ViewGradesPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Admin routes with layout */}
       <Route
@@ -143,21 +145,22 @@ export default function App() {
       </Route>
 
       <Route
-        path="/lecturer/teaching-schedule"
+        path="/lecturer"
         element={
-          <ProtectedRoute allowedRoles={["lecturer"]}>
-            <TeachingSchedulePage />
+          <ProtectedRoute allowedRoles={["lecturer", "teacher"]}>
+            <TeacherLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<Navigate to="teaching-schedule" replace />} />
+        <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
+        <Route path="grades/:classSectionId" element={<LecturerGradesEntryPage />} />
+        <Route path="profile" element={<DashboardPage />} />
+      </Route>
 
       <Route
-        path="/lecturer/grades/:classSectionId"
-        element={
-          <ProtectedRoute allowedRoles={["lecturer"]}>
-            <LecturerGradesEntryPage />
-          </ProtectedRoute>
-        }
+        path="/teacher/*"
+        element={<Navigate to="/lecturer/teaching-schedule" replace />}
       />
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -179,9 +182,10 @@ export default function App() {
         }
       />
 
-      <Route path="/" element={<Navigate to="/admin" replace />} />
-      <Route path="*" element={<Navigate to="/admin" replace />} />
-    </Routes>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    </>
   );
 }
 
@@ -229,7 +233,7 @@ function ProtectedRoute({ children, allowedRoles }) {
     if (user.role === "student") {
       return <Navigate to="/student" replace />;
     }
-    if (user.role === "lecturer") {
+    if (user.role === "lecturer" || user.role === "teacher") {
       return <Navigate to="/lecturer/teaching-schedule" replace />;
     }
     return <Navigate to="/admin" replace />;

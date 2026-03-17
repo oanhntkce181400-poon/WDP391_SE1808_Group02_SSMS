@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import requestService from '../../services/requestService';
+import registrationPeriodService from '../../services/registrationPeriodService';
+import { useSocket } from '../../contexts/SocketContext';
 
 const REQUEST_TYPES = [
   'Xin nghỉ học có phép',
@@ -38,7 +40,21 @@ const EMPTY_FORM = {
   attachments: [], 
 };
 
+const PERIOD_TYPE_LABELS = {
+  all: 'Tất cả loại đơn',
+  repeat: 'Học lại',
+  overload: 'Học vượt',
+  change_class: 'Chuyển lớp',
+  drop: 'Hủy môn',
+};
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('vi-VN');
+}
+
 export default function StudentRequestsPage() {
+  const { socket } = useSocket();
 
   const [requests, setRequests] = useState([]);
 
@@ -56,11 +72,97 @@ export default function StudentRequestsPage() {
 
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Thông báo trạng thái đợt đăng ký đơn trên UI
+  const [requestPeriodNotice, setRequestPeriodNotice] = useState({
+    loading: true,
+    isOpen: false,
+    message: 'Đang kiểm tra đợt đăng ký đơn...',
+    periods: [],
+  });
+  const [openRequestTypes, setOpenRequestTypes] = useState([]);
+  const [isOpenTypeMenuOpen, setIsOpenTypeMenuOpen] = useState(false);
+  const [isOpenPeriodsVisible, setIsOpenPeriodsVisible] = useState(false);
+  const [selectedOpenType, setSelectedOpenType] = useState('all');
+
   const [cancelConfirm, setCancelConfirm] = useState(null); 
 
   useEffect(() => {
     loadRequests();
   }, []);
+
+  useEffect(() => {
+    checkRequestPeriodStatus();
+  }, []);
+
+  // Lắng nghe realtime event đợt đăng ký được cập nhật
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRegistrationPeriodUpdated = async (eventData) => {
+      const noticeMessage = eventData?.notificationType === 'registration-available'
+        ? 'Đợt đăng ký đơn đã mở. Bạn có thể gửi yêu cầu.'
+        : 'Đợt đăng ký đơn vừa được cập nhật.';
+
+      showSuccess(noticeMessage);
+      setIsOpenTypeMenuOpen(false);
+      setIsOpenPeriodsVisible(false);
+      await checkRequestPeriodStatus();
+    };
+
+    socket.on('registration-period-updated', handleRegistrationPeriodUpdated);
+
+    return () => {
+      socket.off('registration-period-updated', handleRegistrationPeriodUpdated);
+    };
+  }, [socket]);
+
+  // Kiểm tra trạng thái đợt đăng ký đơn hiện tại
+  async function checkRequestPeriodStatus() {
+    try {
+      const res = await registrationPeriodService.getOpenRequestTypes();
+      const data = res?.data?.data || {};
+      const isOpen = !!data?.isOpen;
+      const periods = Array.isArray(data?.periods) ? data.periods : [];
+      const types = Array.isArray(data?.openTypes) ? data.openTypes : [];
+
+      // Nếu selected type không còn mở thì reset về all để tránh trạng thái lọc rỗng.
+      if (selectedOpenType !== 'all' && !types.includes(selectedOpenType)) {
+        setSelectedOpenType('all');
+      }
+
+      if (types.length === 0) {
+        setIsOpenPeriodsVisible(false);
+        setIsOpenTypeMenuOpen(false);
+      }
+
+      setRequestPeriodNotice({
+        loading: false,
+        isOpen,
+        periods,
+        message: isOpen
+          ? `Hiện có ${periods.length} đợt đăng ký đơn đang mở.`
+          : 'Đợt đăng ký đơn hiện chưa mở.',
+      });
+      setOpenRequestTypes(types);
+    } catch (error) {
+      setRequestPeriodNotice({
+        loading: false,
+        isOpen: false,
+        periods: [],
+        message: 'Đợt đăng ký đơn hiện chưa mở.',
+      });
+      setOpenRequestTypes([]);
+      setSelectedOpenType('all');
+      setIsOpenPeriodsVisible(false);
+      setIsOpenTypeMenuOpen(false);
+    }
+  }
+
+  const filteredOpenPeriods = (requestPeriodNotice.periods || []).filter((period) => {
+    if (selectedOpenType === 'all') return true;
+    if (period.requestType === 'all') return true;
+    return period.requestType === selectedOpenType;
+  });
 
   // Hàm tải danh sách đơn từ backend
   async function loadRequests() {
@@ -86,6 +188,11 @@ export default function StudentRequestsPage() {
   }
 
   function openCreateForm() {
+    if (!requestPeriodNotice.isOpen) {
+      setFormError('Đợt đăng ký đơn hiện chưa mở, bạn chưa thể tạo yêu cầu mới.');
+      return;
+    }
+
     setForm(EMPTY_FORM);
     setFormError('');
     setEditingId(null);
@@ -201,6 +308,112 @@ export default function StudentRequestsPage() {
         </div>
       )}
 
+      {!requestPeriodNotice.loading && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-3 text-sm font-medium ${
+            requestPeriodNotice.isOpen
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}
+        >
+          {requestPeriodNotice.message}
+        </div>
+      )}
+
+      {!requestPeriodNotice.loading && requestPeriodNotice.periods.length > 0 && (
+        <div className="mb-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpenPeriodsVisible((prev) => !prev);
+              setIsOpenTypeMenuOpen(false);
+            }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {isOpenPeriodsVisible
+              ? 'Ẩn các loại đơn đang mở'
+              : `Các loại đơn đang mở (${requestPeriodNotice.periods.length})`}
+          </button>
+        </div>
+      )}
+
+      {!requestPeriodNotice.loading && isOpenPeriodsVisible && requestPeriodNotice.periods.length > 0 && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Thông tin các đợt đăng ký đang mở</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Đang hiển thị {filteredOpenPeriods.length}/{requestPeriodNotice.periods.length} đợt theo bộ lọc loại đơn.
+              </p>
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsOpenTypeMenuOpen((prev) => !prev)}
+                disabled={openRequestTypes.length === 0}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Lọc loại đơn ({requestPeriodNotice.periods.length})
+              </button>
+
+              {isOpenTypeMenuOpen && openRequestTypes.length > 0 && (
+                <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                  <p className="px-2 py-1 text-xs font-semibold text-slate-500">Danh sách loại đơn đang mở</p>
+                  {openRequestTypes.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setSelectedOpenType(type);
+                        setIsOpenTypeMenuOpen(false);
+                      }}
+                      className={`w-full rounded-md px-2 py-2 text-left text-sm hover:bg-slate-50 ${
+                        selectedOpenType === type ? 'bg-blue-50 font-semibold text-blue-700' : 'text-slate-700'
+                      }`}
+                    >
+                      {PERIOD_TYPE_LABELS[type] || type}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-3">
+            {filteredOpenPeriods.map((period) => (
+              <div key={period._id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="grid grid-cols-1 gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                  <div>
+                    <span className="font-medium">Tên đợt:</span> {period.periodName || '-'}
+                  </div>
+                  <div>
+                    <span className="font-medium">Loại đơn:</span>{' '}
+                    {PERIOD_TYPE_LABELS[period.requestType] || period.requestType || '-'}
+                  </div>
+                  <div>
+                    <span className="font-medium">Bắt đầu:</span> {formatDateTime(period.startDate)}
+                  </div>
+                  <div>
+                    <span className="font-medium">Kết thúc:</span> {formatDateTime(period.endDate)}
+                  </div>
+                  <div>
+                    <span className="font-medium">Học kỳ:</span>{' '}
+                    {period.semester?.name || period.semester?.code || '-'}
+                  </div>
+                  <div>
+                    <span className="font-medium">Đối tượng:</span>{' '}
+                    {Array.isArray(period.allowedCohorts) && period.allowedCohorts.length > 0
+                      ? period.allowedCohorts.map((k) => `K${k}`).join(', ')
+                      : 'Tất cả khóa'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === 'list' && (
         <div>
           <div className="mb-6 flex items-center justify-between">
@@ -212,7 +425,8 @@ export default function StudentRequestsPage() {
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              disabled={!requestPeriodNotice.isOpen}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 transition-colors"
             >
               <span>＋</span> Tạo yêu cầu mới
             </button>

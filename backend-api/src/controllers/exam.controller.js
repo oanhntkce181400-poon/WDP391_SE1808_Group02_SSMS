@@ -386,6 +386,39 @@ const updateExam = async (req, res) => {
 };
 
 /**
+ * Admin: Assign invigilators (teachers) to an exam
+ * PATCH /api/exams/:id/assign-invigilator
+ */
+const assignInvigilator = async (req, res) => {
+  try {
+    const examId = req.params.id || req.params.examId;
+    const { teacherIds = [], checkConflict = false } = req.body || {};
+
+    const result = await examService.assignInvigilators(examId, teacherIds, {
+      checkConflict,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Assigned invigilators successfully',
+      data: result.exam,
+      assignedTeachers: result.assignedTeachers,
+    });
+  } catch (error) {
+    console.error('Error assigning invigilators:', error);
+
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to assign invigilators',
+      missingTeacherIds: error.missingTeacherIds || [],
+      invalidTeacherIds: error.invalidTeacherIds || [],
+      invigilatorConflicts: error.invigilatorConflicts || [],
+    });
+  }
+};
+
+/**
  * Admin: Delete exam
  */
 const deleteExam = async (req, res) => {
@@ -503,6 +536,7 @@ module.exports = {
   getExamDetails,
   createExam,
   updateExam,
+  assignInvigilator,
   deleteExam,
   registerStudentForExam,
 };

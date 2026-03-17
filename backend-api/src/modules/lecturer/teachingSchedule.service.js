@@ -49,6 +49,7 @@ async function getTeachingSchedule(userId, filters = {}) {
 
   let semesterNum = filters.semester ? Number(filters.semester) : null;
   let academicYear = filters.academicYear || null;
+  const includeAllClasses = String(filters.includeAllClasses || '').toLowerCase() === 'true';
 
   if (filters.semesterId) {
     const semester = await Semester.findById(filters.semesterId).lean();
@@ -61,7 +62,7 @@ async function getTeachingSchedule(userId, filters = {}) {
     academicYear = semester.academicYear;
   }
 
-  if (!semesterNum || !academicYear) {
+  if (!includeAllClasses && (!semesterNum || !academicYear)) {
     const currentSemester = await Semester.findOne({ isCurrent: true }).lean();
     if (currentSemester) {
       semesterNum = semesterNum || currentSemester.semesterNum;

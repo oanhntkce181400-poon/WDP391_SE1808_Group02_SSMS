@@ -4,6 +4,8 @@
 // Tác giả: Group02 - WDP391
 
 import { useState, useEffect } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import registrationPeriodService from '../../services/registrationPeriodService';
 
 // ─────────────────────────────────────────────────────────────
@@ -48,9 +50,11 @@ export default function RegistrationPeriodManagement() {
   // Form data
   const [formData, setFormData] = useState({
     periodName: '',
+    requestType: 'all',
     semesterId: '',
-    startDate: '',
-    endDate: '',
+    // startDate và endDate dùng kiểu Date để kết hợp với DatePicker
+    startDate: null,
+    endDate: null,
     allowedCohorts: '',
     description: '',
   });
@@ -101,9 +105,10 @@ export default function RegistrationPeriodManagement() {
   function resetForm() {
     setFormData({
       periodName: '',
+      requestType: 'all',
       semesterId: '',
-      startDate: '',
-      endDate: '',
+      startDate: null,
+      endDate: null,
       allowedCohorts: '',
       description: '',
     });
@@ -111,6 +116,12 @@ export default function RegistrationPeriodManagement() {
 
   async function handleCreate() {
     try {
+      // Validate đơn giản: phải chọn đủ ngày giờ
+      if (!formData.startDate || !formData.endDate) {
+        alert('Vui lòng chọn đầy đủ ngày giờ bắt đầu và kết thúc');
+        return;
+      }
+
       // Parse allowedCohorts
       const cohortsArray = formData.allowedCohorts
         ? formData.allowedCohorts
@@ -135,6 +146,11 @@ export default function RegistrationPeriodManagement() {
 
   async function handleUpdate() {
     try {
+      if (!formData.startDate || !formData.endDate) {
+        alert('Vui lòng chọn đầy đủ ngày giờ bắt đầu và kết thúc');
+        return;
+      }
+
       const cohortsArray = formData.allowedCohorts
         ? formData.allowedCohorts
             .split(',')
@@ -183,9 +199,11 @@ export default function RegistrationPeriodManagement() {
     setSelectedPeriod(period);
     setFormData({
       periodName: period.periodName,
-      semesterId: period.semester._id,
-      startDate: new Date(period.startDate).toISOString().slice(0, 16),
-      endDate: new Date(period.endDate).toISOString().slice(0, 16),
+      requestType: period.requestType || 'all',
+      semesterId: period.semester?._id || period.semester?.id || '',
+      // Chuyển về Date object để DatePicker sử dụng
+      startDate: period.startDate ? new Date(period.startDate) : null,
+      endDate: period.endDate ? new Date(period.endDate) : null,
       allowedCohorts: period.allowedCohorts.join(', '),
       description: period.description || '',
     });
@@ -239,7 +257,7 @@ export default function RegistrationPeriodManagement() {
             >
               <option value="">Tất cả học kỳ</option>
               {semesters.map((s) => (
-                <option key={s._id} value={s._id}>
+                <option key={s._id || s.id} value={s._id || s.id}>
                   {s.name}
                 </option>
               ))}
@@ -285,6 +303,9 @@ export default function RegistrationPeriodManagement() {
                       Tên đợt đăng ký
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                      Loại đơn
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                       Học kỳ
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
@@ -306,6 +327,13 @@ export default function RegistrationPeriodManagement() {
                     <tr key={period._id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-3 text-sm font-medium text-slate-900">
                         {period.periodName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {period.requestType === 'repeat' && 'Học lại'}
+                        {period.requestType === 'overload' && 'Học vượt'}
+                        {period.requestType === 'change_class' && 'Chuyển lớp'}
+                        {period.requestType === 'drop' && 'Hủy môn'}
+                        {(!period.requestType || period.requestType === 'all') && 'Tất cả'}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {period.semester?.name || '-'}
@@ -437,6 +465,28 @@ function PeriodFormModal({ title, formData, setFormData, onSubmit, onClose, seme
               />
             </div>
 
+            {/* Request Type */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Loại đơn áp dụng <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.requestType}
+                onChange={(e) => setFormData({ ...formData, requestType: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="all">Tất cả (mặc định)</option>
+                <option value="repeat">Học lại</option>
+                <option value="overload">Học vượt</option>
+                <option value="change_class">Chuyển lớp</option>
+                <option value="drop">Hủy môn</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Admin có thể cấu hình nhiều đợt khác nhau cho từng loại đơn.
+              </p>
+            </div>
+
             {/* Semester */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -450,7 +500,7 @@ function PeriodFormModal({ title, formData, setFormData, onSubmit, onClose, seme
               >
                 <option value="">Chọn học kỳ</option>
                 {semesters.map((s) => (
-                  <option key={s._id} value={s._id}>
+                  <option key={s._id || s.id} value={s._id || s.id}>
                     {s.name} ({s.code})
                   </option>
                 ))}
@@ -462,12 +512,16 @@ function PeriodFormModal({ title, formData, setFormData, onSubmit, onClose, seme
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Ngày giờ bắt đầu <span className="text-red-500">*</span>
               </label>
-              <input
-                type="datetime-local"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              {/* DatePicker giúp chọn ngày + giờ mượt hơn so với input mặc định */}
+              <DatePicker
+                selected={formData.startDate}
+                onChange={(date) => setFormData({ ...formData, startDate: date })}
+                showTimeSelect
+                timeFormat="HH:mm"
+                timeIntervals={15}
+                dateFormat="dd/MM/yyyy HH:mm"
+                placeholderText="Chọn ngày giờ bắt đầu"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
               />
             </div>
 
@@ -476,12 +530,15 @@ function PeriodFormModal({ title, formData, setFormData, onSubmit, onClose, seme
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Ngày giờ kết thúc <span className="text-red-500">*</span>
               </label>
-              <input
-                type="datetime-local"
-                value={formData.endDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+              <DatePicker
+                selected={formData.endDate}
+                onChange={(date) => setFormData({ ...formData, endDate: date })}
+                showTimeSelect
+                timeFormat="HH:mm"
+                timeIntervals={15}
+                dateFormat="dd/MM/yyyy HH:mm"
+                placeholderText="Chọn ngày giờ kết thúc"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
               />
             </div>
 

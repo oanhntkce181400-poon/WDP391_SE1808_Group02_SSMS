@@ -21,6 +21,7 @@ async function findWithFilter(filter, options = {}) {
     .populate("classSection", "classCode className")
     .populate("room", "roomCode roomName capacity roomType")
     .populate("slot", "groupName startTime endTime")
+    .populate("invigilators", "teacherCode fullName email department")
     .sort(sort)
     .skip(skip)
     .limit(limit)
@@ -48,6 +49,36 @@ async function findById(id) {
     .populate("classSection", "classCode className")
     .populate("room", "roomCode roomName capacity roomType")
     .populate("slot", "groupName startTime endTime startDate endDate")
+    .populate("invigilators", "teacherCode fullName email department")
+    .exec();
+}
+
+/**
+ * Find exams where any teacher in list is assigned as invigilator
+ * Used for optional invigilator conflict checking
+ * @param {Array<String>} teacherIds - Teacher IDs
+ * @param {Date} examDate - Exam date
+ * @param {String} slotId - Slot ID
+ * @param {String} excludeExamId - Exam ID to exclude
+ * @returns {Promise<Array>} Array of conflicting exams
+ */
+async function findByInvigilatorsAndSlot(teacherIds, examDate, slotId, excludeExamId = null) {
+  const filter = {
+    invigilators: { $in: teacherIds },
+    examDate,
+    slot: slotId,
+    status: { $ne: "cancelled" },
+  };
+
+  if (excludeExamId) {
+    filter._id = { $ne: excludeExamId };
+  }
+
+  return Exam.find(filter)
+    .populate("invigilators", "teacherCode fullName")
+    .populate("room", "roomCode roomName")
+    .populate("slot", "groupName startTime endTime")
+    .lean()
     .exec();
 }
 
@@ -160,6 +191,7 @@ async function update(id, updates) {
     .populate("classSection", "classCode className")
     .populate("room", "roomCode roomName capacity roomType")
     .populate("slot", "groupName startTime endTime")
+    .populate("invigilators", "teacherCode fullName email department")
     .exec();
 }
 
@@ -233,6 +265,7 @@ module.exports = {
   findByRoomAndSlot,
   findBySubjectDateSlot,
   findByStudentAndSlot,
+  findByInvigilatorsAndSlot,
   save,
   update,
   deleteById,

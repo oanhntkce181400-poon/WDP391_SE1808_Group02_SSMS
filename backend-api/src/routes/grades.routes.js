@@ -29,6 +29,15 @@ router.get(
   gradesController.getGradeDetails
 );
 
+// GET /api/grades/:enrollmentId/change-logs
+// Lấy log thay đổi điểm của một enrollment
+router.get(
+  '/:enrollmentId/change-logs',
+  authMiddleware,
+  rbacMiddleware(['lecturer']),
+  gradesController.getGradeChangeLogs
+);
+
 // ─────────────────────────────────────────────────────────────
 // ADMIN/STAFF ROUTES
 // ─────────────────────────────────────────────────────────────
@@ -38,16 +47,34 @@ router.get(
 router.post(
   '/submit',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  rbacMiddleware(['lecturer']),
   gradesController.submitGrades
 );
 
+// PATCH /api/grades/:enrollmentId
+// Sửa điểm theo enrollment (chỉ lecturer phụ trách lớp)
+router.patch(
+  '/:enrollmentId',
+  authMiddleware,
+  rbacMiddleware(['lecturer']),
+  gradesController.updateEnrollmentGrade
+);
+
+// POST /api/grades/finalize
+// Công bố điểm chính thức cho lớp (finalize)
+router.post(
+  '/finalize',
+  authMiddleware,
+  rbacMiddleware(['lecturer']),
+  gradesController.submitFinalClassGrades
+);
+
 // POST /api/grades/final-submit
-// Nộp điểm chính thức cho tất cả sinh viên trong lớp
+// Legacy alias để tương thích ngược
 router.post(
   '/final-submit',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  rbacMiddleware(['lecturer']),
   gradesController.submitFinalClassGrades
 );
 
@@ -75,7 +102,7 @@ router.patch(
 router.get(
   '/class/:classSectionId/enrollments',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff', 'lecturer']),
+  rbacMiddleware(['lecturer']),
   gradesController.getClassEnrollmentsForGrading
 );
 

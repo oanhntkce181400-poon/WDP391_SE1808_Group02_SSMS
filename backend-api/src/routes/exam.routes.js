@@ -47,6 +47,14 @@ router.patch(
   examController.updateExam
 );
 
+// PATCH /api/exams/:id/assign-invigilator - Assign teacher(s) as invigilator
+router.patch(
+  '/:id/assign-invigilator',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  examController.assignInvigilator
+);
+
 // DELETE /api/exams/:examId - Delete exam
 router.delete(
   '/:examId',
