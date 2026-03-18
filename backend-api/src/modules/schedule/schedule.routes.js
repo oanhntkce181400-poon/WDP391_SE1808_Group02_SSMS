@@ -7,6 +7,11 @@ const router = Router();
 
 const ADMIN_STAFF = rbacMiddleware(["admin", "staff"]);
 
+// UC124 - Auto Generate Timetables (admin/staff)
+router.post("/schedules/auto-generate", authMiddleware, ADMIN_STAFF, ctrl.autoGenerateTimetables);
+router.get("/schedules/auto-generated", authMiddleware, ADMIN_STAFF, ctrl.getGeneratedTimetables);
+router.patch("/schedules/:scheduleId/reassign", authMiddleware, ADMIN_STAFF, ctrl.reassignGeneratedSchedule);
+
 // Routes cho schedule (gán phòng và lịch học)
 // /api/classes/:classId/schedules
 

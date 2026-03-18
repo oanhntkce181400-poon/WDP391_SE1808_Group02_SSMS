@@ -21,7 +21,7 @@ exports.getTimeslot = async (req, res) => {
     const timeslot = await timeslotService.getTimeslot(req.params.id);
     res.json({ data: timeslot });
   } catch (error) {
-    res.status(404).json({ message: error.message });
+    res.status(error.statusCode || 404).json({ message: error.message });
   }
 };
 
@@ -31,7 +31,7 @@ exports.createTimeslot = async (req, res) => {
     const timeslot = await timeslotService.createTimeslot(req.body);
     res.status(201).json({ message: 'Timeslot created successfully', data: timeslot });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 
@@ -41,7 +41,7 @@ exports.updateTimeslot = async (req, res) => {
     const timeslot = await timeslotService.updateTimeslot(req.params.id, req.body);
     res.json({ message: 'Timeslot updated successfully', data: timeslot });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
 };
 
@@ -51,6 +51,6 @@ exports.deleteTimeslot = async (req, res) => {
     await timeslotService.deleteTimeslot(req.params.id);
     res.json({ message: 'Timeslot deleted successfully' });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(error.statusCode || 400).json({ message: error.message });
   }
 };

@@ -198,7 +198,7 @@ export default function StudentLayout() {
 
       {/* Main Content */}
       <div
-        className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}
+        className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}
       >
         {/* Header */}
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
@@ -350,7 +350,7 @@ export default function StudentLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="p-6">
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
 

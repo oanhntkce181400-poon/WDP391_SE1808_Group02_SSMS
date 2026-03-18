@@ -1,115 +1,278 @@
-// attendance.service.js
-// Service xử lý logic nghiệp vụ cho tính năng điểm danh
-// Tương ứng với AttendanceService trong class diagram:
-//   +getTeachingClasses(user): ClassCard[]
-//   +bulkSave(payload): Result
-//   -computeAvgRate(classes): void
-//   -applyWarningRule(>15%): void
-// Và AttendanceRepository / ClassRepository:
-//   +bulkUpsert(slotId, records): void
-//   +findBySemester(user, semester): Class[]
-
 const mongoose = require('mongoose');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Attendance = require('../models/attendance.model');
 const User = require('../models/user.model');
+const Teacher = require('../models/teacher.model');
+const Schedule = require('../models/schedule.model');
 
-// ─────────────────────────────────────────────────────────────
-// ClassRepository.findBySemester(user, semester)
-// Lấy danh sách lớp học trong học kỳ, theo quyền của user
-// Admin/Staff → lấy TẤT CẢ lớp đang active
-// Teacher → lấy lớp của giảng viên đó (chưa triển khai hoàn chỉnh)
-// ─────────────────────────────────────────────────────────────
-async function findClassesBySemester(userId) {
-  const user = await User.findById(userId).lean();
+const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Late', 'Absent']);
+const WEEKDAY_LABELS = {
+  1: 'Thu Hai',
+  2: 'Thu Ba',
+  3: 'Thu Tu',
+  4: 'Thu Nam',
+  5: 'Thu Sau',
+  6: 'Thu Bay',
+  7: 'Chu Nhat',
+};
+
+function toStartOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatDateDdMmYyyy(date) {
+  const d = new Date(date);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function weekBounds(date) {
+  const day = toSystemDayOfWeek(date);
+  const start = toStartOfDay(date);
+  start.setDate(start.getDate() - (day - 1));
+  const end = toStartOfDay(start);
+  end.setDate(end.getDate() + 6);
+  return { start, end };
+}
+
+function dateInRange(date, startDate, endDate) {
+  const t = toStartOfDay(date).getTime();
+  const start = startDate ? toStartOfDay(startDate).getTime() : null;
+  const end = endDate ? toStartOfDay(endDate).getTime() : null;
+  if (start != null && t < start) return false;
+  if (end != null && t > end) return false;
+  return true;
+}
+
+function dateFromWeekAndDay(weekStart, dayOfWeek) {
+  const d = toStartOfDay(weekStart);
+  d.setDate(d.getDate() + Number(dayOfWeek) - 1);
+  return d;
+}
+
+function toSystemDayOfWeek(date) {
+  const jsDay = date.getDay(); // 0 = Sunday
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+async function getAllowedClassWeekdays(classId, classSection) {
+  const schedules = await Schedule.find({ classSection: classId, status: 'active' })
+    .select('dayOfWeek')
+    .lean();
+
+  const daysFromSchedule = Array.from(
+    new Set(
+      schedules
+        .map((s) => Number(s.dayOfWeek))
+        .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7),
+    ),
+  );
+
+  if (daysFromSchedule.length > 0) return daysFromSchedule;
+
+  const fallback = Number(classSection?.dayOfWeek);
+  if (Number.isInteger(fallback) && fallback >= 1 && fallback <= 7) return [fallback];
+
+  return [];
+}
+
+async function getValidClassDatesAroundSelection(classId, selectedDate) {
+  const schedules = await Schedule.find({ classSection: classId, status: 'active' })
+    .select('dayOfWeek startDate endDate')
+    .lean();
+
+  if (schedules.length === 0) return [];
+
+  const { start, end } = weekBounds(selectedDate);
+  const dates = [];
+
+  for (const sch of schedules) {
+    const d = Number(sch.dayOfWeek);
+    if (!Number.isInteger(d) || d < 1 || d > 7) continue;
+
+    const candidate = dateFromWeekAndDay(start, d);
+    if (candidate < start || candidate > end) continue;
+    if (!dateInRange(candidate, sch.startDate, sch.endDate)) continue;
+    dates.push(candidate);
+  }
+
+  dates.sort((a, b) => a.getTime() - b.getTime());
+  return dates;
+}
+
+async function resolveUserContext(userId) {
+  const user = await User.findById(userId).select('role email').lean();
   if (!user) {
-    const err = new Error('Không tìm thấy tài khoản');
+    const err = new Error('Khong tim thay tai khoan');
     err.statusCode = 404;
     throw err;
   }
 
-  // Vì hệ thống hiện tại chưa có role "teacher" trong User model,
-  // admin và staff có thể quản lý tất cả lớp
-  // Khi thêm teacher về sau, chỉ cần thêm: { teacher: teacherObjectId }
-  const query = { status: 'active' };
+  const role = String(user.role || '').toLowerCase();
+  const isAdminOrStaff = role === 'admin' || role === 'staff';
+  return { user, role, isAdminOrStaff };
+}
 
-  const classes = await ClassSection.find(query)
+async function resolveLecturerByUser(userId) {
+  let teacher = await Teacher.findOne({ userId, isActive: true }).lean();
+  if (teacher) return teacher;
+
+  const user = await User.findById(userId).lean();
+  if (!user?.email) return null;
+
+  teacher = await Teacher.findOne({
+    email: String(user.email).toLowerCase(),
+    isActive: true,
+  }).lean();
+
+  return teacher;
+}
+
+async function ensureLecturerCanAccessClass(classId, userId) {
+  const context = await resolveUserContext(userId);
+
+  if (context.isAdminOrStaff) {
+    const cls = await ClassSection.findById(classId)
+      .select('_id classCode teacher status startDate endDate semester academicYear dayOfWeek')
+      .lean();
+
+    if (!cls) {
+      const err = new Error('Khong tim thay lop hoc');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    return { teacher: null, classSection: cls, isAdminOrStaff: true };
+  }
+
+  const teacher = await resolveLecturerByUser(userId);
+  if (!teacher) {
+    const err = new Error('Tai khoan chua lien ket ho so giang vien');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const cls = await ClassSection.findById(classId)
+    .select('_id classCode teacher status startDate endDate semester academicYear dayOfWeek')
+    .lean();
+
+  if (!cls) {
+    const err = new Error('Khong tim thay lop hoc');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (String(cls.teacher) !== String(teacher._id)) {
+    const err = new Error('Ban khong duoc phep diem danh lop hoc phan nay');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  return { teacher, classSection: cls, isAdminOrStaff: false };
+}
+
+function estimateTotalSessions(classSection, weeklyScheduleCount) {
+  const safeWeekly = Math.max(1, Number(weeklyScheduleCount) || 1);
+
+  if (!classSection?.startDate || !classSection?.endDate) {
+    return safeWeekly;
+  }
+
+  const start = new Date(classSection.startDate);
+  const end = new Date(classSection.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return safeWeekly;
+  }
+
+  const days = Math.floor((end - start) / (24 * 60 * 60 * 1000));
+  const weeks = Math.max(1, Math.ceil((days + 1) / 7));
+  return weeks * safeWeekly;
+}
+
+async function findTeachingClassesByLecturer(userId) {
+  const context = await resolveUserContext(userId);
+
+  if (context.isAdminOrStaff) {
+    const classes = await ClassSection.find({
+      status: { $in: ['scheduled', 'published', 'locked'] },
+    })
+      .populate('subject', 'subjectCode subjectName credits')
+      .populate('teacher', 'fullName email department teacherCode')
+      .populate('room', 'roomCode roomName')
+      .populate('timeslot', 'groupName startTime endTime')
+      .sort({ classCode: 1 })
+      .lean();
+
+    return { teacher: null, classes };
+  }
+
+  const teacher = await resolveLecturerByUser(userId);
+  if (!teacher) {
+    const err = new Error('Tai khoan chua lien ket ho so giang vien');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const classes = await ClassSection.find({
+    teacher: teacher._id,
+    status: { $in: ['scheduled', 'published', 'locked'] },
+  })
     .populate('subject', 'subjectCode subjectName credits')
-    .populate('teacher', 'fullName email department')
+    .populate('teacher', 'fullName email department teacherCode')
     .populate('room', 'roomCode roomName')
-    .populate('timeslot', 'groupName startTime endTime startDate endDate sessionsPerDay')
+    .populate('timeslot', 'groupName startTime endTime')
     .sort({ classCode: 1 })
     .lean();
 
-  return classes;
+  return { teacher, classes };
 }
 
-// ─────────────────────────────────────────────────────────────
-// computeAvgRate(classId)
-// Tính tỷ lệ chuyên cần trung bình của một lớp
-// = (số lần Present + Late) / tổng số lần điểm danh * 100
-// ─────────────────────────────────────────────────────────────
 async function computeAvgRate(classId) {
-  // Đếm tổng số bản ghi điểm danh của lớp
   const total = await Attendance.countDocuments({ classSection: classId });
-
   if (total === 0) {
-    // Chưa có buổi nào → tỷ lệ 100% (chưa tính)
     return { avgRate: 100, totalRecords: 0, absentCount: 0, taughtSlots: 0 };
   }
 
-  // Đếm số lần Absent
   const absentCount = await Attendance.countDocuments({
     classSection: classId,
     status: 'Absent',
   });
 
-  // Đếm số buổi học đã dạy (distinct slotId)
   const slots = await Attendance.distinct('slotId', { classSection: classId });
   const taughtSlots = slots.length;
 
-  // Tỷ lệ chuyên cần = (tổng - vắng) / tổng * 100
   const attendedCount = total - absentCount;
   const avgRate = total > 0 ? Math.round((attendedCount / total) * 100) : 100;
 
   return { avgRate, totalRecords: total, absentCount, taughtSlots };
 }
 
-// ─────────────────────────────────────────────────────────────
-// applyWarningRule(classId)
-// Kiểm tra và cập nhật cờ cảnh báo cho từng sinh viên trong lớp
-// absenceWarning = true nếu tỷ lệ vắng của sinh viên đó > 15%
-// ─────────────────────────────────────────────────────────────
 async function applyWarningRule(classId) {
-  // Lấy tất cả buổi học của lớp
   const slots = await Attendance.distinct('slotId', { classSection: classId });
   const totalSlots = slots.length;
-
   if (totalSlots === 0) return;
 
-  // Lấy danh sách sinh viên trong lớp
   const enrollments = await ClassEnrollment.find({
     classSection: classId,
     status: 'enrolled',
   }).lean();
 
-  // Với mỗi sinh viên, tính số buổi vắng và so sánh với 15%
   for (const enrollment of enrollments) {
     const studentId = enrollment.student;
-
-    // Đếm số buổi vắng của sinh viên này trong lớp này
     const absentCount = await Attendance.countDocuments({
       classSection: classId,
       student: studentId,
       status: 'Absent',
     });
 
-    // Tỷ lệ vắng: absentCount / totalSlots * 100
     const absentRate = (absentCount / totalSlots) * 100;
     const shouldWarn = absentRate > 15;
 
-    // Cập nhật cờ cảnh báo cho TẤT CẢ bản ghi điểm danh của sinh viên này
     await Attendance.updateMany(
       { classSection: classId, student: studentId },
       { absenceWarning: shouldWarn },
@@ -117,35 +280,48 @@ async function applyWarningRule(classId) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// getTeachingClasses(userId)
-// Hàm chính tương ứng AttendanceService.getTeachingClasses
-// Trả về danh sách ClassCard với thông tin nhanh
-// ─────────────────────────────────────────────────────────────
 async function getTeachingClasses(userId) {
-  // Bước 1: Lấy danh sách lớp (ClassRepository.findBySemester)
-  const classes = await findClassesBySemester(userId);
+  const { classes } = await findTeachingClassesByLecturer(userId);
+  if (classes.length === 0) return [];
 
-  if (classes.length === 0) {
-    return [];
-  }
+  const classIds = classes.map((c) => c._id);
 
-  // Bước 2: Với mỗi lớp, tính thêm thông tin điểm danh
-  // (computeAvgRate cho từng lớp)
+  const [enrollmentCounts, scheduleCounts] = await Promise.all([
+    ClassEnrollment.aggregate([
+      { $match: { classSection: { $in: classIds }, status: 'enrolled' } },
+      { $group: { _id: '$classSection', count: { $sum: 1 } } },
+    ]),
+    Schedule.aggregate([
+      { $match: { classSection: { $in: classIds }, status: 'active' } },
+      { $group: { _id: '$classSection', count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const scheduleDaysAgg = await Schedule.aggregate([
+    { $match: { classSection: { $in: classIds }, status: 'active' } },
+    { $group: { _id: '$classSection', days: { $addToSet: '$dayOfWeek' } } },
+  ]);
+
+  const enrollmentMap = new Map(enrollmentCounts.map((x) => [String(x._id), x.count]));
+  const scheduleMap = new Map(scheduleCounts.map((x) => [String(x._id), x.count]));
+  const scheduleDaysMap = new Map(
+    scheduleDaysAgg.map((x) => [
+      String(x._id),
+      (x.days || [])
+        .map((d) => Number(d))
+        .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)
+        .sort((a, b) => a - b),
+    ]),
+  );
+
   const classCards = await Promise.all(
     classes.map(async (cls) => {
-      // Lấy số sinh viên đang đăng ký
-      const enrollmentCount = await ClassEnrollment.countDocuments({
-        classSection: cls._id,
-        status: 'enrolled',
-      });
-
-      // Tính tỷ lệ chuyên cần trung bình
+      const enrollmentCount = enrollmentMap.get(String(cls._id)) || 0;
       const { avgRate, taughtSlots } = await computeAvgRate(cls._id);
-
-      // Tổng số buổi học dự kiến từ sessionsPerDay
-      // Nếu không có timeslot → mặc định 0
-      const totalSessions = cls.timeslot?.sessionsPerDay || 0;
+      const weeklyScheduleCount = scheduleMap.get(String(cls._id)) || 0;
+      const scheduleDays = scheduleDaysMap.get(String(cls._id)) ||
+        (Number.isInteger(Number(cls.dayOfWeek)) ? [Number(cls.dayOfWeek)] : []);
+      const totalSessions = estimateTotalSessions(cls, weeklyScheduleCount);
 
       return {
         _id: cls._id,
@@ -157,25 +333,23 @@ async function getTeachingClasses(userId) {
         timeslot: cls.timeslot,
         semester: cls.semester,
         academicYear: cls.academicYear,
-        // Thông tin nhanh cho ClassCard (theo yêu cầu)
-        enrollmentCount,    // Sĩ số
-        taughtSlots,         // Số buổi đã dạy
-        totalSessions,       // Tổng số buổi
-        avgAttendanceRate: avgRate, // Tỷ lệ chuyên cần trung bình
+        dayOfWeek: cls.dayOfWeek,
+        scheduleDays,
+        enrollmentCount,
+        taughtSlots,
+        totalSessions,
+        avgAttendanceRate: avgRate,
       };
     }),
   );
 
-  return classCards;
+  // Chỉ hiển thị lớp có sinh viên đang enrolled để luồng điểm danh luôn nhất quán.
+  return classCards.filter((item) => Number(item.enrollmentCount || 0) > 0);
 }
 
-// ─────────────────────────────────────────────────────────────
-// getSlotAttendance(classId, slotId)
-// Trả về danh sách điểm danh của một buổi học cụ thể
-// Kèm thông tin sinh viên và trạng thái
-// ─────────────────────────────────────────────────────────────
-async function getSlotAttendance(classId, slotId) {
-  // Lấy tất cả sinh viên đang đăng ký lớp
+async function getSlotAttendance(classId, slotId, userId) {
+  const { classSection } = await ensureLecturerCanAccessClass(classId, userId);
+
   const enrollments = await ClassEnrollment.find({
     classSection: classId,
     status: 'enrolled',
@@ -183,48 +357,35 @@ async function getSlotAttendance(classId, slotId) {
     .populate('student', 'studentCode fullName email')
     .lean();
 
-  if (enrollments.length === 0) {
-    return [];
-  }
+  if (enrollments.length === 0) return [];
 
-  // Lấy bản ghi điểm danh cho buổi này (nếu đã có)
   const existingRecords = await Attendance.find({
     classSection: classId,
-    slotId: slotId,
+    slotId,
   }).lean();
 
-  // Tạo map: studentId → attendance record
-  const recordMap = {};
-  for (const rec of existingRecords) {
-    recordMap[String(rec.student)] = rec;
-  }
+  const recordMap = new Map();
+  existingRecords.forEach((r) => recordMap.set(String(r.student), r));
 
-  // Ghép thông tin sinh viên với trạng thái điểm danh
-  const result = enrollments.map((enrollment) => {
+  return enrollments.map((enrollment) => {
     const studentId = String(enrollment.student._id);
-    const existing = recordMap[studentId];
+    const existing = recordMap.get(studentId);
 
     return {
       studentId: enrollment.student._id,
       studentCode: enrollment.student.studentCode,
       fullName: enrollment.student.fullName,
       email: enrollment.student.email,
-      // Trạng thái điểm danh (nếu chưa có thì mặc định Present)
-      status: existing?.status || 'Present',
+      status: existing?.status || '',
       note: existing?.note || '',
       absenceWarning: existing?.absenceWarning || false,
     };
   });
-
-  return result;
 }
 
-// ─────────────────────────────────────────────────────────────
-// getClassSlots(classId)
-// Trả về danh sách các buổi học đã có điểm danh trong lớp
-// ─────────────────────────────────────────────────────────────
-async function getClassSlots(classId) {
-  // Lấy distinct slotId và slotDate
+async function getClassSlots(classId, userId) {
+  const { classSection } = await ensureLecturerCanAccessClass(classId, userId);
+
   const slots = await Attendance.aggregate([
     { $match: { classSection: new mongoose.Types.ObjectId(classId) } },
     {
@@ -232,15 +393,11 @@ async function getClassSlots(classId) {
         _id: '$slotId',
         slotDate: { $first: '$slotDate' },
         totalStudents: { $sum: 1 },
-        absentCount: {
-          $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] },
-        },
-        lateCount: {
-          $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] },
-        },
+        absentCount: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+        lateCount: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
       },
     },
-    { $sort: { slotDate: -1 } }, // Mới nhất lên đầu
+    { $sort: { slotDate: -1 } },
   ]);
 
   return slots.map((s) => ({
@@ -253,64 +410,104 @@ async function getClassSlots(classId) {
   }));
 }
 
-// ─────────────────────────────────────────────────────────────
-// bulkSave(payload)
-// Hàm chính tương ứng AttendanceService.bulkSave
-// Lưu điểm danh cho toàn bộ SV trong một Slot
-// AttendanceRepository.bulkUpsert(slotId, records)
-// ─────────────────────────────────────────────────────────────
-async function bulkSave(payload) {
-  const { classId, slotId, slotDate, records } = payload;
+async function bulkSave(payload, userId) {
+  const { classId, slotId, slotDate, records } = payload || {};
 
-  // Validate đầu vào cơ bản
-  if (!classId || !slotId || !records || !Array.isArray(records)) {
-    const err = new Error('Dữ liệu không hợp lệ: thiếu classId, slotId hoặc records');
+  if (!classId || !slotId || !Array.isArray(records)) {
+    const err = new Error('Du lieu khong hop le: thieu classId, slotId hoac records');
     err.statusCode = 400;
     throw err;
   }
 
-  // Kiểm tra lớp có tồn tại không
-  const classSection = await ClassSection.findById(classId).lean();
-  if (!classSection) {
-    const err = new Error('Không tìm thấy lớp học');
-    err.statusCode = 404;
+  const { classSection } = await ensureLecturerCanAccessClass(classId, userId);
+
+  const enrolledStudents = await ClassEnrollment.find({
+    classSection: classId,
+    status: 'enrolled',
+  })
+    .select('student')
+    .lean();
+
+  const enrolledSet = new Set(enrolledStudents.map((e) => String(e.student)));
+  const inputSet = new Set(records.map((r) => String(r.studentId)));
+
+  if (enrolledSet.size === 0) {
+    const err = new Error('Lop chua co sinh vien de diem danh');
+    err.statusCode = 400;
     throw err;
   }
 
-  // Xác định ngày buổi học
+  if (records.length !== enrolledSet.size || inputSet.size !== enrolledSet.size) {
+    const err = new Error('Vui long diem danh day du tat ca sinh vien truoc khi luu');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  for (const record of records) {
+    if (!enrolledSet.has(String(record.studentId))) {
+      const err = new Error('Danh sach diem danh chua sinh vien khong thuoc lop hoc phan');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (!VALID_ATTENDANCE_STATUSES.has(record.status)) {
+      const err = new Error('Moi sinh vien phai co dung mot trang thai diem danh');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   const sessionDate = slotDate ? new Date(slotDate) : new Date();
 
-  // bulkUpsert: dùng updateOne với upsert=true để tạo mới hoặc cập nhật
-  // Tương ứng AttendanceRepository.bulkUpsert(slotId, records)
-  const upsertPromises = records.map((record) => {
-    return Attendance.updateOne(
-      {
+  // Đồng bộ lịch học và điểm danh theo Schedule thật: ngày điểm danh phải đúng thứ có lịch học.
+  const allowedWeekdays = await getAllowedClassWeekdays(classId, classSection);
+  if (allowedWeekdays.length > 0) {
+    const selectedDay = toSystemDayOfWeek(sessionDate);
+    if (!allowedWeekdays.includes(selectedDay)) {
+      const selectedText = formatDateDdMmYyyy(sessionDate);
+      const validDates = await getValidClassDatesAroundSelection(classId, sessionDate);
+
+      let hint = '';
+      if (validDates.length > 0) {
+        hint = ` Ngay hop le trong tuan nay: ${validDates.map((d) => formatDateDdMmYyyy(d)).join(', ')}.`;
+      } else {
+        const allowedText = allowedWeekdays
+          .sort((a, b) => a - b)
+          .map((d) => WEEKDAY_LABELS[d] || `Thu ${d}`)
+          .join(', ');
+        hint = ` Lop nay hoc vao: ${allowedText}.`;
+      }
+
+      const err = new Error(`Lop ${classSection.classCode} khong hoc ngay ${selectedText}.${hint}`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  const bulkOps = records.map((record) => ({
+    updateOne: {
+      filter: {
         classSection: classId,
-        slotId: slotId,
+        slotId,
         student: record.studentId,
       },
-      {
+      update: {
         $set: {
           classSection: classId,
-          slotId: slotId,
+          slotId,
           slotDate: sessionDate,
           student: record.studentId,
-          status: record.status || 'Present',
+          status: record.status,
           note: record.note || '',
         },
       },
-      { upsert: true }, // Tạo mới nếu chưa có, cập nhật nếu đã có
-    );
-  });
+      upsert: true,
+    },
+  }));
 
-  // Thực hiện tất cả cùng lúc
-  await Promise.all(upsertPromises);
-
-  // Sau khi lưu xong → áp dụng rule cảnh báo > 15%
-  // applyWarningRule(classes): void
+  await Attendance.bulkWrite(bulkOps, { ordered: false });
   await applyWarningRule(classId);
 
-  // Trả về thống kê nhanh
   const totalSaved = records.length;
   const absentCount = records.filter((r) => r.status === 'Absent').length;
   const lateCount = records.filter((r) => r.status === 'Late').length;
@@ -321,7 +518,6 @@ async function bulkSave(payload) {
     presentCount,
     absentCount,
     lateCount,
-    // Cảnh báo nếu tỷ lệ vắng > 15%
     warningTriggered: totalSaved > 0 && (absentCount / totalSaved) * 100 > 15,
   };
 }

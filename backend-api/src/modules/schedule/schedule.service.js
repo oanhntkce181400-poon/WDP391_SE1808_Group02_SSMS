@@ -2,6 +2,7 @@ const repo = require("./schedule.repository");
 const ClassSection = require("../../models/classSection.model");
 const Room = require("../../models/room.model");
 const Teacher = require("../../models/teacher.model");
+const generator = require("./scheduleGenerator.service");
 
 // ─── Assign Schedule to Class ────────────────────────────────
 
@@ -321,6 +322,81 @@ async function lockClassSchedule(classSectionId) {
   );
 }
 
+async function autoGenerateTimetables(payload) {
+  return generator.autoGenerateTimetables(payload);
+}
+
+async function reassignGeneratedSchedule(scheduleId, payload) {
+  return generator.reassignGeneratedSchedule({ scheduleId, ...payload });
+}
+
+async function listGeneratedTimetables({ semester, academicYear, teacherId } = {}) {
+  const scheduleQuery = { status: 'active' };
+
+  const schedules = await require('../../models/schedule.model')
+    .find(scheduleQuery)
+    .populate('room', 'roomCode roomName capacity')
+    .populate({
+      path: 'classSection',
+      select: 'classCode className subject teacher timeslot semester academicYear status',
+      match: {
+        ...(semester ? { semester: Number(semester) } : {}),
+        ...(academicYear ? { academicYear } : {}),
+        status: { $in: ['scheduled', 'published', 'locked'] },
+      },
+      populate: [
+        { path: 'subject', select: 'subjectCode subjectName facultyCode majorCode' },
+        { path: 'teacher', select: 'teacherCode fullName' },
+        { path: 'timeslot', select: 'groupName startPeriod endPeriod startTime endTime' },
+      ],
+    })
+    .lean();
+
+  const filtered = schedules.filter((s) => s.classSection);
+  const generated = filtered
+    .filter((s) => !teacherId || String(s.classSection.teacher?._id || s.classSection.teacher) === String(teacherId))
+    .map((s) => ({
+      classSectionId: s.classSection._id,
+      scheduleId: s._id,
+      classCode: s.classSection.classCode,
+      className: s.classSection.className,
+      subject: s.classSection.subject,
+      teacher: s.classSection.teacher,
+      room: s.room,
+      timeslotId: s.classSection.timeslot?._id || null,
+      timeslot: s.classSection.timeslot
+        ? {
+            _id: s.classSection.timeslot._id,
+            groupName: s.classSection.timeslot.groupName,
+            startPeriod: s.classSection.timeslot.startPeriod || s.startPeriod,
+            endPeriod: s.classSection.timeslot.endPeriod || s.endPeriod,
+            startTime: s.classSection.timeslot.startTime || '',
+            endTime: s.classSection.timeslot.endTime || '',
+          }
+        : {
+            _id: null,
+            groupName: `P${s.startPeriod}-P${s.endPeriod}`,
+            startPeriod: s.startPeriod,
+            endPeriod: s.endPeriod,
+            startTime: '',
+            endTime: '',
+          },
+      dayOfWeek: s.dayOfWeek,
+      expectedEnrollment: null,
+    }));
+
+  return {
+    semester: semester ? Number(semester) : null,
+    academicYear: academicYear || null,
+    summary: {
+      generatedClasses: generated.length,
+      unassignedClasses: 0,
+    },
+    generated,
+    unassigned: [],
+  };
+}
+
 module.exports = {
   assignScheduleToClass,
   updateSchedule,
@@ -328,5 +404,8 @@ module.exports = {
   getSchedulesByClassId,
   checkScheduleConflict,
   publishClassSchedule,
-  lockClassSchedule
+  lockClassSchedule,
+  autoGenerateTimetables,
+  reassignGeneratedSchedule,
+  listGeneratedTimetables,
 };

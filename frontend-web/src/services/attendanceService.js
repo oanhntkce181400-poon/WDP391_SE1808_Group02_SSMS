@@ -8,7 +8,8 @@ const attendanceService = {
   getSlotAttendance: (classId, slotId) =>
     axiosClient.get(`/attendance/classes/${classId}/slots/${encodeURIComponent(slotId)}`),
 
-  bulkSave: (payload) => axiosClient.post('/attendance/bulk', payload),
+  markAttendance: (payload) => axiosClient.post('/attendance/mark', payload),
+  bulkSave: (payload) => axiosClient.post('/attendance/mark', payload),
 };
 
 export default attendanceService;

@@ -6,9 +6,20 @@ const scheduleService = {
 
   // Student weekly schedule
   getMySchedule: (weekStart) =>
-    axiosClient.get('/schedules/my', { params: { weekStart } }),
+    axiosClient.get('/schedules/me', { params: { weekStart } }),
+
+  // Backward-compatible alias
+  getMyWeekSchedule: (weekStart) =>
+    axiosClient.get('/schedules/me', { params: { weekStart } }),
 
   // Class schedule management
+  autoGenerateTimetables: (payload) =>
+    axiosClient.post('/classes/schedules/auto-generate', payload),
+  getGeneratedTimetables: (params) =>
+    axiosClient.get('/classes/schedules/auto-generated', { params }),
+  reassignGeneratedSchedule: (scheduleId, payload) =>
+    axiosClient.patch(`/classes/schedules/${scheduleId}/reassign`, payload),
+
   getClassSchedules: (classId) => axiosClient.get(`/classes/${classId}/schedules`),
   assignSchedule: (classId, scheduleData) => axiosClient.post(`/classes/${classId}/schedules`, scheduleData),
   updateSchedule: (classId, scheduleId, scheduleData) =>

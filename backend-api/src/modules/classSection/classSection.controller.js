@@ -2,6 +2,10 @@ const service = require("./classSection.service");
 
 function handleError(res, err) {
   const msg = String(err?.message || "");
+  if (msg.includes("Unauthorized") || msg.includes("không được phép") || msg.includes("chỉ có thể xem"))
+    return res.status(403).json({ success: false, message: msg });
+  if (msg.includes("conflict") || msg.includes("đang được sử dụng"))
+    return res.status(409).json({ success: false, message: msg });
   if (msg.includes("not found"))
     return res.status(404).json({ success: false, message: msg });
   if (
@@ -59,6 +63,29 @@ async function update(req, res) {
     return res.json({
       success: true,
       message: "Class section updated successfully",
+      data,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+async function assignLecturer(req, res) {
+  try {
+    const classId = req.params.classId || req.params.id;
+    const lecturerId = req.body?.lecturerId || req.body?.teacherId;
+
+    if (!lecturerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu lecturerId",
+      });
+    }
+
+    const data = await service.assignLecturerToClass(classId, lecturerId);
+    return res.json({
+      success: true,
+      message: "Phân công giảng viên thành công",
       data,
     });
   } catch (err) {
@@ -254,50 +281,22 @@ async function searchClasses(req, res) {
 async function getClassDetails(req, res) {
   try {
     const { classId } = req.params;
-    
-    // Cho phép xem chi tiết nếu đã đăng nhập, hoặc không cần đăng nhập
-    // Nếu có userId thì kiểm tra enrollment của user đó
-    // Nếu không có userId thì vẫn cho xem (demo mode)
     const userId = req.auth?.sub;
-    
-    console.log('getClassDetails - auth:', req.auth);
-    console.log('getClassDetails - classId:', classId);
+    const role = String(req.auth?.role || '').toLowerCase();
 
-    // Nếu có userId thì kiểm tra enrollment
-    if (userId) {
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (role === 'student') {
       const data = await service.getClassDetails(classId, userId);
-      return res.json({
-        success: true,
-        data,
-      });
+      return res.json({ success: true, data });
     }
 
-    // Không có userId - lấy thông tin cơ bản của lớp (demo mode)
-    const repo = require("./classSection.repository");
-    const cls = await repo.findClassById(classId);
-
-    if (!cls) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy lớp học" });
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        classId: cls._id,
-        classCode: cls.classCode,
-        className: cls.className,
-        subject: cls.subject,
-        teacher: cls.teacher,
-        room: cls.room,
-        timeslot: cls.timeslot,
-        dayOfWeek: cls.dayOfWeek,
-        currentEnrollment: cls.currentEnrollment,
-        maxCapacity: cls.maxCapacity,
-        status: cls.status,
-      },
-    });
+    // Admin/Staff/Lecturer: xem thông tin lớp thật từ DB, không dùng demo mode
+    const data = await service.getClassById(classId);
+    return res.json({ success: true, data });
   } catch (err) {
-    console.error('getClassDetails error:', err);
     return handleError(res, err);
   }
 }
@@ -347,11 +346,41 @@ async function bulkCreate(req, res) {
     return handleError(res, err);
   }
 }
+
+// ─── UC99 - View Class Roster ───────────────────────────────────
+async function getClassRoster(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.auth?.sub || req.auth?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const data = await service.getClassRosterForStudent(id, userId);
+    return res.json({
+      success: true,
+      message: "Class roster retrieved successfully",
+      data,
+    });
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (msg.includes("chỉ có thể xem")) {
+      return res.status(403).json({ success: false, message: msg });
+    }
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getById,
   create,
   update,
+  assignLecturer,
   remove,
   enrollStudent,
   selfEnroll,
@@ -365,6 +394,7 @@ module.exports = {
   searchClasses,
   getClassList,
   getClassDetails,
+  getClassRoster,
 };
 
 

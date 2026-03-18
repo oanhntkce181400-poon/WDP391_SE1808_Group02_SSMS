@@ -8,28 +8,36 @@ const router = express.Router();
 router.get(
   '/classes',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff']),
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
   attendanceController.getClasses,
 );
 
 router.get(
   '/classes/:classId/slots',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff']),
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
   attendanceController.getClassSlots,
 );
 
 router.get(
   '/classes/:classId/slots/:slotId',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff']),
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
   attendanceController.getSlotAttendance,
 );
 
 router.post(
   '/bulk',
   authMiddleware,
-  rbacMiddleware(['admin', 'staff']),
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  attendanceController.bulkSave,
+);
+
+// UC101 - canonical endpoint
+router.post(
+  '/mark',
+  authMiddleware,
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
   attendanceController.bulkSave,
 );
 

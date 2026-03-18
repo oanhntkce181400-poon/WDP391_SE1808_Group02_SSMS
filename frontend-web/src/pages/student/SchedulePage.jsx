@@ -5,12 +5,12 @@ import WaitlistModal from '../../components/features/WaitlistModal';
 import { X, BookOpen, Users, FileText, Calendar, MapPin, GraduationCap } from 'lucide-react';
 
 const TIME_SLOTS = [
-  { label: 'Ca 1', startTime: '07:00', endTime: '09:15' },
-  { label: 'Ca 2', startTime: '09:30', endTime: '11:45' },
-  { label: 'Ca 3', startTime: '12:30', endTime: '14:45' },
-  { label: 'Ca 4', startTime: '15:00', endTime: '17:15' },
-  { label: 'Ca 5', startTime: '17:30', endTime: '19:45' },
-  { label: 'Ca 6', startTime: '20:00', endTime: '22:00' },
+  { label: 'Ca 1', startTime: '07:30', endTime: '09:00', matchFrom: '07:00', matchTo: '09:30' },
+  { label: 'Ca 2', startTime: '09:30', endTime: '11:00', matchFrom: '09:30', matchTo: '12:00' },
+  { label: 'Ca 3', startTime: '12:30', endTime: '14:00', matchFrom: '12:00', matchTo: '14:30' },
+  { label: 'Ca 4', startTime: '14:30', endTime: '16:00', matchFrom: '14:30', matchTo: '17:00' },
+  { label: 'Ca 5', startTime: '17:00', endTime: '18:30', matchFrom: '17:00', matchTo: '19:30' },
+  { label: 'Ca 6', startTime: '20:00', endTime: '22:00', matchFrom: '19:30', matchTo: '23:59' },
 ];
 
 const DAYS = [
@@ -49,6 +49,12 @@ const FALLBACK_COLORS = [
   { bg: 'bg-teal-600',    text: 'text-teal-100' },
 ];
 
+const ATTENDANCE_LABEL = {
+  Present: { text: 'Có mặt', cls: 'bg-green-500/90 text-white' },
+  Late: { text: 'Đi trễ', cls: 'bg-amber-500/90 text-white' },
+  Absent: { text: 'Vắng', cls: 'bg-rose-600/90 text-white' },
+};
+
 function getMondayOfWeek(date) {
   const d = new Date(date);
   const jsDay = d.getDay(); 
@@ -59,13 +65,23 @@ function getMondayOfWeek(date) {
 }
 
 function toDateStr(date) {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function getDateOfDay(weekStartStr, dayOfWeek) {
   const d = new Date(weekStartStr);
   d.setDate(d.getDate() + dayOfWeek - 1);
   return d;
+}
+
+function toMinutes(timeText) {
+  if (!timeText) return -1;
+  const parts = String(timeText).split(':').map(Number);
+  if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return -1;
+  return parts[0] * 60 + parts[1];
 }
 
 function formatDDMM(date) {
@@ -88,6 +104,9 @@ export default function SchedulePage() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [classDetails, setClassDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailTab, setDetailTab] = useState('overview');
+  const [classRoster, setClassRoster] = useState([]);
+  const [rosterError, setRosterError] = useState('');
 
   // State cho modal Waitlist
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
@@ -144,12 +163,27 @@ export default function SchedulePage() {
     }
   };
 
+  const fetchClassRoster = async (classId) => {
+    try {
+      setRosterError('');
+      const res = await classService.getClassRoster(classId);
+      setClassRoster(res?.data?.data?.students || []);
+    } catch (err) {
+      setClassRoster([]);
+      setRosterError(err?.response?.data?.message || 'Không thể tải danh sách sinh viên');
+    }
+  };
+
   // Click vào slot trong TKB
   const handleSlotClick = (schedule) => {
     // API trả về classId, không phải classSection
     if (schedule?.classId) {
+      setDetailTab('overview');
+      setClassRoster([]);
+      setRosterError('');
       setSelectedClass(schedule.classId);
       fetchClassDetails(schedule.classId);
+      fetchClassRoster(schedule.classId);
     }
   };
 
@@ -157,6 +191,9 @@ export default function SchedulePage() {
   const closeClassDetails = () => {
     setSelectedClass(null);
     setClassDetails(null);
+    setClassRoster([]);
+    setRosterError('');
+    setDetailTab('overview');
   };
 
   // Gán màu: ưu tiên map cố định, fallback theo thứ tự
@@ -171,10 +208,19 @@ export default function SchedulePage() {
   const getColor = (code) => dynamicColorMap[code] || FALLBACK_COLORS[0];
 
  
+  function timeToMinutes(t) {
+    const [h, m] = String(t || '00:00').split(':').map(Number);
+    return h * 60 + m;
+  }
+
   function getScheduleForCell(dayOfWeek, timeSlot) {
-    return schedules.find(
-      (s) => s.dayOfWeek === dayOfWeek && s.startTime === timeSlot.startTime
-    );
+      const from = timeToMinutes(timeSlot.matchFrom);
+      const to = timeToMinutes(timeSlot.matchTo);
+    return schedules.find((s) => {
+      if (s.dayOfWeek !== dayOfWeek) return false;
+      const start = timeToMinutes(s.startTime);
+      return start >= from && start < to;
+    });
   }
 
   const weekEndStr = toDateStr(
@@ -315,8 +361,8 @@ export default function SchedulePage() {
                       >
                         {schedule ? (
                           <div 
-                            onClick={() => handleSlotClick(schedule)}
-                            className={`${clr.bg} rounded-lg p-2 h-full flex flex-col gap-0.5 cursor-pointer hover:opacity-90 transition-opacity`}>
+                            onClick={() => schedule.classId && handleSlotClick(schedule)}
+                            className={`${clr.bg} rounded-lg p-2 h-full flex flex-col gap-0.5 ${schedule.classId ? 'cursor-pointer hover:opacity-90' : 'cursor-default'} transition-opacity`}>
                             {/* Mã môn (badge) */}
                             <span className="text-[11px] font-bold bg-black/20 text-white rounded px-1.5 py-0.5 self-start leading-tight">
                               {schedule.subject.subjectCode}
@@ -326,6 +372,12 @@ export default function SchedulePage() {
                             <div className="text-[11px] font-semibold text-white leading-tight mt-0.5 line-clamp-2">
                               {schedule.subject.subjectName}
                             </div>
+
+                            {schedule.classCode && (
+                              <div className="text-[10px] text-white/85 truncate">
+                                {schedule.classCode}
+                              </div>
+                            )}
 
                             {/* Spacer */}
                             <div className="flex-1" />
@@ -344,8 +396,22 @@ export default function SchedulePage() {
 
                             {/* Thời gian */}
                             <div className="text-[10px] text-white/80 font-medium">
-                              {slot.startTime} – {slot.endTime}
+                              {schedule.startTime || slot.startTime} – {schedule.endTime || slot.endTime}
                             </div>
+                            {schedule.classId && (
+                              <div className={`text-[10px] mt-0.5 inline-flex w-fit rounded px-1.5 py-0.5 font-semibold ${
+                                schedule.attendanceStatus
+                                  ? (ATTENDANCE_LABEL[schedule.attendanceStatus]?.cls || 'bg-slate-700/80 text-white')
+                                  : 'bg-slate-900/35 text-white'
+                              }`}>
+                                {schedule.attendanceStatus
+                                  ? (ATTENDANCE_LABEL[schedule.attendanceStatus]?.text || schedule.attendanceStatus)
+                                  : 'Chưa điểm danh'}
+                              </div>
+                            )}
+                            {!schedule.classId && (
+                              <div className="text-[10px] text-white/80">Theo khung CT</div>
+                            )}
                           </div>
                         ) : (
                           <div className="h-full min-h-[6rem] flex items-center justify-center">
@@ -404,6 +470,31 @@ export default function SchedulePage() {
                 </div>
               ) : classDetails ? (
                 <div className="space-y-6">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                    <button
+                      onClick={() => setDetailTab('overview')}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                        detailTab === 'overview'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Thông tin lớp
+                    </button>
+                    <button
+                      onClick={() => setDetailTab('roster')}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                        detailTab === 'roster'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Danh sách sinh viên ({classRoster.length})
+                    </button>
+                  </div>
+
+                  {detailTab === 'overview' && (
+                    <>
                   {/* Thông tin cơ bản */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-50 rounded-xl p-4">
@@ -495,28 +586,33 @@ export default function SchedulePage() {
                   )}
 
                   {/* Danh sách bạn cùng lớp */}
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
-                      <Users size={16} />
-                      <span className="font-medium">
-                        Danh sách bạn cùng lớp ({classDetails.classmates?.length || 0})
-                      </span>
+                  </>
+                  )}
+
+                  {detailTab === 'roster' && (
+                    <div>
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+                        <Users size={16} />
+                        <span className="font-medium">Danh sách sinh viên cùng lớp</span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-4 max-h-80 overflow-y-auto">
+                        {rosterError ? (
+                          <p className="text-red-500 text-sm">{rosterError}</p>
+                        ) : classRoster.length > 0 ? (
+                          <div className="space-y-2">
+                            {classRoster.map((mate, idx) => (
+                              <div key={mate.enrollmentId || idx} className="flex items-center justify-between text-sm">
+                                <span className="text-slate-800">{mate.fullName}</span>
+                                <span className="text-slate-400 text-xs">{mate.studentCode}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-slate-400 text-sm">Không tìm thấy sinh viên trong lớp này</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-4 max-h-48 overflow-y-auto">
-                      {classDetails.classmates?.length > 0 ? (
-                        <div className="space-y-2">
-                          {classDetails.classmates.map((mate, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-sm">
-                              <span className="text-slate-800">{mate.name}</span>
-                              <span className="text-slate-400 text-xs">{mate.studentId}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-slate-400 text-sm">Chưa có bạn cùng lớp</p>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-10 text-slate-400">

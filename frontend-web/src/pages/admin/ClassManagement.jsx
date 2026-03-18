@@ -149,6 +149,8 @@ export default function ClassManagement() {
   const [selected, setSelected] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [assigningLecturerClassId, setAssigningLecturerClassId] = useState(null);
+  const [lecturerSelections, setLecturerSelections] = useState({});
   const [conflictWarning, setConflictWarning] = useState(null);
   const [conflictData, setConflictData] = useState(null);
 
@@ -180,6 +182,14 @@ export default function ClassManagement() {
         const res = await classService.getAllClasses(params);
         const d = res.data;
         setClasses(d.data || []);
+        setLecturerSelections(
+          Object.fromEntries(
+            (d.data || []).map((cls) => [
+              cls._id,
+              String(cls.teacher?._id || cls.teacher || ""),
+            ]),
+          ),
+        );
         if (d.pagination) {
           setPagination({
             page: d.pagination.page,
@@ -511,6 +521,29 @@ export default function ClassManagement() {
     });
   };
 
+  const handleLecturerSelect = (classId, lecturerId) => {
+    setLecturerSelections((prev) => ({ ...prev, [classId]: lecturerId }));
+  };
+
+  const handleAssignLecturer = async (cls) => {
+    const lecturerId = lecturerSelections[cls._id];
+    if (!lecturerId) {
+      showToast("Vui lòng chọn giảng viên", "error");
+      return;
+    }
+
+    setAssigningLecturerClassId(cls._id);
+    try {
+      await classService.assignLecturer(cls._id, lecturerId);
+      showToast("Phân công giảng viên thành công");
+      fetchClasses(pagination.page, search, statusFilter);
+    } catch (err) {
+      showToast(err?.response?.data?.message || "Phân công giảng viên thất bại", "error");
+    } finally {
+      setAssigningLecturerClassId(null);
+    }
+  };
+
   // Handle subject selection from curriculum - auto-fill className
   const handleCurriculumSubjectChange = (subjectId) => {
     const subject = curriculumSubjects.find(s => 
@@ -680,8 +713,30 @@ export default function ClassManagement() {
                         HK{cls.semester}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 max-w-[140px] truncate">
-                      {cls.teacher?.fullName || "—"}
+                    <td className="px-4 py-3 text-slate-600 min-w-[250px]">
+                      <div className="space-y-1">
+                        <select
+                          value={lecturerSelections[cls._id] || ""}
+                          onChange={(e) => handleLecturerSelect(cls._id, e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          <option value="">Chọn giảng viên</option>
+                          {teachers.map((t) => (
+                            <option key={t._id} value={t._id}>
+                              {(t.teacherCode || "GV")} - {(t.fullName || "Chưa có tên")}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleAssignLecturer(cls)}
+                          disabled={!lecturerSelections[cls._id] || assigningLecturerClassId === cls._id}
+                          className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-700 disabled:bg-slate-400"
+                        >
+                          <GraduationCap size={12} />
+                          {assigningLecturerClassId === cls._id ? "Đang lưu..." : "Lưu GV"}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {cls.room?.roomCode || "—"}

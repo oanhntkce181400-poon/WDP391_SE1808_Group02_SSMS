@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const timeslotController = require('../controllers/timeslot.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
+const rbacMiddleware = require('../middlewares/rbac.middleware');
 
 // All routes require authentication
 router.use(authMiddleware);
+router.use(rbacMiddleware(['admin', 'staff']));
 
 // GET /api/timeslots - Get all timeslots with pagination and filters
 router.get('/', timeslotController.getTimeslots);
