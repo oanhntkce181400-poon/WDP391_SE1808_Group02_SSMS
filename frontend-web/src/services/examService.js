@@ -4,7 +4,9 @@ const examService = {
   // Admin: Get all exams with filtering and pagination
   getAllExams: (params) => axiosClient.get('/exams', { params }),
 
-  getMyExams: () => axiosClient.get('/exams/me'),
+  getMyExams: () => axiosClient.get('/student-exams/my-exams'),
+
+  getMyLecturerExams: () => axiosClient.get('/exams/lecturer/my-exams'),
 
   getExamDetails: (examId) => axiosClient.get(`/exams/${examId}`),
 

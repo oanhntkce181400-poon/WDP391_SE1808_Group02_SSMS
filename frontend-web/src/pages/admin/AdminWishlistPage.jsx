@@ -21,6 +21,14 @@ const STATUS_LABELS = {
   rejected: 'Từ chối',
 };
 
+function resolveSemesterId(semester) {
+  return String(semester?._id || semester?.id || '').trim();
+}
+
+function isLikelyObjectId(value) {
+  return /^[a-fA-F0-9]{24}$/.test(String(value || '').trim());
+}
+
 export default function AdminWishlistPage() {
   const [loading, setLoading] = useState(true);
   const [reviewingId, setReviewingId] = useState('');
@@ -42,16 +50,19 @@ export default function AdminWishlistPage() {
     const data = response?.data?.data || [];
     setSemesters(data);
 
-    if (!selectedSemesterId && data.length > 0) {
+    const semesterIds = data.map((item) => resolveSemesterId(item)).filter(Boolean);
+    const hasValidSelectedSemester = semesterIds.includes(String(selectedSemesterId || '').trim());
+
+    if (!hasValidSelectedSemester && semesterIds.length > 0) {
       const current = data.find((item) => item.isCurrent);
-      setSelectedSemesterId(current?._id || data[0]._id);
+      setSelectedSemesterId(resolveSemesterId(current) || semesterIds[0]);
     }
 
     return data;
   }
 
   async function loadWishlistBySemester(semesterId, nextPage = page, nextStatus = statusFilter) {
-    if (!semesterId) return;
+    if (!semesterId || !isLikelyObjectId(semesterId)) return;
 
     setLoading(true);
     try {
@@ -87,7 +98,7 @@ export default function AdminWishlistPage() {
   }, [selectedSemesterId, page, statusFilter]);
 
   const selectedSemester = useMemo(
-    () => semesters.find((item) => item._id === selectedSemesterId) || null,
+    () => semesters.find((item) => resolveSemesterId(item) === selectedSemesterId) || null,
     [semesters, selectedSemesterId],
   );
 
@@ -144,11 +155,14 @@ export default function AdminWishlistPage() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="">-- Chọn học kỳ --</option>
-              {semesters.map((semester) => (
-                <option key={semester._id} value={semester._id}>
-                  {semester.name || semester.code}
-                </option>
-              ))}
+              {semesters.map((semester, index) => {
+                const semesterId = resolveSemesterId(semester);
+                return (
+                  <option key={semesterId || `semester-${index}`} value={semesterId}>
+                    {semester.name || semester.code}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

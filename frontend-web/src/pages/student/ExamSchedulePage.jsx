@@ -1,454 +1,338 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import examService from '../../services/examService';
+
+const WEEKDAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+function toDateKey(dateInput) {
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatMonthLabel(date) {
+  return date.toLocaleDateString('vi-VN', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function getEventTime(exam) {
+  const start = exam.startTime || exam.slot?.startTime || '--:--';
+  const end = exam.endTime || exam.slot?.endTime || '--:--';
+  return `${start} - ${end}`;
+}
 
 export default function ExamSchedulePage() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
   const [selectedExam, setSelectedExam] = useState(null);
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [selectedDayKey, setSelectedDayKey] = useState('');
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   useEffect(() => {
     fetchExamSchedule();
   }, []);
 
-  const fetchExamSchedule = async () => {
+  async function fetchExamSchedule() {
     try {
       setLoading(true);
-      setError(null);
+      setError('');
       const response = await examService.getMyExams();
-      setExams(response.data.data || []);
+      setExams(response?.data?.data || []);
     } catch (err) {
       console.error('Failed to fetch exam schedule:', err);
-      setError(err.response?.data?.message || 'Failed to load exam schedule');
+      setError(err?.response?.data?.message || 'Không thể tải lịch thi');
       setExams([]);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
+  const eventsByDay = useMemo(() => {
+    const grouped = new Map();
+
+    exams.forEach((exam) => {
+      const key = toDateKey(exam.examDate);
+      if (!key) return;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+
+      grouped.get(key).push(exam);
+    });
+
+    grouped.forEach((items, key) => {
+      grouped.set(
+        key,
+        items.sort((a, b) => {
+          const aTime = a.startTime || a.slot?.startTime || '';
+          const bTime = b.startTime || b.slot?.startTime || '';
+          return aTime.localeCompare(bTime);
+        }),
+      );
+    });
+
+    return grouped;
+  }, [exams]);
+
+  const calendarCells = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const leadingEmpty = (firstDay.getDay() + 6) % 7;
+
+    const cells = [];
+
+    for (let i = 0; i < leadingEmpty; i += 1) {
+      cells.push(null);
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push(new Date(year, month, day));
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+
+    return cells;
+  }, [currentMonth]);
+
+  const totalEventsThisMonth = useMemo(() => {
+    const targetYear = currentMonth.getFullYear();
+    const targetMonth = currentMonth.getMonth();
+
+    return exams.filter((exam) => {
+      const date = new Date(exam.examDate);
+      return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
+    }).length;
+  }, [exams, currentMonth]);
+
+  const todayKey = toDateKey(new Date());
+
+  function formatFullDate(dateInput) {
+    const date = new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return 'Chưa có ngày thi';
     return date.toLocaleDateString('vi-VN', {
       weekday: 'long',
-      year: 'numeric',
-      month: '2-digit',
       day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
     });
-  };
-
-  const getStatusColor = (status) => {
-    const statusColors = {
-      scheduled: 'bg-blue-100 text-blue-800',
-      'in-progress': 'bg-yellow-100 text-yellow-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-    return statusColors[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getRegistrationStatusColor = (status) => {
-    const colors = {
-      registered: 'bg-green-100 text-green-800',
-      attended: 'bg-blue-100 text-blue-800',
-      absent: 'bg-red-100 text-red-800',
-      'not-registered': 'bg-gray-100 text-gray-800',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const filteredExams = filterStatus === 'all' 
-    ? exams 
-    : exams.filter(exam => exam.status === filterStatus);
-
-  const upcomingExams = filteredExams.filter(exam => {
-    const examDate = new Date(exam.examDate);
-    return examDate >= new Date();
-  });
-
-  const pastExams = filteredExams.filter(exam => {
-    const examDate = new Date(exam.examDate);
-    return examDate < new Date();
-  });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">📅 Lịch Thi Của Tôi</h1>
-          <p className="text-gray-600">Xem lịch thi, phòng thi, SBD và quy chế thi</p>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-800">Lịch Thi Của Tôi</h1>
+          <p className="mt-1 text-gray-600">Lịch hiển thị theo ngày thi, mỗi ngày sẽ có các sự kiện thi tương ứng.</p>
         </div>
 
-        {/* Statistics */}
-        {!loading && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
-              <div className="text-gray-600 text-sm">Tổng Kỳ Thi</div>
-              <div className="text-3xl font-bold text-gray-800">{exams.length}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
-              <div className="text-gray-600 text-sm">Kỳ Thi Sắp Tới</div>
-              <div className="text-3xl font-bold text-gray-800">{upcomingExams.length}</div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
-              <div className="text-gray-600 text-sm">Kỳ Thi Đã Hoàn Thành</div>
-              <div className="text-3xl font-bold text-gray-800">{pastExams.length}</div>
-            </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div className="text-sm text-slate-600">
+            Tổng lịch thi trong tháng: <span className="font-semibold text-slate-900">{totalEventsThisMonth}</span>
           </div>
-        )}
-
-        {/* Filter */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          {['all', 'scheduled', 'in-progress', 'completed', 'cancelled'].map(
-            (status) => (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition ${
-                  filterStatus === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                }`}
-              >
-                {status === 'all' ? '🔍 Tất Cả' : status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            )
-          )}
+          <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
+            Ngày có lịch thi được tô nổi bật
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+              }
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+            >
+              ← Tháng trước
+            </button>
+            <div className="min-w-[220px] text-center text-sm font-semibold text-slate-800">
+              {formatMonthLabel(currentMonth)}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+              }
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+            >
+              Tháng sau →
+            </button>
+          </div>
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <div className="inline-block animate-spin">
-                <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              </div>
-              <p className="mt-4 text-gray-600">Đang tải lịch thi...</p>
-            </div>
+        {loading ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-600 shadow-sm">
+            Đang tải lịch thi...
           </div>
-        )}
+        ) : null}
 
-        {/* Error */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <span className="text-red-500 text-xl">⚠️</span>
-              </div>
-              <div className="ml-3">
-                <p className="text-red-800">{error}</p>
-                <button
-                  onClick={fetchExamSchedule}
-                  className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                >
-                  Thử Lại
-                </button>
-              </div>
-            </div>
+        {!loading && error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={fetchExamSchedule}
+              className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Thử lại
+            </button>
           </div>
-        )}
+        ) : null}
 
-        {/* No Exams */}
-        {!loading && filteredExams.length === 0 && (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <div className="text-5xl mb-4">📭</div>
-            <p className="text-gray-600 text-lg">Bạn chưa có kỳ thi nào</p>
-            <p className="text-gray-500 text-sm mt-2">
-              Hãy đăng ký các lớp học để nhận lịch thi
-            </p>
-          </div>
-        )}
-
-        {/* Upcoming Exams */}
-        {!loading && upcomingExams.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-              <span className="text-2xl mr-2">🔴</span> Kỳ Thi Sắp Tới
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {upcomingExams.map((exam) => (
-                <div
-                  key={exam._id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer"
-                  onClick={() => setSelectedExam(exam)}
-                >
-                  {/* Header */}
-                  <div className={`px-6 py-4 ${getStatusColor(exam.status)}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-lg">{exam.subject?.subjectName}</h3>
-                        <p className="text-sm opacity-90">{exam.subject?.subjectCode}</p>
-                      </div>
-                      <span className="text-xs font-bold px-2 py-1 bg-white bg-opacity-30 rounded">
-                        {exam.status.toUpperCase()}
-                      </span>
-                    </div>
+        {!loading && !error ? (
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+                {WEEKDAY_LABELS.map((label) => (
+                  <div key={label} className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-600">
+                    {label}
                   </div>
+                ))}
+              </div>
 
-                  {/* Content */}
-                  <div className="px-6 py-4">
-                    {/* Date and Time */}
-                    <div className="mb-3 pb-3 border-b">
-                      <p className="text-sm text-gray-600">📅 Ngày Thi</p>
-                      <p className="font-semibold text-gray-800">
-                        {formatDate(exam.examDate)}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        ⏰ {exam.startTime} - {exam.endTime}
-                      </p>
-                    </div>
+              <div className="grid grid-cols-7">
+                {calendarCells.map((date, index) => {
+                  if (!date) {
+                    return (
+                      <div
+                        key={`empty-${index}`}
+                        className="min-h-[130px] border-b border-r border-slate-100 bg-slate-50"
+                      />
+                    );
+                  }
 
-                    {/* Room */}
-                    <div className="mb-3 pb-3 border-b">
-                      <p className="text-sm text-gray-600">🏠 Phòng Thi</p>
-                      <p className="font-semibold text-gray-800">
-                        {exam.room?.roomCode} - {exam.room?.roomName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Sức chứa: {exam.room?.capacity} người
-                      </p>
-                    </div>
+                  const dayKey = toDateKey(date);
+                  const events = eventsByDay.get(dayKey) || [];
+                  const hasEvents = events.length > 0;
+                  const isToday = dayKey === todayKey;
+                  const isSelectedDay = dayKey === selectedDayKey;
 
-                    {/* SBD */}
-                    <div className="mb-3 pb-3 border-b">
-                      <p className="text-sm text-gray-600">🔢 Số Báo Danh (SBD)</p>
-                      <p className="font-bold text-lg text-blue-600">
-                        {exam.sbd || '---'}
-                      </p>
-                    </div>
-
-                    {/* Registration Status */}
-                    <div>
-                      <p className="text-sm text-gray-600">✅ Trạng Thái Đăng Ký</p>
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getRegistrationStatusColor(exam.registrationStatus)}`}>
-                        {exam.registrationStatus === 'registered' && '✓ Đã Đăng Ký'}
-                        {exam.registrationStatus === 'attended' && '✓ Đã Tham Dự'}
-                        {exam.registrationStatus === 'absent' && '✗ Vắng Mặt'}
-                        {exam.registrationStatus === 'not-registered' && '○ Chưa Đăng Ký'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-6 py-3 bg-gray-50 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedExam(exam);
-                      }}
-                      className="text-blue-600 hover:text-blue-800 font-semibold text-sm"
+                  return (
+                    <div
+                      key={dayKey}
+                      className={`min-h-[130px] border-b border-r border-slate-100 p-2 transition ${
+                        isToday
+                          ? 'bg-blue-50/70'
+                          : hasEvents
+                          ? 'bg-amber-50/70'
+                          : ''
+                      } ${isSelectedDay ? 'ring-2 ring-inset ring-amber-400' : ''}`}
                     >
-                      Xem Chi Tiết →
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Past Exams */}
-        {!loading && pastExams.length > 0 && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-              <span className="text-2xl mr-2">✓</span> Kỳ Thi Đã Hoàn Thành
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pastExams.map((exam) => (
-                <div
-                  key={exam._id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden opacity-75 hover:opacity-100 transition"
-                >
-                  {/* Header */}
-                  <div className="px-6 py-4 bg-gray-200 text-gray-800">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-lg">{exam.subject?.subjectName}</h3>
-                        <p className="text-sm opacity-90">{exam.subject?.subjectCode}</p>
+                      <div
+                        className={`mb-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${
+                          isToday
+                            ? 'bg-blue-600 text-white'
+                            : hasEvents
+                            ? 'bg-amber-500 text-white'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        {date.getDate()}
                       </div>
-                      <span className="text-xs font-bold px-2 py-1 bg-white bg-opacity-30 rounded">
-                        COMPLETED
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Content */}
-                  <div className="px-6 py-4">
-                    <div className="mb-3 pb-3 border-b">
-                      <p className="text-sm text-gray-600">📅 Ngày Thi</p>
-                      <p className="font-semibold text-gray-800">
-                        {formatDate(exam.examDate)}
-                      </p>
-                    </div>
+                      <div className="space-y-1">
+                        {events.slice(0, 3).map((exam) => (
+                          <button
+                            key={exam._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDayKey(dayKey);
+                              setSelectedExam(exam);
+                            }}
+                            className="block w-full rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-left text-[11px] text-blue-800 transition hover:border-blue-300 hover:bg-blue-100"
+                          >
+                            <div className="font-medium">{getEventTime(exam)}</div>
+                            <div>{exam.subject?.subjectCode || 'N/A'}</div>
+                            <div>{exam.room?.roomCode || 'Chưa phân phòng'}</div>
+                          </button>
+                        ))}
 
-                    <div className="mb-3 pb-3 border-b">
-                      <p className="text-sm text-gray-600">🏠 Phòng Thi</p>
-                      <p className="font-semibold text-gray-800">
-                        {exam.room?.roomCode}
-                      </p>
+                        {events.length > 3 ? (
+                          <div className="text-[11px] font-medium text-slate-500">
+                            +{events.length - 3} lịch thi khác
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-
-                    <div>
-                      <p className="text-sm text-gray-600">🔢 SBD</p>
-                      <p className="font-bold text-gray-800">{exam.sbd || '---'}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Modal - Exam Details */}
-      {selectedExam && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
-            {/* Header */}
-            <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-800">Chi Tiết Kỳ Thi</h2>
+      {selectedExam ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">Chi tiết lịch thi</h3>
               <button
+                type="button"
                 onClick={() => setSelectedExam(null)}
-                className="text-2xl text-gray-500 hover:text-gray-700"
+                className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
               >
                 ✕
               </button>
             </div>
 
-            {/* Content */}
-            <div className="px-6 py-6 space-y-6">
-              {/* Subject */}
+            <div className="space-y-4 px-5 py-4 text-sm text-slate-700">
               <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Môn Học</h3>
-                <div className="bg-blue-50 p-4 rounded">
-                  <p className="font-bold text-lg text-blue-900">
-                    {selectedExam.subject?.subjectName}
-                  </p>
-                  <p className="text-sm text-blue-700">
-                    Mã: {selectedExam.subject?.subjectCode} | Tín chỉ:{' '}
-                    {selectedExam.subject?.credits}
-                  </p>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Môn học</div>
+                <div className="mt-1 font-semibold text-slate-900">{selectedExam.subject?.subjectName || 'Chưa cập nhật tên môn'}</div>
+                <div className="text-slate-600">Mã môn: {selectedExam.subject?.subjectCode || 'N/A'}</div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Ngày thi</div>
+                  <div className="mt-1 font-medium text-slate-900">{formatFullDate(selectedExam.examDate)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Giờ thi</div>
+                  <div className="mt-1 font-medium text-slate-900">{getEventTime(selectedExam)}</div>
                 </div>
               </div>
 
-              {/* Date and Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Ngày Thi</h3>
-                  <p className="text-lg font-bold text-gray-800">
-                    {formatDate(selectedExam.examDate)}
-                  </p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Giờ Thi</h3>
-                  <p className="text-lg font-bold text-gray-800">
-                    {selectedExam.startTime} - {selectedExam.endTime}
-                  </p>
-                </div>
-              </div>
-
-              {/* Room Information */}
               <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Thông Tin Phòng Thi</h3>
-                <div className="bg-green-50 p-4 rounded space-y-2">
-                  <p className="text-gray-700">
-                    <strong>Mã Phòng:</strong> {selectedExam.room?.roomCode}
-                  </p>
-                  <p className="text-gray-700">
-                    <strong>Tên Phòng:</strong> {selectedExam.room?.roomName}
-                  </p>
-                  <p className="text-gray-700">
-                    <strong>Loại Phòng:</strong> {selectedExam.room?.roomType || 'N/A'}
-                  </p>
-                  <p className="text-gray-700">
-                    <strong>Sức Chứa:</strong> {selectedExam.room?.capacity} người
-                  </p>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Phòng thi</div>
+                <div className="mt-1 font-medium text-slate-900">
+                  {selectedExam.room?.roomCode || 'Chưa phân phòng'}
+                  {selectedExam.room?.roomName ? ` - ${selectedExam.room.roomName}` : ''}
                 </div>
               </div>
 
-              {/* SBD and Seat */}
-              <div className="grid grid-cols-2 gap-4">
+              {selectedExam.classSection?.classCode ? (
                 <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Số Báo Danh (SBD)</h3>
-                  <div className="bg-yellow-50 p-4 rounded text-center">
-                    <p className="text-3xl font-bold text-yellow-700">
-                      {selectedExam.sbd || '---'}
-                    </p>
-                  </div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Lớp học</div>
+                  <div className="mt-1 font-medium text-slate-900">{selectedExam.classSection.classCode}</div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Số Ghế</h3>
-                  <div className="bg-gray-50 p-4 rounded text-center">
-                    <p className="text-3xl font-bold text-gray-700">
-                      {selectedExam.seatNumber || '---'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Exam Rules */}
-              {selectedExam.examRules && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Quy Chế Thi</h3>
-                  <div className="bg-red-50 p-4 rounded border border-red-200">
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {selectedExam.examRules}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              {selectedExam.notes && (
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Ghi Chú</h3>
-                  <p className="text-gray-700 bg-gray-50 p-4 rounded">
-                    {selectedExam.notes}
-                  </p>
-                </div>
-              )}
-
-              {/* Registration Status */}
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-2">Trạng Thái Đăng Ký</h3>
-                <span
-                  className={`inline-block px-4 py-2 rounded-full text-sm font-semibold ${getRegistrationStatusColor(selectedExam.registrationStatus)}`}
-                >
-                  {selectedExam.registrationStatus === 'registered' && '✓ Đã Đăng Ký'}
-                  {selectedExam.registrationStatus === 'attended' && '✓ Đã Tham Dự'}
-                  {selectedExam.registrationStatus === 'absent' && '✗ Vắng Mặt'}
-                  {selectedExam.registrationStatus === 'not-registered' && '○ Chưa Đăng Ký'}
-                </span>
-              </div>
+              ) : null}
             </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t text-right">
+            <div className="border-t border-slate-200 px-5 py-3 text-right">
               <button
+                type="button"
                 onClick={() => setSelectedExam(null)}
-                className="px-6 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 font-semibold"
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
               >
                 Đóng
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

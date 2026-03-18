@@ -90,6 +90,7 @@ app.use("/api/classes", require("./modules/schedule/schedule.routes"));
 app.use("/api/semesters", require("./modules/semester/semester.routes"));
 app.use("/api/lecturers", require("./modules/lecturer/lecturer.routes"));
 app.use("/api/exams", require("./routes/exam.routes"));
+app.use("/api/student-exams", require("./routes/studentExam.routes"));
 app.use("/api/feedback-templates", require("./routes/feedbackTemplate.routes"));
 app.use(
   "/api/feedback-submissions",

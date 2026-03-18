@@ -2,8 +2,74 @@ const Exam = require('../models/exam.model');
 const StudentExam = require('../models/studentExam.model');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
+const Student = require('../models/student.model');
+const Teacher = require('../models/teacher.model');
+const User = require('../models/user.model');
 const examService = require('../services/exam.service');
 const examRepository = require('../modules/exam/exam.repository');
+const wishlistService = require('../modules/wishlist/wishlist.service');
+
+function resolveAuthUserId(auth = {}) {
+  return auth.sub || auth.id || auth._id || null;
+}
+
+async function resolveStudentFromUserId(userId) {
+  if (!userId) {
+    const error = new Error('Unauthorized');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  let student = await Student.findOne({ userId, isActive: true }).lean();
+  if (!student && user.email) {
+    student = await Student.findOne({ email: String(user.email).toLowerCase(), isActive: true }).lean();
+  }
+
+  if (!student) {
+    const error = new Error('Student profile not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return student;
+}
+
+async function resolveTeacherFromUserId(userId) {
+  if (!userId) {
+    const error = new Error('Unauthorized');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  let teacher = await Teacher.findOne({ userId, isActive: true }).lean();
+  if (teacher) return teacher;
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (user.email) {
+    teacher = await Teacher.findOne({ email: String(user.email).toLowerCase(), isActive: true }).lean();
+  }
+
+  if (!teacher) {
+    const error = new Error('Teacher profile not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return teacher;
+}
 
 /**
  * Admin: Get all exams with filtering, pagination and search
@@ -105,21 +171,33 @@ const getAllExams = async (req, res) => {
  */
 const getMyExams = async (req, res) => {
   try {
-    const studentId = req.auth?.sub;
+    const userId = resolveAuthUserId(req.auth);
     
-    if (!studentId) {
+    if (!userId) {
       return res.status(401).json({
         success: false,
         message: 'Unauthorized',
       });
     }
 
+    const student = await resolveStudentFromUserId(userId);
+
+    // Backfill legacy approved wishlist records that were marked approved without enrollment.
+    try {
+      await wishlistService.reconcileApprovedWishlistEnrollmentsForStudent(student._id);
+    } catch (reconcileError) {
+      console.warn('[ExamController] wishlist reconcile skipped:', reconcileError.message);
+    }
+
     // Step 1: Find all enrolled classes
     const classEnrollments = await ClassEnrollment.find({
-      student: studentId,
-      status: { $in: ['enrolled', 'active', 'completed'] },
+      student: student._id,
+      status: { $in: ['enrolled', 'completed'] },
     })
-      .populate('classSection')
+      .populate({
+        path: 'classSection',
+        select: '_id subject classCode className',
+      })
       .exec();
 
     if (classEnrollments.length === 0) {
@@ -130,49 +208,105 @@ const getMyExams = async (req, res) => {
       });
     }
 
-    const enrolledClassIds = classEnrollments.map((e) => e.classSection._id);
+    const enrolledClassIdSet = new Set();
+    const enrolledSubjectIdSet = new Set();
 
-    // Step 2: Find exams for those classes, populate references
-    const exams = await Exam.find({
-      classSection: { $in: enrolledClassIds },
+    classEnrollments.forEach((enrollment) => {
+      const classSection = enrollment?.classSection;
+      if (!classSection) return;
+
+      if (classSection._id) {
+        enrolledClassIdSet.add(String(classSection._id));
+      }
+
+      if (classSection.subject) {
+        enrolledSubjectIdSet.add(String(classSection.subject));
+      }
+    });
+
+    const enrolledClassIds = [...enrolledClassIdSet];
+    const enrolledSubjectIds = [...enrolledSubjectIdSet];
+
+    if (enrolledClassIds.length === 0 && enrolledSubjectIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No valid enrolled classes found',
+      });
+    }
+
+    const examQuery = {
       status: { $ne: 'cancelled' },
-    })
+      $or: [],
+    };
+
+    // Case 1: Class-specific exams for classes the student enrolled in.
+    if (enrolledClassIds.length > 0) {
+      examQuery.$or.push({ classSection: { $in: enrolledClassIds } });
+    }
+
+    // Case 2: Subject-level exams (no classSection) for subjects the student is learning.
+    if (enrolledSubjectIds.length > 0) {
+      examQuery.$or.push({
+        subject: { $in: enrolledSubjectIds },
+        $or: [{ classSection: null }, { classSection: { $exists: false } }],
+      });
+    }
+
+    if (examQuery.$or.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        message: 'No eligible exams found',
+      });
+    }
+
+    // Step 2: Find exams for enrolled classes and subject-level exams, populate references
+    const exams = await Exam.find(examQuery)
       .populate('subject', 'subjectCode subjectName credits')
       .populate('classSection', 'classCode className')
       .populate('room', 'roomCode roomName capacity')
       .populate('slot', 'groupName startTime endTime')
-      .sort({ examDate: 1 })
+      .sort({ examDate: 1, startTime: 1 })
       .exec();
 
-    // Step 3: For each exam, get the student's exam registration (SBD)
-    const examsWithSBD = await Promise.all(
-      exams.map(async (exam) => {
-        const studentExam = await StudentExam.findOne({
-          exam: exam._id,
-          student: studentId,
-        }).exec();
+    const examIds = exams.map((exam) => exam._id);
+    const studentExamRows = examIds.length
+      ? await StudentExam.find({
+          exam: { $in: examIds },
+          student: student._id,
+        }).lean()
+      : [];
 
-        return {
-          _id: exam._id,
-          examCode: exam.examCode,
-          subject: exam.subject,
-          classSection: exam.classSection,
-          room: exam.room,
-          slot: exam.slot,
-          examDate: exam.examDate,
-          startTime: exam.startTime,
-          endTime: exam.endTime,
-          examRules: exam.examRules,
-          notes: exam.notes,
-          status: exam.status,
-          // Student-specific data
-          sbd: studentExam?.sbd || null, // Số báo danh
-          seatNumber: studentExam?.seatNumber || null,
-          registrationStatus: studentExam?.status || 'not-registered',
-          registrationDate: studentExam?.registrationDate || null,
-        };
-      })
-    );
+    const studentExamMap = studentExamRows.reduce((acc, item) => {
+      acc[String(item.exam)] = item;
+      return acc;
+    }, {});
+
+    // Step 3: For each exam, get the student's exam registration (SBD)
+    const examsWithSBD = exams.map((exam) => {
+      const studentExam = studentExamMap[String(exam._id)];
+
+      return {
+        _id: exam._id,
+        examCode: exam.examCode,
+        subject: exam.subject,
+        classSection: exam.classSection,
+        room: exam.room,
+        slot: exam.slot,
+        examDate: exam.examDate,
+        startTime: exam.startTime,
+        endTime: exam.endTime,
+        examRules: exam.examRules,
+        notes: exam.notes,
+        status: exam.status,
+        // Student-specific data
+        sbd: studentExam?.sbd || null, // Số báo danh
+        seatNumber: studentExam?.seatNumber || null,
+        registrationStatus: studentExam?.status || 'not-registered',
+        registrationDate: studentExam?.registrationDate || null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -190,19 +324,111 @@ const getMyExams = async (req, res) => {
 };
 
 /**
- * Get single exam details
+ * Get exam schedule for current lecturer
+ * Includes exams of classes the lecturer teaches and exams where lecturer is invigilator
  */
-const getExamDetails = async (req, res) => {
+const getMyLecturerExams = async (req, res) => {
   try {
-    const { examId } = req.params;
-    const studentId = req.auth?.sub;
+    const userId = resolveAuthUserId(req.auth);
 
-    if (!studentId) {
+    if (!userId) {
       return res.status(401).json({
         success: false,
         message: 'Unauthorized',
       });
     }
+
+    const teacher = await resolveTeacherFromUserId(userId);
+
+    const teachingClasses = await ClassSection.find({
+      teacher: teacher._id,
+      status: { $ne: 'cancelled' },
+    })
+      .select('_id')
+      .lean();
+
+    const teachingClassIds = teachingClasses.map((item) => item._id);
+    const examQuery = {
+      status: { $ne: 'cancelled' },
+      $or: [{ invigilators: teacher._id }],
+    };
+
+    if (teachingClassIds.length > 0) {
+      examQuery.$or.push({ classSection: { $in: teachingClassIds } });
+    }
+
+    const exams = await Exam.find(examQuery)
+      .populate('subject', 'subjectCode subjectName credits')
+      .populate('classSection', 'classCode className semester academicYear teacher')
+      .populate('room', 'roomCode roomName capacity roomType')
+      .populate('slot', 'groupName startTime endTime')
+      .populate('invigilators', 'teacherCode fullName')
+      .sort({ examDate: 1, startTime: 1 })
+      .exec();
+
+    const teachingClassIdSet = new Set(teachingClassIds.map((id) => String(id)));
+
+    const data = exams.map((exam) => {
+      const classSectionId = String(exam.classSection?._id || exam.classSection || '');
+      const isTeachingExam = teachingClassIdSet.has(classSectionId);
+      const isInvigilator = Array.isArray(exam.invigilators)
+        ? exam.invigilators.some((item) => String(item?._id || item) === String(teacher._id))
+        : false;
+
+      let roleInExam = 'invigilator';
+      if (isTeachingExam && isInvigilator) {
+        roleInExam = 'teaching-and-invigilator';
+      } else if (isTeachingExam) {
+        roleInExam = 'teaching';
+      }
+
+      return {
+        _id: exam._id,
+        examCode: exam.examCode,
+        subject: exam.subject,
+        classSection: exam.classSection,
+        room: exam.room,
+        slot: exam.slot,
+        examDate: exam.examDate,
+        startTime: exam.startTime,
+        endTime: exam.endTime,
+        examRules: exam.examRules,
+        notes: exam.notes,
+        status: exam.status,
+        roleInExam,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data,
+      total: data.length,
+    });
+  } catch (error) {
+    console.error('Error getting lecturer exams:', error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to get lecturer exam schedule',
+    });
+  }
+};
+
+/**
+ * Get single exam details
+ */
+const getExamDetails = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const userId = resolveAuthUserId(req.auth);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
+    const student = await resolveStudentFromUserId(userId);
 
     // Get exam details
     const exam = await Exam.findById(examId)
@@ -222,7 +448,7 @@ const getExamDetails = async (req, res) => {
     // Get student's exam registration
     const studentExam = await StudentExam.findOne({
       exam: examId,
-      student: studentId,
+      student: student._id,
     }).exec();
 
     if (!studentExam) {
@@ -533,6 +759,7 @@ const registerStudentForExam = async (req, res) => {
 module.exports = {
   getAllExams,
   getMyExams,
+  getMyLecturerExams,
   getExamDetails,
   createExam,
   updateExam,
