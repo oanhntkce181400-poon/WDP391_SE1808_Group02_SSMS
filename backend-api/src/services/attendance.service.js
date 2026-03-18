@@ -3,10 +3,12 @@ const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Attendance = require('../models/attendance.model');
 const User = require('../models/user.model');
+const Student = require('../models/student.model');
 const Teacher = require('../models/teacher.model');
 const Schedule = require('../models/schedule.model');
 
 const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Late', 'Absent']);
+const ATTENDED_STATUSES = new Set(['Present', 'Late']);
 const WEEKDAY_LABELS = {
   1: 'Thu Hai',
   2: 'Thu Ba',
@@ -131,6 +133,459 @@ async function resolveLecturerByUser(userId) {
   }).lean();
 
   return teacher;
+}
+
+async function resolveStudentByUser(userId) {
+  if (!userId) {
+    const err = new Error('Unauthorized');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const user = await User.findById(userId).select('email').lean();
+  if (!user) {
+    const err = new Error('Khong tim thay tai khoan');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  let student = await Student.findOne({ userId, isActive: true })
+    .select('_id studentCode fullName email')
+    .lean();
+
+  if (!student && user.email) {
+    student = await Student.findOne({
+      email: String(user.email).toLowerCase(),
+      isActive: true,
+    })
+      .select('_id studentCode fullName email')
+      .lean();
+  }
+
+  if (!student) {
+    const err = new Error('Khong tim thay ho so sinh vien');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return student;
+}
+
+function safePercentage(numerator, denominator) {
+  if (!denominator || denominator <= 0) return 0;
+  return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+function toObjectIdOrNull(value) {
+  if (!value) return null;
+  if (!mongoose.Types.ObjectId.isValid(value)) return null;
+  return new mongoose.Types.ObjectId(value);
+}
+
+function countOccurrencesByWeekday(startDate, endDate, dayOfWeek) {
+  const start = startDate ? toStartOfDay(startDate) : null;
+  const end = endDate ? toStartOfDay(endDate) : null;
+  const targetDay = Number(dayOfWeek);
+
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return 0;
+  }
+
+  if (!Number.isInteger(targetDay) || targetDay < 1 || targetDay > 7) {
+    return 0;
+  }
+
+  const first = new Date(start);
+  const offset = (targetDay - toSystemDayOfWeek(first) + 7) % 7;
+  first.setDate(first.getDate() + offset);
+
+  if (first > end) {
+    return 0;
+  }
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const weeks = Math.floor((toStartOfDay(end).getTime() - toStartOfDay(first).getTime()) / (7 * DAY_MS));
+  return weeks + 1;
+}
+
+function buildScheduleRules(classSection, schedules = []) {
+  const rules = [];
+
+  schedules.forEach((item) => {
+    const day = Number(item.dayOfWeek);
+    if (!Number.isInteger(day) || day < 1 || day > 7) return;
+    if (!item.startDate || !item.endDate) return;
+
+    rules.push({
+      dayOfWeek: day,
+      startDate: item.startDate,
+      endDate: item.endDate,
+    });
+  });
+
+  if (rules.length > 0) {
+    return rules;
+  }
+
+  const fallbackDay = Number(classSection?.dayOfWeek);
+  if (
+    Number.isInteger(fallbackDay)
+    && fallbackDay >= 1
+    && fallbackDay <= 7
+    && classSection?.startDate
+    && classSection?.endDate
+  ) {
+    return [{
+      dayOfWeek: fallbackDay,
+      startDate: classSection.startDate,
+      endDate: classSection.endDate,
+    }];
+  }
+
+  return [];
+}
+
+function countSessionsFromRules(rules, untilDate = null) {
+  if (!Array.isArray(rules) || rules.length === 0) return 0;
+
+  return rules.reduce((sum, rule) => {
+    const effectiveEnd = untilDate && rule.endDate
+      ? (toStartOfDay(rule.endDate) < toStartOfDay(untilDate) ? rule.endDate : untilDate)
+      : (untilDate || rule.endDate);
+
+    return sum + countOccurrencesByWeekday(rule.startDate, effectiveEnd, rule.dayOfWeek);
+  }, 0);
+}
+
+function toDateKey(date) {
+  const d = toStartOfDay(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateKeyToDate(dateKey) {
+  const [y, m, d] = String(dateKey).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  if (Number.isNaN(date.getTime())) return null;
+  return toStartOfDay(date);
+}
+
+function normalizeSlotKey(slotId, slotDate) {
+  const rawSlotId = String(slotId || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawSlotId)) {
+    return rawSlotId;
+  }
+
+  if (!slotDate) return null;
+  return toDateKey(slotDate);
+}
+
+function listSessionDatesFromRules(rules, untilDate = null) {
+  if (!Array.isArray(rules) || rules.length === 0) return [];
+
+  const keySet = new Set();
+
+  rules.forEach((rule) => {
+    const dayOfWeek = Number(rule.dayOfWeek);
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 1 || dayOfWeek > 7) return;
+
+    if (!rule.startDate || !rule.endDate) return;
+
+    const start = toStartOfDay(rule.startDate);
+    let end = toStartOfDay(rule.endDate);
+
+    if (untilDate) {
+      const boundary = toStartOfDay(untilDate);
+      if (end > boundary) {
+        end = boundary;
+      }
+    }
+
+    if (end < start) return;
+
+    const first = new Date(start);
+    const offset = (dayOfWeek - toSystemDayOfWeek(first) + 7) % 7;
+    first.setDate(first.getDate() + offset);
+
+    if (first > end) return;
+
+    const cursor = new Date(first);
+    while (cursor <= end) {
+      keySet.add(toDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  });
+
+  return Array.from(keySet)
+    .map((key) => parseDateKeyToDate(key))
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime());
+}
+
+async function getMyAttendanceReport(userId, filters = {}) {
+  const student = await resolveStudentByUser(userId);
+  const { classSectionId, subjectId } = filters;
+
+  if (classSectionId && !mongoose.Types.ObjectId.isValid(classSectionId)) {
+    const err = new Error('classSectionId khong hop le');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (subjectId && !mongoose.Types.ObjectId.isValid(subjectId)) {
+    const err = new Error('subjectId khong hop le');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const enrollments = await ClassEnrollment.find({
+    student: student._id,
+    status: { $in: ['enrolled', 'completed'] },
+  })
+    .populate({
+      path: 'classSection',
+      select: '_id classCode className subject semester academicYear startDate endDate dayOfWeek',
+      populate: {
+        path: 'subject',
+        select: '_id subjectCode subjectName credits',
+      },
+    })
+    .lean();
+
+  const filteredEnrollments = enrollments.filter((enrollment) => {
+    const classSection = enrollment.classSection;
+    if (!classSection) return false;
+
+    if (classSectionId && String(classSection._id) !== String(classSectionId)) {
+      return false;
+    }
+
+    if (subjectId && String(classSection.subject?._id || classSection.subject) !== String(subjectId)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (filteredEnrollments.length === 0) {
+    return {
+      student,
+      summary: {
+        totalClasses: 0,
+        sessionsElapsed: 0,
+        totalSessions: 0,
+        attendedSessions: 0,
+        absentSessions: 0,
+        absenceRateToDate: 0,
+        absenceRateOverall: 0,
+      },
+      items: [],
+    };
+  }
+
+  const classObjectIds = filteredEnrollments
+    .map((enrollment) => toObjectIdOrNull(enrollment.classSection?._id))
+    .filter(Boolean);
+
+  const [scheduleRows, attendanceRows] = await Promise.all([
+    Schedule.find({
+      classSection: { $in: classObjectIds },
+      status: 'active',
+    })
+      .select('classSection dayOfWeek startDate endDate')
+      .lean(),
+    Attendance.find({
+      classSection: { $in: classObjectIds },
+      student: student._id,
+    })
+      .select('classSection slotId slotDate status note')
+      .sort({ slotDate: -1, createdAt: -1 })
+      .lean(),
+  ]);
+
+  const scheduleMap = new Map();
+  scheduleRows.forEach((item) => {
+    const key = String(item.classSection);
+    if (!scheduleMap.has(key)) scheduleMap.set(key, []);
+    scheduleMap.get(key).push(item);
+  });
+
+  const attendanceMap = new Map();
+  attendanceRows.forEach((item) => {
+    const key = String(item.classSection);
+    if (!attendanceMap.has(key)) attendanceMap.set(key, []);
+    attendanceMap.get(key).push(item);
+  });
+
+  const today = toStartOfDay(new Date());
+
+  const items = filteredEnrollments
+    .map((enrollment) => {
+      const classSection = enrollment.classSection;
+      const classId = String(classSection._id);
+      const classSchedules = scheduleMap.get(classId) || [];
+      const rules = buildScheduleRules(classSection, classSchedules);
+
+      const rawAttendanceDetails = (attendanceMap.get(classId) || []).map((record) => {
+        const slotDate = record.slotDate ? toStartOfDay(record.slotDate) : null;
+        const slotKey = normalizeSlotKey(record.slotId, slotDate);
+        return {
+          slotId: record.slotId,
+          slotDate,
+          slotKey,
+          status: record.status || 'Absent',
+          note: record.note || '',
+        };
+      });
+
+      const attendanceByDateKey = new Map();
+      rawAttendanceDetails.forEach((record) => {
+        if (!record.slotKey) return;
+        if (!attendanceByDateKey.has(record.slotKey)) {
+          attendanceByDateKey.set(record.slotKey, record);
+        }
+      });
+
+      const scheduledDatesToDate = listSessionDatesFromRules(rules, today);
+      const detailByDateKey = new Map();
+
+      scheduledDatesToDate.forEach((sessionDate) => {
+        const dateKey = toDateKey(sessionDate);
+        const existing = attendanceByDateKey.get(dateKey);
+
+        if (existing) {
+          detailByDateKey.set(dateKey, {
+            slotId: existing.slotId || dateKey,
+            slotDate: existing.slotDate || sessionDate,
+            status: existing.status,
+            note: existing.note,
+            isAbsent: existing.status === 'Absent',
+            isParticipated: ATTENDED_STATUSES.has(existing.status),
+            isMarked: true,
+            isToDate: true,
+          });
+          return;
+        }
+
+        detailByDateKey.set(dateKey, {
+          slotId: dateKey,
+          slotDate: sessionDate,
+          status: 'Unmarked',
+          note: '',
+          isAbsent: false,
+          isParticipated: false,
+          isMarked: false,
+          isToDate: true,
+        });
+      });
+
+      rawAttendanceDetails.forEach((record) => {
+        if (!record.slotDate || record.slotDate > today || !record.slotKey) {
+          return;
+        }
+
+        if (detailByDateKey.has(record.slotKey)) {
+          return;
+        }
+
+        detailByDateKey.set(record.slotKey, {
+          slotId: record.slotId || record.slotKey,
+          slotDate: record.slotDate,
+          status: record.status,
+          note: record.note,
+          isAbsent: record.status === 'Absent',
+          isParticipated: ATTENDED_STATUSES.has(record.status),
+          isMarked: true,
+          isToDate: true,
+        });
+      });
+
+      const detailsToDate = Array.from(detailByDateKey.values()).sort((a, b) => {
+        const ad = new Date(a.slotDate || 0).getTime();
+        const bd = new Date(b.slotDate || 0).getTime();
+        return bd - ad;
+      });
+
+      const absentSessions = detailsToDate.filter((item) => item.status === 'Absent').length;
+      const lateSessions = detailsToDate.filter((item) => item.status === 'Late').length;
+      const presentSessions = detailsToDate.filter((item) => item.status === 'Present').length;
+      const attendedSessions = presentSessions + lateSessions;
+      const unmarkedSessions = detailsToDate.filter((item) => item.status === 'Unmarked').length;
+
+      const sessionsElapsedFromSchedule = scheduledDatesToDate.length;
+      const totalSessionsFromSchedule = countSessionsFromRules(rules, null);
+
+      const sessionsElapsed = Math.max(sessionsElapsedFromSchedule, detailsToDate.length);
+      const totalSessions = Math.max(totalSessionsFromSchedule, rawAttendanceDetails.length, sessionsElapsed);
+
+      const absenceRateToDate = safePercentage(absentSessions, sessionsElapsed);
+      const absenceRateOverall = safePercentage(absentSessions, totalSessions);
+
+      return {
+        classSection: {
+          _id: classSection._id,
+          classCode: classSection.classCode,
+          className: classSection.className,
+          semester: classSection.semester,
+          academicYear: classSection.academicYear,
+          startDate: classSection.startDate || null,
+          endDate: classSection.endDate || null,
+        },
+        subject: classSection.subject || null,
+        attendanceStats: {
+          sessionsElapsed,
+          totalSessions,
+          sessionsMarked: detailsToDate.length - unmarkedSessions,
+          attendedSessions,
+          presentSessions,
+          lateSessions,
+          absentSessions,
+          unmarkedSessions,
+          absenceRateToDate,
+          absenceRateOverall,
+          participationRateToDate: safePercentage(attendedSessions, sessionsElapsed),
+          attendanceScore: Math.max(0, Math.round((100 - absenceRateToDate) * 10) / 10),
+        },
+        details: detailsToDate,
+      };
+    })
+    .sort((a, b) => {
+      const aCode = String(a.subject?.subjectCode || a.classSection?.classCode || '');
+      const bCode = String(b.subject?.subjectCode || b.classSection?.classCode || '');
+      return aCode.localeCompare(bCode);
+    });
+
+  const summary = items.reduce(
+    (acc, item) => {
+      acc.totalClasses += 1;
+      acc.sessionsElapsed += item.attendanceStats.sessionsElapsed;
+      acc.totalSessions += item.attendanceStats.totalSessions;
+      acc.attendedSessions += item.attendanceStats.attendedSessions;
+      acc.absentSessions += item.attendanceStats.absentSessions;
+      return acc;
+    },
+    {
+      totalClasses: 0,
+      sessionsElapsed: 0,
+      totalSessions: 0,
+      attendedSessions: 0,
+      absentSessions: 0,
+      absenceRateToDate: 0,
+      absenceRateOverall: 0,
+    },
+  );
+
+  summary.absenceRateToDate = safePercentage(summary.absentSessions, summary.sessionsElapsed);
+  summary.absenceRateOverall = safePercentage(summary.absentSessions, summary.totalSessions);
+
+  return {
+    student,
+    summary,
+    items,
+  };
 }
 
 async function ensureLecturerCanAccessClass(classId, userId) {
@@ -528,4 +983,5 @@ module.exports = {
   getClassSlots,
   bulkSave,
   computeAvgRate,
+  getMyAttendanceReport,
 };
