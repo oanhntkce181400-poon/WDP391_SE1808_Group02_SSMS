@@ -66,6 +66,17 @@ function buildMajorAliasesByCode(majorCodes = [], majors = []) {
 // - các môn sinh viên đang học / đã hoàn tất trong tập lớp đang xét
 // occupiedClassSectionIds:
 // - các class section sinh viên đã chiếm chỗ, dùng để tránh gán trùng lớp
+/**
+ * Dựng trạng thái tạm của từng sinh viên từ enrollment đã có sẵn.
+ *
+ * Ý tưởng:
+ * - activeSubjectIds: tập các môn mà sinh viên đã có trong kỳ này
+ * - occupiedClassSectionIds: tập các lớp mà sinh viên đang chiếm chỗ
+ *
+ * Mục tiêu:
+ * - chống tạo enrollment trùng
+ * - giúp các bước sau chỉ cần đọc Set trong RAM, không phải query DB liên tục
+ */
 function buildStudentStateMap(existingEnrollments, classSectionsById) {
   const stateByStudent = new Map();
 
@@ -82,10 +93,14 @@ function buildStudentStateMap(existingEnrollments, classSectionsById) {
     const classSectionId = String(enrollment.classSection);
     const classSection = classSectionsById.get(classSectionId);
 
+    // Chỉ cần sinh viên đã từng chiếm lớp này thì đánh dấu là occupied ngay.
+    // Tập này giúp bước chọn lớp không gán sinh viên vào cùng một class section thêm lần nữa.
     state.occupiedClassSectionIds.add(classSectionId);
     if (!classSection) continue;
 
     if (ACTIVE_ENROLLMENT_STATUSES.has(enrollment.status)) {
+      // activeSubjectIds là tập môn đang "có hiệu lực" với sinh viên trong kỳ.
+      // Nếu subject đã nằm trong tập này thì các bước sau sẽ skip để tránh duplicate theo môn.
       state.activeSubjectIds.add(String(classSection.subject));
     }
   }
@@ -95,6 +110,15 @@ function buildStudentStateMap(existingEnrollments, classSectionsById) {
 
 // Trong batch, có sinh viên lúc đầu chưa có state sẵn.
 // Hàm này bảo đảm mọi sinh viên đều có một state object thống nhất để cập nhật trong RAM.
+/**
+ * Lấy state của sinh viên nếu đã có, nếu chưa có thì tạo mới.
+ *
+ * Đây là helper nhỏ nhưng cần thiết vì trong batch có sinh viên:
+ * - đã có enrollment từ trước
+ * - hoặc hoàn toàn chưa có state nào
+ *
+ * Dùng helper này giúp shape state luôn thống nhất ở mọi nơi.
+ */
 function getOrCreateStudentState(stateByStudent, studentId) {
   const key = String(studentId);
   if (!stateByStudent.has(key)) {
@@ -111,6 +135,20 @@ function getOrCreateStudentState(stateByStudent, studentId) {
 // - classSectionsById: truy cập nhanh theo id
 // - classSectionsBySubject: lấy toàn bộ lớp mở của một môn
 // Đồng thời ép currentEnrollment/maxCapacity về number để so sánh an toàn.
+/**
+ * Tiền xử lý danh sách class section thành 2 bảng tra cứu nhanh.
+ *
+ * classSectionsById:
+ * - tra từ classSectionId sang object lớp tương ứng
+ *
+ * classSectionsBySubject:
+ * - gom tất cả lớp mở của cùng một subject vào một mảng
+ *
+ * Vì sao cần làm vậy:
+ * - triggerAutoEnrollment phải tìm lớp cho rất nhiều subject
+ * - nếu mỗi lần đều lặp qua cả mảng classSections sẽ rất tốn
+ * - dựng lookup một lần giúp phần còn lại chỉ đọc Map trong RAM
+ */
 function buildClassSectionPools(classSections) {
   const classSectionsById = new Map();
   const classSectionsBySubject = new Map();
@@ -125,10 +163,16 @@ function buildClassSectionPools(classSections) {
     const classSectionId = String(normalized._id);
     const subjectId = String(normalized.subject);
 
+    // Lưu theo classSectionId để khi đã biết id lớp thì lấy object ra ngay.
     classSectionsById.set(classSectionId, normalized);
+
+    // Nếu subject này chưa có "rổ lớp" thì tạo mảng rỗng trước.
     if (!classSectionsBySubject.has(subjectId)) {
       classSectionsBySubject.set(subjectId, []);
     }
+
+    // Nhét lớp hiện tại vào đúng nhóm subject tương ứng.
+    // Về sau chỉ cần biết subjectId là lấy được toàn bộ lớp mở của môn đó.
     classSectionsBySubject.get(subjectId).push(normalized);
   }
 
@@ -178,6 +222,12 @@ function buildCurriculumMatchCacheKey(student) {
 }
 
 // Tìm curriculum phù hợp cho sinh viên, có cache để nhiều sinh viên cùng profile không phải resolve lại.
+/**
+ * Tìm curriculum phù hợp cho sinh viên, có cache để tránh tính lặp.
+ *
+ * Nhiều sinh viên cùng major + enrollmentYear thường dùng chung curriculum,
+ * nên cache ở đây giúp giảm số lần resolve curriculum giống nhau.
+ */
 async function getCurriculumMatchCached(cache, student, options) {
   const cacheKey = buildCurriculumMatchCacheKey(student);
   if (!cache.has(cacheKey)) {
@@ -190,6 +240,15 @@ async function getCurriculumMatchCached(cache, student, options) {
 // Xác định sinh viên đang thuộc curriculum semester nào ở thời điểm chạy batch.
 // Ưu tiên lấy từ hồ sơ student nếu trường currentCurriculumSemester đã được set.
 // Nếu chưa có, hệ thống tính động dựa trên năm nhập học và học kỳ hiện tại.
+/**
+ * Xác định sinh viên đang ở curriculum semester số mấy.
+ *
+ * Thứ tự ưu tiên:
+ * 1. Nếu student đã có currentCurriculumSemester thì dùng luôn
+ * 2. Nếu chưa có thì tính từ enrollmentYear + semester hiện tại + termsPerYear
+ *
+ * Bước này cực quan trọng vì nó quyết định sẽ lấy môn của kỳ nào trong curriculum.
+ */
 async function getCurriculumSemesterOrderCached(cache, student, semester, options) {
   // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
   if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
@@ -212,6 +271,16 @@ async function getCurriculumSemesterOrderCached(cache, student, semester, option
 // Cách làm này giúp:
 // - chống tạo waitlist trùng trong cùng lượt chạy
 // - bulk upsert cuối batch nhanh hơn và ổn định hơn
+/**
+ * Đưa waitlist vào bộ nhớ tạm của batch, chưa ghi DB ngay.
+ *
+ * Vì sao không create trực tiếp:
+ * - batch có thể phát sinh nhiều waitlist liên tiếp
+ * - ghi từng bản ghi một sẽ chậm hơn và khó kiểm soát duplicate
+ * - gom vào pendingWaitlistDocs để cuối batch bulk upsert sẽ ổn định hơn
+ *
+ * waitlistSet có nhiệm vụ chống trùng student + subject trong chính lần chạy này.
+ */
 function queueWaitlistIfNeeded(
   studentId,
   subjectId,
@@ -232,6 +301,7 @@ function queueWaitlistIfNeeded(
 
   options.waitlistSet?.add(waitKey);
   if (Array.isArray(options.pendingWaitlistDocs)) {
+    // Chưa create DB ở đây; chỉ gom document để cuối batch bulk upsert.
     options.pendingWaitlistDocs.push({
       student: studentId,
       subject: subjectId,
@@ -267,20 +337,36 @@ function buildFilterSummary({ majorCodes, studentCodes, limit, onlyStudentsWitho
 // - lớp chưa đầy
 // - ưu tiên lớp có ít sinh viên hơn để phân tải đều
 // - nếu bằng nhau thì lấy classCode nhỏ hơn để kết quả ổn định, dễ debug
+/**
+ * Chọn lớp phù hợp nhất cho một subject theo rule hiện tại.
+ *
+ * Rule:
+ * - bỏ qua lớp mà sinh viên đã chiếm chỗ rồi
+ * - bỏ qua lớp đã đầy
+ * - ưu tiên lớp có currentEnrollment nhỏ hơn để phân tải đều
+ * - nếu bằng nhau thì so classCode để giữ kết quả ổn định, dễ debug
+ *
+ * Đây là helper "ra quyết định chọn lớp".
+ */
 function pickAvailableClassSection(subjectId, classSectionsBySubject, occupiedClassSectionIds) {
   const subjectKey = String(subjectId);
   const pool = classSectionsBySubject.get(subjectKey) || [];
   let selected = null;
 
   for (const classSection of pool) {
+    // Không chọn lớp mà sinh viên đã chiếm.
     if (occupiedClassSectionIds?.has(String(classSection._id))) {
       continue;
     }
 
+    // Không chọn lớp đã đầy.
     if (classSection.currentEnrollment >= classSection.maxCapacity) {
       continue;
     }
 
+    // Rule chọn lớp:
+    // - ưu tiên lớp ít người hơn để phân tải
+    // - nếu bằng nhau thì chọn classCode nhỏ hơn để kết quả ổn định
     if (
       !selected ||
       classSection.currentEnrollment < selected.currentEnrollment ||
@@ -348,6 +434,16 @@ function formatCurriculumError(match, student) {
 
 // Preflight là phần tổng quan để biết dữ liệu nền có đủ sạch để chạy batch hay không.
 // Nó không trực tiếp xếp lớp, nhưng rất hữu ích cho dashboard và kiểm tra cấu hình.
+/**
+ * Tạo phần tổng quan/preflight cho lần chạy batch.
+ *
+ * Hàm này không trực tiếp enroll ai.
+ * Nó chỉ giúp admin hiểu dữ liệu nền đang ổn hay có vấn đề cấu hình:
+ * - thiếu curriculum
+ * - thiếu enrollmentYear
+ * - curriculum-course mất linked subject
+ * - học kỳ được chọn không có lớp mở
+ */
 function buildPreflightSummary({
   students,
   candidateStudentCount,
@@ -405,6 +501,12 @@ function buildPreflightSummary({
 }
 
 // Cache môn học của từng curriculum semester để giảm query lặp cho nhiều sinh viên giống nhau.
+/**
+ * Lấy danh sách môn của một curriculum semester, có cache.
+ *
+ * Nhiều sinh viên có thể cùng học chung một curriculum và cùng curriculum semester,
+ * nên nếu không cache thì sẽ query cùng một dữ liệu rất nhiều lần.
+ */
 async function getCurriculumSemesterSubjectsCached(cache, curriculumId, curriculumSemesterOrder) {
   const cacheKey = buildCurriculumSemesterKey(curriculumId, curriculumSemesterOrder);
   if (!cache.has(cacheKey)) {
@@ -826,6 +928,21 @@ async function previewAutoEnrollment(studentId) {
 //    - lấy danh sách môn của kỳ đó
 //    - chọn lớp còn chỗ hoặc đưa vào waitlist
 // 5. Cuối batch mới bulk ghi DB để hiệu năng tốt hơn
+/**
+ * Hàm batch chính của chức năng Auto-Assign Students To Classes.
+ *
+ * Cách hiểu nhanh:
+ * 1. Nhận semesterId và các filter chạy batch
+ * 2. Nạp dữ liệu nền: sinh viên, curriculum, lớp mở, termsPerYear
+ * 3. Dựng cache/state trong RAM
+ * 4. Duyệt từng sinh viên
+ * 5. Với mỗi sinh viên, duyệt từng môn của curriculum semester hiện tại
+ * 6. Chọn lớp để enroll hoặc đưa vào waitlist
+ * 7. Cuối cùng mới bulk ghi DB nếu không phải dryRun
+ *
+ * Đây là hàm điều phối (orchestration function), nên bản thân nó dài.
+ * Khi đọc nên chia theo từng chặng thay vì cố hiểu từng dòng một lần.
+ */
 async function triggerAutoEnrollment(semesterId, options = {}) {
   const startedAt = Date.now();
   const dryRun = options.dryRun === true;
@@ -840,6 +957,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     onlyStudentsWithoutEnrollments,
   });
 
+  // Chặng 1: xác định học kỳ chạy batch.
+  // Nếu semesterId sai thì toàn bộ luồng phải dừng ngay vì mọi bước phía sau đều phụ thuộc học kỳ này.
   const semester = await repo.findSemesterById(semesterId);
   if (!semester) {
     const error = new Error('Semester not found');
@@ -852,6 +971,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // - activeCurriculums: toàn bộ curriculum đang active
   // - classSections: các lớp mở trong học kỳ cần chạy
   // - termsPerYear: số học kỳ trong năm để tính curriculum semester
+  // Chặng 2: nạp dữ liệu nền song song.
+  // Đây là toàn bộ đầu vào chính trước khi bắt đầu duyệt từng sinh viên.
   const [candidateStudents, activeCurriculums, classSections, termsPerYear] = await Promise.all([
     repo.findEligibleStudents({
       majorCodes: requestedMajorCodes,
@@ -867,6 +988,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   ]);
 
   // Chuẩn bị các lookup/cache trong RAM để giảm việc lặp query trong vòng for lớn.
+  // Chặng 3: dựng lookup/cache trong RAM để tránh query lặp trong vòng for lớn.
   const { classSectionsById, classSectionsBySubject } = buildClassSectionPools(classSections);
   const classSectionIds = Array.from(classSectionsById.keys());
   const studentIds = candidateStudents.map((student) => student._id);
@@ -887,6 +1009,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // - tránh tạo enrollment trùng
   // - biết sinh viên đã có môn nào rồi
   // - biết đã có waitlist chưa
+  // Nạp enrollment và waitlist hiện có trước khi xếp lớp.
+  // Mục đích là chống duplicate và biết sinh viên đã có môn nào rồi.
   const [existingEnrollments, existingWaitlists] =
     studentIds.length > 0
       ? await Promise.all([
@@ -909,6 +1033,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
   // Filter cuối cùng áp vào danh sách candidate.
   // onlyStudentsWithoutEnrollments thường dùng khi admin chỉ muốn xử lý các sinh viên chưa có enrollment active nào.
+  // Chặng 4: áp filter cuối cùng vào danh sách candidateStudents.
   let students = candidateStudents;
   if (onlyStudentsWithoutEnrollments) {
     students = students.filter((student) => {
@@ -938,6 +1063,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   const classSectionIncrementMap = new Map();
 
   // Xử lý từng sinh viên một để log kết quả chi tiết theo từng người.
+  // Chặng 5: vòng lặp chính của batch.
   for (const student of students) {
     const studentLog = {
       studentId: student._id,
@@ -951,6 +1077,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
     try {
       // Bước 1: tìm curriculum phù hợp với major + enrollmentYear/cohort của sinh viên.
+      // Bước 5.1: tìm curriculum phù hợp cho sinh viên.
       const curriculumMatch = await getCurriculumMatchCached(curriculumMatchCache, student, {
         curriculums: activeCurriculums,
         curriculumLookup,
@@ -973,6 +1100,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
       const curriculum = curriculumMatch.curriculum;
       // Bước 2: xác định sinh viên hiện đang học tới curriculum semester thứ mấy.
+      // Bước 5.2: xác định sinh viên đang ở curriculum semester thứ mấy.
       const curriculumSemesterOrder = await getCurriculumSemesterOrderCached(
         curriculumSemesterOrderCache,
         student,
@@ -984,6 +1112,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       studentLog.curriculumSemesterOrder = curriculumSemesterOrder;
 
       // Bước 3: lấy danh sách subject mà curriculum quy định cho semester order này.
+      // Bước 5.3: lấy các môn mà curriculum quy định cho kỳ hiện tại của sinh viên.
       const semesterSubjects = await getCurriculumSemesterSubjectsCached(
         curriculumSemesterSubjectsCache,
         curriculum._id,
@@ -1001,6 +1130,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       const studentState = getOrCreateStudentState(studentStateMap, student._id);
 
       // Bước 4: duyệt từng subject trong curriculum semester để gán lớp hoặc waitlist.
+      // Bước 5.4: duyệt từng môn để quyết định enroll, waitlist hoặc skip.
       for (const subjectData of semesterSubjects) {
         const subject = subjectData?.subject;
         if (!subject?._id) {
@@ -1017,6 +1147,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
           continue;
         }
 
+        // Chọn lớp phù hợp nhất cho đúng subject này từ pool lớp đang mở.
         const classSection = pickAvailableClassSection(
           subjectId,
           classSectionsBySubject,
@@ -1065,6 +1196,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         // - batch có thể xếp nhiều sinh viên liên tiếp vào cùng một lớp
         // - nếu không "giữ chỗ tạm" trong bộ nhớ, các sinh viên sau sẽ tiếp tục thấy lớp còn chỗ
         //   và bị xếp vượt maxCapacity trước khi tới bước bulkWrite cuối batch
+        // Chưa ghi DB ngay.
+        // Batch chỉ gom enrollment vào danh sách chờ ghi và "giữ chỗ tạm" trong RAM.
         pendingEnrollmentDocs.push({
           student: student._id,
           classSection: classSection._id,
@@ -1075,7 +1208,13 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         });
         incrementMapCounter(classSectionIncrementMap, classSection._id, 1);
         totalEnrollments += 1;
+
+        // Giữ chỗ tạm ngay trong RAM để các sinh viên xử lý sau trong cùng batch
+        // không tiếp tục nhìn thấy lớp này còn chỗ và bị xếp vượt maxCapacity.
         classSection.currentEnrollment += 1;
+
+        // Cập nhật state của sinh viên ngay sau khi đã quyết định enroll.
+        // Nhờ vậy các môn/lớp xử lý tiếp theo trong cùng vòng lặp sẽ nhìn thấy trạng thái mới nhất.
         studentState.activeSubjectIds.add(subjectId);
         studentState.occupiedClassSectionIds.add(String(classSection._id));
         studentLog.enrolled.push({
@@ -1090,6 +1229,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       studentLog.errors.push(error.message);
     }
 
+    // Sau mỗi sinh viên, cập nhật các bộ đếm tổng rồi mới đẩy log vào danh sách logs.
     if (studentLog.errors.length > 0) {
       studentsWithErrors += 1;
     }
@@ -1102,6 +1242,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
   // dryRun chỉ mô phỏng kết quả, tuyệt đối không ghi DB.
   // Nếu chạy thật, enrollment, seat count, và waitlist sẽ được persist ở cuối batch.
+  // Chặng 6: nếu không phải dryRun thì mới bulk ghi DB thật.
   if (!dryRun) {
     try {
       await repo.bulkUpsertEnrollments(pendingEnrollmentDocs);
@@ -1114,6 +1255,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     }
   }
 
+  // Chặng 7: tổng hợp preflight + summary + logs để FE/admin hiển thị kết quả.
+  // Chặng 7: tổng hợp summary/preflight để FE hiển thị lại kết quả lần chạy.
   const preflight = buildPreflightSummary({
     students,
     candidateStudentCount: candidateStudents.length,
