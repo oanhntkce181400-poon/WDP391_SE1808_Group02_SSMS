@@ -74,7 +74,7 @@ export default function HomeScreen({ onNavigate }) {
           <FeatureCard
             label="Exam schedule"
             icon={<MaterialCommunityIcons name="calendar-clock" size={44} color="#f59e0b" />}
-            disabled
+            onPress={() => onNavigate?.('exam')}
           />
         </View>
 

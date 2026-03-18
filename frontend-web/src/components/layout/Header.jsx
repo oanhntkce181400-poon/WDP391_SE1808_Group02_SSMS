@@ -63,8 +63,10 @@ export default function Header({ mode = 'admin' }) {
 
   const primaryNav = isTeacherMode
     ? [
+        { label: 'Trang chủ', href: '/lecturer' },
         { label: 'Lịch giảng dạy', href: '/lecturer/teaching-schedule' },
         { label: 'Điểm danh', href: '/lecturer/attendance' },
+        { label: 'Lịch thi', href: '/lecturer/exams' },
         { label: 'Lịch nghỉ năm', href: '/lecturer/academic-calendar' },
         { label: 'Hồ sơ cá nhân', href: '/lecturer/profile' },
       ]
@@ -103,7 +105,7 @@ export default function Header({ mode = 'admin' }) {
         { label: 'Nhân sự', href: '/admin/actors' },
       ];
 
-  const homeLink = isTeacherMode ? '/lecturer/teaching-schedule' : '/admin/dashboard';
+  const homeLink = isTeacherMode ? '/lecturer' : '/admin/dashboard';
   const profileLink = isTeacherMode ? '/lecturer/profile' : '/dashboard';
   const subtitleText = isTeacherMode ? 'GIẢNG VIÊN' : 'QUẢN TRỊ';
 

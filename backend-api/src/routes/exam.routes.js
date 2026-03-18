@@ -22,7 +22,13 @@ router.get(
  */
 
 // GET /api/exams/me - Get exam schedule for current student
-router.get('/me', authMiddleware, examController.getMyExams);
+router.get('/me', authMiddleware, rbacMiddleware(['student']), examController.getMyExams);
+
+// GET /api/exams/my-exams - Alias for student exam schedule
+router.get('/my-exams', authMiddleware, rbacMiddleware(['student']), examController.getMyExams);
+
+// GET /api/exams/lecturer/my-exams - Get exam schedule for current lecturer
+router.get('/lecturer/my-exams', authMiddleware, rbacMiddleware(['lecturer']), examController.getMyLecturerExams);
 
 // GET /api/exams/:examId - Get exam details
 router.get('/:examId', authMiddleware, examController.getExamDetails);

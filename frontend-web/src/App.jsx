@@ -58,6 +58,9 @@ import AcademicCalendarManagementPage from "./pages/admin/AcademicCalendarManage
 import ViewGradesPage from "./pages/student/ViewGradesPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
 import LecturerAcademicCalendarPage from "./pages/lecturer/LecturerAcademicCalendarPage";
+import LecturerHomePage from "./pages/lecturer/LecturerHomePage";
+import LecturerClassStudentsPage from "./pages/lecturer/LecturerClassStudentsPage";
+import LecturerExamSchedulePage from "./pages/lecturer/LecturerExamSchedulePage";
 export default function App() {
   return (
     <>
@@ -157,9 +160,11 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="teaching-schedule" replace />} />
+        <Route index element={<LecturerHomePage />} />
         <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
         <Route path="attendance" element={<AttendancePage />} />
+        <Route path="exams" element={<LecturerExamSchedulePage />} />
+        <Route path="classes/:classSectionId" element={<LecturerClassStudentsPage />} />
         <Route path="academic-calendar" element={<LecturerAcademicCalendarPage />} />
         <Route path="grades/:classSectionId" element={<LecturerGradesEntryPage />} />
         <Route path="profile" element={<DashboardPage />} />
@@ -167,7 +172,7 @@ export default function App() {
 
       <Route
         path="/teacher/*"
-        element={<Navigate to="/lecturer/teaching-schedule" replace />}
+        element={<Navigate to="/lecturer" replace />}
       />
 
       {/* Legacy dashboard route - redirect to admin */}
@@ -241,7 +246,7 @@ function ProtectedRoute({ children, allowedRoles }) {
       return <Navigate to="/student" replace />;
     }
     if (user.role === "lecturer" || user.role === "teacher") {
-      return <Navigate to="/lecturer/teaching-schedule" replace />;
+      return <Navigate to="/lecturer" replace />;
     }
     return <Navigate to="/admin" replace />;
   }
