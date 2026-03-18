@@ -109,6 +109,27 @@ const EMPTY_FORM = {
   curriculumSemester: "",
 };
 
+const OBJECT_ID_REGEX = /^[a-fA-F0-9]{24}$/;
+
+function resolveMongoId(value) {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return OBJECT_ID_REGEX.test(normalized) ? normalized : "";
+  }
+
+  if (typeof value === "object") {
+    const candidates = [value._id, value.id, value.subjectId, value.subject];
+    for (const candidate of candidates) {
+      const resolved = resolveMongoId(candidate);
+      if (resolved) return resolved;
+    }
+  }
+
+  return "";
+}
+
 const getCurrentAcademicYear = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -393,9 +414,9 @@ export default function ClassManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Validate subject is a valid ObjectId
-      const subjectId = formData.subject;
-      if (!subjectId || subjectId.length !== 24 || !/^[a-fA-F0-9]+$/.test(subjectId)) {
+      // Ưu tiên giữ subject hiện tại nếu resolve được, nhưng không chặn việc đổi status chỉ vì subject cũ bị thiếu.
+      const subjectId = resolveMongoId(formData.subject);
+      if (!subjectId) {
         showToast("Vui lòng chọn môn học hợp lệ", "error");
         setSubmitting(false);
         return;
@@ -435,7 +456,9 @@ export default function ClassManagement() {
       sourceType: "all", // Edit always uses "all subjects" mode
       classCode: cls.classCode,
       className: cls.className,
-      subject: cls.subject?._id || cls.subject || "",
+      subject: resolveMongoId(cls.subject),
+      subjectCode: cls.subject?.subjectCode || "",
+      subjectName: cls.subject?.subjectName || "",
       teacher: cls.teacher?._id || cls.teacher || "",
       semester: cls.semester || "",
       academicYear: cls.academicYear || "",
@@ -453,23 +476,26 @@ export default function ClassManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Validate subject is a valid ObjectId
-      const subjectId = formData.subject;
-      if (!subjectId || subjectId.length !== 24 || !/^[a-fA-F0-9]+$/.test(subjectId)) {
+      // Khi edit, ưu tiên dùng subject hiện tại nếu resolve được; không chặn đổi status nếu subject cũ đang bị rỗng.
+      const subjectId = resolveMongoId(formData.subject) || resolveMongoId(selected?.subject);
+      if (!subjectId && formData.subject) {
         showToast("Vui lòng chọn môn học hợp lệ", "error");
         setSubmitting(false);
         return;
       }
 
-      await classService.updateClass(selected._id, {
+      const payload = {
         className: formData.className,
-        subject: subjectId,
         teacher: formData.teacher,
         semester: Number(formData.semester),
         academicYear: formData.academicYear,
         maxCapacity: Number(formData.maxCapacity),
         status: formData.status,
-      });
+      };
+      if (subjectId) {
+        payload.subject = subjectId;
+      }
+      await classService.updateClass(selected._id, payload);
       showToast("Cập nhật lớp học thành công");
       setShowEdit(false);
       fetchClasses(pagination.page, search, statusFilter);

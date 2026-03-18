@@ -84,7 +84,7 @@ export default function SemesterManagement() {
         }));
       } catch (err) {
         console.error('Error fetching semesters:', err);
-        setError('Khong the tai danh sach hoc ky.');
+        setError('Không thể tải danh sách học kỳ.');
       } finally {
         setLoading(false);
       }
@@ -137,7 +137,7 @@ export default function SemesterManagement() {
       const shouldTriggerAutoEnrollment = formData.isCurrent && !selectedSemester?.isCurrent;
       if (
         shouldTriggerAutoEnrollment &&
-        !window.confirm('Dat hoc ky nay la hoc ky hien tai va chay auto-enrollment ngay bay gio?')
+        !window.confirm('Đặt học kỳ này là học kỳ hiện tại và chạy auto-enrollment ngay bây giờ?')
       ) {
         setModalLoading(false);
         return;
@@ -159,23 +159,23 @@ export default function SemesterManagement() {
         ? await semesterService.update(selectedSemester.id, payload)
         : await semesterService.create(payload);
 
-      showToast(selectedSemester ? 'Cap nhat hoc ky thanh cong.' : 'Tao hoc ky moi thanh cong.');
+      showToast(selectedSemester ? 'Cập nhật học kỳ thành công.' : 'Tạo học kỳ mới thành công.');
 
       const autoResult = response?.data?.data?.autoEnrollment || null;
       setAutoEnrollmentResult(autoResult);
       if (autoResult?.summary) {
         showToast(
-          `Auto-enrollment: ${autoResult.summary.totalEnrollments} dang ky, ${autoResult.summary.waitlisted} waitlist.`,
+          `Auto-enrollment: ${autoResult.summary.totalEnrollments} đăng ký, ${autoResult.summary.waitlisted} waitlist.`,
         );
       } else if (autoResult && autoResult.success === false) {
-        showToast(autoResult.message || 'Auto-enrollment khong thanh cong.', 'error');
+        showToast(autoResult.message || 'Auto-enrollment không thành công.', 'error');
       }
 
       handleCloseModal();
       fetchSemesters(pagination.currentPage);
     } catch (err) {
       console.error('Error saving semester:', err);
-      showToast(err.response?.data?.message || 'Co loi xay ra khi luu hoc ky.', 'error');
+      showToast(err.response?.data?.message || 'Có lỗi xảy ra khi lưu học kỳ.', 'error');
     } finally {
       setModalLoading(false);
     }
@@ -187,13 +187,13 @@ export default function SemesterManagement() {
     setModalLoading(true);
     try {
       await semesterService.remove(selectedSemester.id);
-      showToast('Xoa hoc ky thanh cong.');
+      showToast('Xóa học kỳ thành công.');
       setIsDeleteModalOpen(false);
       setSelectedSemester(null);
       fetchSemesters(pagination.currentPage);
     } catch (err) {
       console.error('Error deleting semester:', err);
-      showToast(err.response?.data?.message || 'Khong the xoa hoc ky.', 'error');
+      showToast(err.response?.data?.message || 'Không thể xóa học kỳ.', 'error');
     } finally {
       setModalLoading(false);
     }
@@ -219,11 +219,11 @@ export default function SemesterManagement() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">Quan ly hoc ky</h1>
+              <h1 className="text-2xl font-bold text-slate-800">Quản lý học kỳ</h1>
               <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-                <span>Cau hinh</span>
+                <span>Cấu hình</span>
                 <img src={nextIcon} alt="/" className="h-3 w-3" />
-                <span className="font-medium text-slate-700">Hoc ky</span>
+                <span className="font-medium text-slate-700">Học kỳ</span>
               </div>
             </div>
 
@@ -232,7 +232,7 @@ export default function SemesterManagement() {
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
             >
               <img src={addIcon} alt="+" className="h-4 w-4 invert" />
-              <span className="font-medium">Them hoc ky moi</span>
+              <span className="font-medium">Thêm học kỳ mới</span>
             </button>
           </div>
         </div>
@@ -252,7 +252,7 @@ export default function SemesterManagement() {
                 autoEnrollmentResult.success === false ? 'text-amber-800' : 'text-emerald-800'
               }`}
             >
-              Ket qua auto-enrollment gan nhat
+              Kết quả auto-enrollment gần nhất
             </div>
             {autoEnrollmentResult.summary ? (
               <div
@@ -260,15 +260,15 @@ export default function SemesterManagement() {
                   autoEnrollmentResult.success === false ? 'text-amber-900' : 'text-emerald-900'
                 }`}
               >
-                <div>Tong SV: {autoEnrollmentResult.summary.totalStudents}</div>
-                <div>Dang ky: {autoEnrollmentResult.summary.totalEnrollments}</div>
+                <div>Tổng SV: {autoEnrollmentResult.summary.totalStudents}</div>
+                <div>Đăng ký: {autoEnrollmentResult.summary.totalEnrollments}</div>
                 <div>Waitlist: {autoEnrollmentResult.summary.waitlisted}</div>
-                <div>Trung: {autoEnrollmentResult.summary.duplicates}</div>
-                <div>Loi: {autoEnrollmentResult.summary.failed}</div>
+                <div>Trùng: {autoEnrollmentResult.summary.duplicates}</div>
+                <div>Lỗi: {autoEnrollmentResult.summary.failed}</div>
               </div>
             ) : (
               <div className="text-sm text-amber-900">
-                {autoEnrollmentResult.message || 'Auto-enrollment khong tra ve summary.'}
+                {autoEnrollmentResult.message || 'Auto-enrollment không trả về summary.'}
               </div>
             )}
           </div>
@@ -279,10 +279,10 @@ export default function SemesterManagement() {
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Nam hoc</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Năm học</label>
               <input
                 type="text"
-                placeholder="Vi du: 2025-2026"
+                placeholder="Ví dụ: 2025-2026"
                 value={filters.academicYear}
                 onChange={(event) => setFilters((prev) => ({ ...prev, academicYear: event.target.value }))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
@@ -290,16 +290,16 @@ export default function SemesterManagement() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Trang thai</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Trạng thái</label>
               <select
                 value={filters.status}
                 onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">Tat ca</option>
-                <option value="active">Dang hoat dong</option>
-                <option value="inactive">Ngung hoat dong</option>
-                <option value="current">Hoc ky hien tai</option>
+                <option value="all">Tất cả</option>
+                <option value="active">Đang hoạt động</option>
+                <option value="inactive">Ngừng hoạt động</option>
+                <option value="current">Học kỳ hiện tại</option>
               </select>
             </div>
 
@@ -308,7 +308,7 @@ export default function SemesterManagement() {
                 onClick={() => fetchSemesters(1)}
                 className="w-full rounded-lg bg-slate-900 px-4 py-2 text-white transition-colors hover:bg-slate-800"
               >
-                Ap dung bo loc
+                Áp dụng bộ lọc
               </button>
             </div>
           </div>
@@ -319,12 +319,12 @@ export default function SemesterManagement() {
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {currentSemester ? (
             <div className="border-b border-slate-200 bg-slate-50 px-6 py-3 text-sm text-slate-700">
-              Hoc ky hien tai: <span className="font-semibold">{currentSemester.name}</span> ({currentSemester.code})
+              Học kỳ hiện tại: <span className="font-semibold">{currentSemester.name}</span> ({currentSemester.code})
             </div>
           ) : null}
 
           {loading ? (
-            <div className="p-12 text-center text-slate-500">Dang tai du lieu...</div>
+            <div className="p-12 text-center text-slate-500">Đang tải dữ liệu...</div>
           ) : error ? (
             <div className="p-12 text-center text-red-500">{error}</div>
           ) : (
@@ -333,21 +333,21 @@ export default function SemesterManagement() {
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">STT</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Ma hoc ky</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Ten hoc ky</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">So ky</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Nam hoc</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thoi gian</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Hien tai</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Trang thai</th>
-                    <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thao tac</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mã học kỳ</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Tên học kỳ</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Số kỳ</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Năm học</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thời gian</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Hiện tại</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Trạng thái</th>
+                     <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {semesters.length === 0 ? (
                     <tr>
                       <td colSpan="9" className="px-6 py-12 text-center text-slate-500">
-                        Khong co du lieu hoc ky.
+                        Không có dữ liệu học kỳ.
                       </td>
                     </tr>
                   ) : (
@@ -358,7 +358,7 @@ export default function SemesterManagement() {
                         </td>
                         <td className="px-6 py-4 font-mono font-semibold text-slate-700">{semester.code}</td>
                         <td className="px-6 py-4 font-medium text-slate-900">{semester.name}</td>
-                        <td className="px-6 py-4 text-slate-700">Ky {semester.semesterNum}</td>
+                        <td className="px-6 py-4 text-slate-700">Kỳ {semester.semesterNum}</td>
                         <td className="px-6 py-4 text-slate-700">{semester.academicYear || '-'}</td>
                         <td className="px-6 py-4 text-sm text-slate-600">
                           {formatDateRange(semester.startDate, semester.endDate)}
@@ -366,7 +366,7 @@ export default function SemesterManagement() {
                         <td className="px-6 py-4">
                           {semester.isCurrent ? (
                             <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-                              Hien tai
+                              Hiện tại
                             </span>
                           ) : (
                             '-'
@@ -378,7 +378,7 @@ export default function SemesterManagement() {
                               semester.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'
                             }`}
                           >
-                            {semester.isActive ? 'Dang hoat dong' : 'Ngung hoat dong'}
+                            {semester.isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -387,7 +387,7 @@ export default function SemesterManagement() {
                               onClick={() => handleOpenModal(semester)}
                               className="text-sm font-medium text-blue-600 hover:text-blue-800"
                             >
-                              Sua
+                              Sửa
                             </button>
                             <span className="text-slate-300">|</span>
                             <button
@@ -397,7 +397,7 @@ export default function SemesterManagement() {
                               }}
                               className="text-sm font-medium text-red-600 hover:text-red-800"
                             >
-                              Xoa
+                              Xóa
                             </button>
                           </div>
                         </td>
@@ -409,7 +409,7 @@ export default function SemesterManagement() {
 
               <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
                 <div className="text-sm text-slate-600">
-                  Hien thi {currentStart} den {currentEnd} trong tong so {pagination.totalItems} ban ghi
+                  Hiển thị {currentStart} đến {currentEnd} trong tổng số {pagination.totalItems} bản ghi
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -451,13 +451,13 @@ export default function SemesterManagement() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
             <div className="border-b border-slate-200 p-6">
               <h2 className="text-xl font-bold text-slate-800">
-                {selectedSemester ? 'Chinh sua hoc ky' : 'Them hoc ky moi'}
+                {selectedSemester ? 'Chỉnh sửa học kỳ' : 'Thêm học kỳ mới'}
               </h2>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 p-6">
               <div className="grid grid-cols-2 gap-4">
-                <Field label="So ky" required>
+                <Field label="Số kỳ" required>
                   <input
                     type="number"
                     min="1"
@@ -468,7 +468,7 @@ export default function SemesterManagement() {
                     placeholder="1"
                   />
                 </Field>
-                <Field label="Nam hoc">
+                <Field label="Năm học">
                   <input
                     type="text"
                     value={formData.academicYear}
@@ -480,7 +480,7 @@ export default function SemesterManagement() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Ma hoc ky" required>
+                <Field label="Mã học kỳ" required>
                   <input
                     type="text"
                     required
@@ -490,20 +490,20 @@ export default function SemesterManagement() {
                     placeholder="HK1"
                   />
                 </Field>
-                <Field label="Ten hoc ky" required>
+                <Field label="Tên học kỳ" required>
                   <input
                     type="text"
                     required
                     value={formData.name}
                     onChange={(event) => setFormData((prev) => ({ ...prev, name: event.target.value }))}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                    placeholder="Hoc ky 1"
+                    placeholder="Học kỳ 1"
                   />
                 </Field>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Ngay bat dau">
+                <Field label="Ngày bắt đầu">
                   <input
                     type="date"
                     value={formData.startDate}
@@ -511,7 +511,7 @@ export default function SemesterManagement() {
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   />
                 </Field>
-                <Field label="Ngay ket thuc">
+                <Field label="Ngày kết thúc">
                   <input
                     type="date"
                     value={formData.endDate}
@@ -521,13 +521,13 @@ export default function SemesterManagement() {
                 </Field>
               </div>
 
-              <Field label="Mo ta">
+              <Field label="Mô tả">
                 <textarea
                   value={formData.description}
                   onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
                   rows={3}
-                  placeholder="Mo ta ngan ve hoc ky..."
+                  placeholder="Mô tả ngắn về học kỳ..."
                 />
               </Field>
 
@@ -539,7 +539,7 @@ export default function SemesterManagement() {
                     onChange={(event) => setFormData((prev) => ({ ...prev, isCurrent: event.target.checked }))}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  Dat la hoc ky hien tai
+                  Đặt là học kỳ hiện tại
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
@@ -548,7 +548,7 @@ export default function SemesterManagement() {
                     onChange={(event) => setFormData((prev) => ({ ...prev, isActive: event.target.checked }))}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  Dang hoat dong
+                  Đang hoạt động
                 </label>
               </div>
 
@@ -558,14 +558,14 @@ export default function SemesterManagement() {
                   onClick={handleCloseModal}
                   className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  Huy
+                  Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={modalLoading}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {modalLoading ? 'Dang luu...' : selectedSemester ? 'Cap nhat' : 'Them moi'}
+                  {modalLoading ? 'Đang lưu...' : selectedSemester ? 'Cập nhật' : 'Thêm mới'}
                 </button>
               </div>
             </form>
@@ -577,10 +577,10 @@ export default function SemesterManagement() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
             <div className="p-6">
-              <h2 className="mb-4 text-xl font-bold text-slate-800">Xac nhan xoa</h2>
+              <h2 className="mb-4 text-xl font-bold text-slate-800">Xác nhận xóa</h2>
               <p className="mb-6 text-slate-600">
-                Ban co chac chan muon xoa hoc ky <strong>{selectedSemester?.name}</strong>? Hanh dong nay khong the
-                hoan tac.
+                Bạn có chắc chắn muốn xóa học kỳ <strong>{selectedSemester?.name}</strong>? Hành động này không thể
+                hoàn tác.
               </p>
               <div className="flex justify-end gap-3">
                 <button
@@ -590,14 +590,14 @@ export default function SemesterManagement() {
                   }}
                   className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  Huy
+                  Hủy
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={modalLoading}
                   className="rounded-lg bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                 >
-                  {modalLoading ? 'Dang xoa...' : 'Xoa'}
+                  {modalLoading ? 'Đang xóa...' : 'Xóa'}
                 </button>
               </div>
             </div>
