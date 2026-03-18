@@ -56,7 +56,9 @@ async function findEligibleStudents(filters = {}) {
   }
 
   return Student.find(query)
-    .select('studentCode fullName majorCode cohort enrollmentYear academicStatus isActive userId')
+    .select(
+      'studentCode fullName majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId',
+    )
     .sort({ studentCode: 1, _id: 1 })
     .lean();
 }
