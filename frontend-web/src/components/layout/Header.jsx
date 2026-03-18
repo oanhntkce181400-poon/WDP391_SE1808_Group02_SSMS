@@ -65,6 +65,7 @@ export default function Header({ mode = 'admin' }) {
   const primaryNav = isTeacherMode
     ? [
         { label: 'Lịch giảng dạy', href: '/lecturer/teaching-schedule' },
+        { label: 'Điểm danh', href: '/lecturer/attendance' },
         { label: 'Hồ sơ cá nhân', href: '/lecturer/profile' },
       ]
     : [
