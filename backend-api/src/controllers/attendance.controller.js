@@ -135,9 +135,39 @@ const bulkSave = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/attendance/my-attendance
+// Bao cao diem danh cho sinh vien hien tai
+// ─────────────────────────────────────────────────────────────
+const getMyAttendance = async (req, res) => {
+  try {
+    const userId = req.auth.sub;
+    const { classSectionId, subjectId } = req.query;
+
+    const report = await attendanceService.getMyAttendanceReport(userId, {
+      classSectionId,
+      subjectId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lay bao cao diem danh thanh cong',
+      data: report,
+    });
+  } catch (error) {
+    console.error('[AttendanceController] getMyAttendance error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Loi may chu, thu lai sau',
+    });
+  }
+};
+
 module.exports = {
   getClasses,
   getClassSlots,
   getSlotAttendance,
   bulkSave,
+  getMyAttendance,
 };

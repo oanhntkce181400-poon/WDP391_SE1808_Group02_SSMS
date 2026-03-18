@@ -7,6 +7,7 @@ import ApplicationStatusScreen from '../screens/student/ApplicationStatusScreen'
 import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
+import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
 
@@ -64,6 +65,9 @@ export default function AppNavigator() {
   let screen = <HomeScreen onNavigate={setActiveTab} />;
   if (activeTab === 'exam') {
     screen = <ExamScheduleScreen />;
+  }
+  if (activeTab === 'attendance') {
+    screen = <AttendanceReportScreen onNavigate={setActiveTab} />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;

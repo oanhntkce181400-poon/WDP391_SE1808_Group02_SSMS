@@ -41,4 +41,11 @@ router.post(
   attendanceController.bulkSave,
 );
 
+router.get(
+  '/my-attendance',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  attendanceController.getMyAttendance,
+);
+
 module.exports = router;

@@ -56,6 +56,7 @@ import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
 import AcademicCalendarManagementPage from "./pages/admin/AcademicCalendarManagementPage";
 import ViewGradesPage from "./pages/student/ViewGradesPage";
+import AttendanceReportPage from "./pages/student/AttendanceReportPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
 import LecturerAcademicCalendarPage from "./pages/lecturer/LecturerAcademicCalendarPage";
 import LecturerHomePage from "./pages/lecturer/LecturerHomePage";
@@ -140,6 +141,7 @@ export default function App() {
         <Route path="exams" element={<ExamSchedulePage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="grades" element={<ViewGradesPage />} />
+        <Route path="attendance-report" element={<AttendanceReportPage />} />
         <Route path="academic-calendar" element={<AcademicCalendarPage />} />
         <Route path="wishlist" element={<CourseWishlistPage />} />
         <Route path="waitlist" element={<CourseWishlistPage />} />

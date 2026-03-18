@@ -50,29 +50,29 @@ export default function HomeScreen({ onNavigate }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <SectionTitle title="Notification and Application status" />
+        <SectionTitle title="Thông báo và trạng thái đơn" />
         <View style={styles.grid2}>
           <FeatureCard
-            label="Notification"
+            label="Thông báo"
             icon={<Ionicons name="notifications" size={44} color="#f59e0b" />}
             disabled
           />
           <FeatureCard
-            label="Application status"
+            label="Trạng thái đơn"
             icon={<MaterialCommunityIcons name="clipboard-account" size={44} color="#f59e0b" />}
             onPress={() => onNavigate?.('application')}
           />
         </View>
 
-        <SectionTitle title="Information Access" />
+        <SectionTitle title="Tra cứu thông tin" />
         <View style={styles.grid2}>
           <FeatureCard
-            label="Weekly timetable"
+            label="Thời khóa biểu"
             icon={<MaterialCommunityIcons name="calendar-week" size={44} color="#f59e0b" />}
             disabled
           />
           <FeatureCard
-            label="Exam schedule"
+            label="Lịch thi"
             icon={<MaterialCommunityIcons name="calendar-clock" size={44} color="#f59e0b" />}
             onPress={() => onNavigate?.('exam')}
           />
@@ -86,15 +86,15 @@ export default function HomeScreen({ onNavigate }) {
           />
         </View>
 
-        <SectionTitle title="Reports" />
+        <SectionTitle title="Báo cáo" />
         <View style={styles.grid2}>
           <FeatureCard
-            label="Academic report"
-            icon={<MaterialCommunityIcons name="file-chart" size={44} color="#f59e0b" />}
-            disabled
+            label="Báo cáo điểm danh"
+            icon={<MaterialCommunityIcons name="clipboard-check" size={44} color="#f59e0b" />}
+            onPress={() => onNavigate?.('attendance')}
           />
           <FeatureCard
-            label="View profile"
+            label="Hồ sơ cá nhân"
             icon={<Ionicons name="person-circle" size={44} color="#f59e0b" />}
             onPress={() => onNavigate?.('profile')}
           />
