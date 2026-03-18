@@ -23,6 +23,8 @@ export default function ClassRegistrationPage() {
   const [validationResults, setValidationResults] = useState({});
   const [eligibility, setEligibility] = useState(null);
   const [toast, setToast] = useState(null);
+  const [selectedClassId, setSelectedClassId] = useState(null);
+  const [conflictPopup, setConflictPopup] = useState(null);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -132,7 +134,44 @@ export default function ClassRegistrationPage() {
     }
   };
 
+  const checkScheduleConflictNow = async (classId, { showWhenNoConflict = false } = {}) => {
+    try {
+      const response = await registrationService.validateScheduleConflict(classId);
+      const result = response?.data?.data || null;
+
+      if (result?.hasConflict) {
+        setConflictPopup({
+          classId,
+          message: result.message,
+          conflicts: result.conflicts || [],
+          selectedClass: result.selectedClass || null,
+        });
+        return result;
+      }
+
+      setConflictPopup(null);
+      if (showWhenNoConflict) {
+        showToast('No schedule conflict. You can continue registration.', 'success');
+      }
+      return result;
+    } catch (error) {
+      showToast(error?.response?.data?.message || 'Cannot check schedule conflict now', 'error');
+      return null;
+    }
+  };
+
+  const handleSelectClass = async (cls) => {
+    setSelectedClassId(cls._id);
+    await checkScheduleConflictNow(cls._id, { showWhenNoConflict: false });
+  };
+
   const handleRegister = async (cls) => {
+    const scheduleConflict = await checkScheduleConflictNow(cls._id, { showWhenNoConflict: false });
+    if (scheduleConflict?.hasConflict) {
+      showToast('Schedule conflict detected. Please choose another class section.', 'error');
+      return;
+    }
+
     let validation = validationResults[cls._id];
     if (!validation) {
       validation = await validateSingleClass(cls._id);
@@ -230,7 +269,15 @@ export default function ClassRegistrationPage() {
                   (validation ? !validation.isEligible : false);
 
                 return (
-                  <div key={cls._id} className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div
+                    key={cls._id}
+                    onClick={() => handleSelectClass(cls)}
+                    className={`cursor-pointer rounded-lg border bg-white shadow-sm transition ${
+                      selectedClassId === cls._id
+                        ? 'border-blue-400 ring-1 ring-blue-200'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
                     <div className="p-5">
                       <div className="mb-4 flex items-start justify-between gap-2">
                         <h3 className="text-lg font-bold text-gray-900">{cls.classCode}</h3>
@@ -302,6 +349,16 @@ export default function ClassRegistrationPage() {
                         </div>
                       )}
 
+                      {validation?.scheduleConflict?.hasConflict && (
+                        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                          <div className="mb-1 flex items-center gap-1 font-semibold">
+                            <AlertTriangle className="h-4 w-4" />
+                            Schedule conflict detected
+                          </div>
+                          <p>{validation.scheduleConflict.message}</p>
+                        </div>
+                      )}
+
                       {overloadInfo?.currentOverloadCount >= 2 && validation?.overload?.enrollingCourseIsOverload && (
                         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
                           <div className="flex items-center gap-1 font-semibold">
@@ -322,13 +379,19 @@ export default function ClassRegistrationPage() {
 
                       <div className="flex gap-2">
                         <button
-                          onClick={() => validateSingleClass(cls._id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            validateSingleClass(cls._id);
+                          }}
                           className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
                           Check
                         </button>
                         <button
-                          onClick={() => handleRegister(cls)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRegister(cls);
+                          }}
                           disabled={cannotRegister}
                           className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
@@ -378,6 +441,40 @@ export default function ClassRegistrationPage() {
             }`}
           >
             {toast.message}
+          </div>
+        </div>
+      )}
+
+      {conflictPopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-xl border border-red-200 bg-white p-5 shadow-2xl">
+            <div className="mb-3 flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="text-lg font-semibold">Schedule Conflict Warning</h3>
+            </div>
+            <p className="mb-3 text-sm text-red-700">{conflictPopup.message}</p>
+
+            {conflictPopup.conflicts?.length > 0 && (
+              <div className="mb-4 rounded-lg border border-red-100 bg-red-50 p-3">
+                <p className="mb-2 text-sm font-semibold text-red-800">Conflicted classes:</p>
+                <ul className="space-y-1 text-sm text-red-700">
+                  {conflictPopup.conflicts.map((item) => (
+                    <li key={item.classId || `${item.classCode}-${item.startTime}`}>
+                      • {item.classCode} ({item.subjectCode}) - Day {item.dayOfWeek}, {item.startTime} - {item.endTime}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setConflictPopup(null)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Choose another class
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -10,6 +10,9 @@ const registrationService = {
   validateWallet: (classId) =>
     axiosClient.post('/registrations/validate-wallet', { classId }),
 
+  validateScheduleConflict: (classId) =>
+    axiosClient.post('/registrations/check-schedule-conflict', { classId }),
+
   validateAll: (classId) =>
     axiosClient.post('/registrations/validate-all', { classId }),
 

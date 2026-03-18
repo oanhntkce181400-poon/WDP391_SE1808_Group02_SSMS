@@ -196,6 +196,94 @@ async function lockSchedule(req, res) {
   }
 }
 
+/**
+ * POST /api/classes/schedules/auto-generate
+ * UC124 - Auto generate timetable for selected subjects
+ */
+async function autoGenerateTimetables(req, res) {
+  try {
+    const {
+      semester,
+      academicYear,
+      subjectIds,
+      expectedEnrollment,
+      availableRooms,
+      availableTimeSlots,
+      startDate,
+      endDate,
+    } = req.body || {};
+
+    const data = await service.autoGenerateTimetables({
+      semester,
+      academicYear,
+      subjectIds,
+      expectedEnrollment,
+      availableRooms,
+      availableTimeSlots,
+      startDate,
+      endDate,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Tạo thời khóa biểu tự động thành công",
+      data,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+/**
+ * PATCH /api/classes/schedules/:scheduleId/reassign
+ * UC124 - Manual drag/drop adjustment after generation
+ */
+async function reassignGeneratedSchedule(req, res) {
+  try {
+    const { scheduleId } = req.params;
+    const { roomId, dayOfWeek, timeslotId } = req.body || {};
+
+    if (!roomId || !dayOfWeek || !timeslotId) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc: roomId, dayOfWeek, timeslotId",
+      });
+    }
+
+    const data = await service.reassignGeneratedSchedule(scheduleId, {
+      roomId,
+      dayOfWeek,
+      timeslotId,
+    });
+
+    return res.json({
+      success: true,
+      message: "Điều chỉnh lịch học thành công",
+      data,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+/**
+ * GET /api/classes/schedules/auto-generated?semester=1&academicYear=2026-2027&teacherId=...
+ * Reload generated schedules from DB (survive F5)
+ */
+async function getGeneratedTimetables(req, res) {
+  try {
+    const { semester, academicYear, teacherId } = req.query || {};
+    const data = await service.listGeneratedTimetables({ semester, academicYear, teacherId });
+    return res.json({
+      success: true,
+      message: 'Lấy danh sách thời khóa biểu đã tạo thành công',
+      data,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getClassSchedules,
   assignSchedule,
@@ -203,5 +291,8 @@ module.exports = {
   deleteSchedule,
   checkConflict,
   publishSchedule,
-  lockSchedule
+  lockSchedule,
+  autoGenerateTimetables,
+  reassignGeneratedSchedule,
+  getGeneratedTimetables,
 };

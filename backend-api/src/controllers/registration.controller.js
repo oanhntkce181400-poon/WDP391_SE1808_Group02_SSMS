@@ -110,6 +110,48 @@ const validateWallet = async (req, res) => {
   }
 };
 
+const validateScheduleConflict = async (req, res) => {
+  try {
+    const { classId } = req.body;
+    if (!classId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: classId',
+      });
+    }
+
+    const student = await resolveStudentFromAuth(req);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found for this user',
+      });
+    }
+
+    const result = await registrationService.checkScheduleConflict(student._id, classId);
+
+    if (!result.valid) {
+      return res.status(400).json({
+        success: false,
+        message: result.message,
+        data: result,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to validate schedule conflict',
+      error: error.message,
+    });
+  }
+};
+
 const validateAll = async (req, res) => {
   try {
     const { classId } = req.body;
@@ -128,10 +170,11 @@ const validateAll = async (req, res) => {
       });
     }
 
-    const [prerequisitesResult, capacityResult, walletResult, eligibility] = await Promise.all([
+    const [prerequisitesResult, capacityResult, walletResult, scheduleConflictResult, eligibility] = await Promise.all([
       registrationService.validatePrerequisites(student._id, classId),
       registrationService.validateClassCapacity(classId),
       registrationService.validateWallet(student._id, classId),
+      registrationService.checkScheduleConflict(student._id, classId),
       registrationService.getStudentEligibilitySummary(student._id, classId),
     ]);
 
@@ -139,12 +182,14 @@ const validateAll = async (req, res) => {
       prerequisitesResult.eligible &&
       !capacityResult.isFull &&
       walletResult.isSufficient &&
+      !scheduleConflictResult.hasConflict &&
       eligibility.canRegister;
 
     const validationErrors = [];
     if (!prerequisitesResult.eligible) validationErrors.push(prerequisitesResult.message);
     if (capacityResult.isFull) validationErrors.push(capacityResult.message);
     if (!walletResult.isSufficient) validationErrors.push(walletResult.message);
+    if (scheduleConflictResult.hasConflict) validationErrors.push(scheduleConflictResult.message);
     if (!eligibility.limits.overload.allowed) validationErrors.push(eligibility.limits.overload.message);
     if (!eligibility.limits.credit.allowed) validationErrors.push(eligibility.limits.credit.message);
     if (!eligibility.limits.cohortAccess.allowed) validationErrors.push(eligibility.limits.cohortAccess.message);
@@ -157,6 +202,7 @@ const validateAll = async (req, res) => {
         prerequisites: prerequisitesResult,
         capacity: capacityResult,
         wallet: walletResult,
+        scheduleConflict: scheduleConflictResult,
         overload: eligibility.limits.overload,
         credit: eligibility.limits.credit,
         cohortAccess: eligibility.limits.cohortAccess,
@@ -206,6 +252,7 @@ module.exports = {
   validatePrerequisites,
   validateClassCapacity,
   validateWallet,
+  validateScheduleConflict,
   validateAll,
   getEligibilitySummary,
 };

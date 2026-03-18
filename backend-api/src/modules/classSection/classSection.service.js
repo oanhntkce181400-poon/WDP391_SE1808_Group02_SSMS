@@ -5,6 +5,7 @@ const ClassEnrollment = require("../../models/classEnrollment.model");
 const Schedule = require("../../models/schedule.model");
 const Student = require("../../models/student.model");
 const User = require("../../models/user.model");
+const Teacher = require("../../models/teacher.model");
 const registrationService = require("../../services/registration.service");
 
 const REQUIRED_CLASS_FIELDS = [
@@ -151,6 +152,99 @@ async function updateClassSection(classId, updates = {}) {
   return updated;
 }
 
+function isPeriodOverlap(startA, endA, startB, endB) {
+  return Number(startA) <= Number(endB) && Number(startB) <= Number(endA);
+}
+
+async function assertLecturerNoConflictForClass(classSection, teacherId) {
+  if (!classSection) return;
+
+  const validStatuses = ["draft", "scheduled", "published", "locked"];
+
+  // Quick conflict check for legacy single-slot classes
+  if (classSection.dayOfWeek && classSection.timeslot && classSection.semester && classSection.academicYear) {
+    const legacyConflict = await ClassSection.findOne({
+      _id: { $ne: classSection._id },
+      teacher: teacherId,
+      semester: classSection.semester,
+      academicYear: classSection.academicYear,
+      dayOfWeek: classSection.dayOfWeek,
+      timeslot: classSection.timeslot,
+      status: { $in: validStatuses },
+    })
+      .select("_id classCode")
+      .lean();
+
+    if (legacyConflict) {
+      throw new Error(`Giảng viên đã có lịch dạy trùng tại lớp ${legacyConflict.classCode}`);
+    }
+  }
+
+  const targetSchedules = await Schedule.find({
+    classSection: classSection._id,
+    status: "active",
+  })
+    .select("dayOfWeek startPeriod endPeriod")
+    .lean();
+
+  if (targetSchedules.length === 0) return;
+
+  const teacherClasses = await ClassSection.find({
+    _id: { $ne: classSection._id },
+    teacher: teacherId,
+    semester: classSection.semester,
+    academicYear: classSection.academicYear,
+    status: { $in: validStatuses },
+  })
+    .select("_id classCode")
+    .lean();
+
+  if (teacherClasses.length === 0) return;
+
+  const teacherClassIds = teacherClasses.map((c) => c._id);
+  const codeById = new Map(teacherClasses.map((c) => [String(c._id), c.classCode]));
+
+  const occupied = await Schedule.find({
+    classSection: { $in: teacherClassIds },
+    status: "active",
+  })
+    .select("classSection dayOfWeek startPeriod endPeriod")
+    .lean();
+
+  for (const target of targetSchedules) {
+    for (const item of occupied) {
+      if (Number(item.dayOfWeek) !== Number(target.dayOfWeek)) continue;
+      if (!isPeriodOverlap(target.startPeriod, target.endPeriod, item.startPeriod, item.endPeriod)) continue;
+
+      const code = codeById.get(String(item.classSection)) || "(unknown)";
+      throw new Error(`Giảng viên đã có lịch dạy trùng tại lớp ${code}`);
+    }
+  }
+}
+
+async function assignLecturerToClass(classId, lecturerId) {
+  if (!classId || !lecturerId) {
+    throw new Error("Thiếu classId hoặc lecturerId");
+  }
+
+  const [classSection, teacher] = await Promise.all([
+    repo.findClassById(classId),
+    Teacher.findOne({ _id: lecturerId, isActive: true }).lean(),
+  ]);
+
+  if (!classSection) throw new Error("Class section not found");
+  if (!teacher) throw new Error("Lecturer not found or inactive");
+
+  if (String(classSection.teacher?._id || classSection.teacher) === String(lecturerId)) {
+    return classSection;
+  }
+
+  await assertLecturerNoConflictForClass(classSection, lecturerId);
+
+  const updated = await repo.updateClassById(classId, { teacher: lecturerId });
+  return updated;
+}
+
 async function deleteClassSection(classId) {
   const cls = await repo.findClassById(classId);
   if (!cls) throw new Error("Class section not found");
@@ -227,10 +321,11 @@ async function selfEnroll(userId, classId) {
     throw new Error("Student record not found");
   }
 
-  const [prerequisites, capacity, wallet, eligibility] = await Promise.all([
+  const [prerequisites, capacity, wallet, scheduleConflict, eligibility] = await Promise.all([
     registrationService.validatePrerequisites(student._id, classId),
     registrationService.validateClassCapacity(classId),
     registrationService.validateWallet(student._id, classId),
+    registrationService.checkScheduleConflict(student._id, classId),
     registrationService.getStudentEligibilitySummary(student._id, classId),
   ]);
 
@@ -238,6 +333,7 @@ async function selfEnroll(userId, classId) {
   if (!prerequisites.eligible) errors.push(prerequisites.message);
   if (capacity.isFull) errors.push(capacity.message);
   if (!wallet.isSufficient) errors.push(wallet.message);
+  if (scheduleConflict?.hasConflict) errors.push(scheduleConflict.message);
   if (!eligibility.limits.overload.allowed) errors.push(eligibility.limits.overload.message);
   if (!eligibility.limits.credit.allowed) errors.push(eligibility.limits.credit.message);
   if (!eligibility.limits.cohortAccess.allowed) errors.push(eligibility.limits.cohortAccess.message);
@@ -731,6 +827,74 @@ async function getClassDetails(classId, userId) {
   };
 }
 
+// ─── UC99 - View Class Roster ───────────────────────────────────
+
+async function getClassRosterForStudent(classId, userId) {
+  const ClassEnrollment = require("../../models/classEnrollment.model");
+  const Student = require("../../models/student.model");
+
+  // BR17: Authorization dựa trên enrollment hợp lệ
+  const student = await Student.findOne({ userId }).lean();
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  const cls = await repo.findClassById(classId);
+  if (!cls) {
+    throw new Error("Class section not found");
+  }
+
+  // BR16: Chỉ được xem roster của lớp đã enrolled
+  const myEnrollment = await ClassEnrollment.findOne({
+    classSection: classId,
+    student: student._id,
+    status: { $in: ["enrolled", "completed"] },
+  }).lean();
+
+  if (!myEnrollment) {
+    throw new Error("Bạn chỉ có thể xem danh sách lớp mà bạn đã đăng ký");
+  }
+
+  // BR18: Chỉ trả sinh viên thuộc class section được chọn
+  const enrollments = await ClassEnrollment.find({
+    classSection: classId,
+    status: { $in: ["enrolled", "completed"] },
+  })
+    .populate("student", "studentCode fullName email")
+    .sort({ createdAt: 1 })
+    .lean();
+
+  return {
+    classSection: {
+      _id: cls._id,
+      classCode: cls.classCode,
+      className: cls.className,
+      subject: cls.subject
+        ? {
+            subjectCode: cls.subject.subjectCode,
+            subjectName: cls.subject.subjectName,
+          }
+        : null,
+      teacher: cls.teacher
+        ? {
+            teacherCode: cls.teacher.teacherCode,
+            fullName: cls.teacher.fullName,
+          }
+        : null,
+    },
+    students: enrollments
+      .filter((e) => e.student)
+      .map((e) => ({
+        enrollmentId: e._id,
+        studentId: e.student._id,
+        studentCode: e.student.studentCode,
+        fullName: e.student.fullName,
+        email: e.student.email,
+        status: e.status,
+      })),
+  };
+}
+
 // ─── Bulk Create Class Sections from Curriculum ───────────────────────────────────
 
 async function bulkCreateClassSections(classDataList, createdBy) {
@@ -779,6 +943,7 @@ module.exports = {
   getClassById,
   createClassSection,
   updateClassSection,
+  assignLecturerToClass,
   deleteClassSection,
   enrollStudent,
   getStudentEnrollments,
@@ -792,5 +957,6 @@ module.exports = {
   searchAvailableClasses,
   getClassListWithCapacity,
   getClassDetails,
+  getClassRosterForStudent,
   bulkCreateClassSections,
 };

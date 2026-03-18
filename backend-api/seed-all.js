@@ -55,32 +55,54 @@ function parseStudentCode(email) {
 
 async function ensureStudents(db) {
   const users = await db.collection('users').find({ role: 'student' }).toArray();
-  const existing = await db.collection('students').find({}).project({ email: 1 }).toArray();
-  const existingEmails = new Set(existing.map(s => s.email));
+  if (users.length === 0) {
+    console.log('  No student users found in users collection.');
+    return;
+  }
 
-  const toCreate = users.filter(u => !existingEmails.has(u.email));
-  if (toCreate.length === 0) {
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const user of users) {
+    const filter = {
+      $or: [
+        { userId: user._id },
+        { email: String(user.email).toLowerCase() },
+      ],
+    };
+
+    const update = {
+      $set: {
+        userId: user._id,
+        email: String(user.email).toLowerCase(),
+        fullName: user.fullName || user.name || 'Sinh viên',
+        cohort: '18',
+        majorCode: 'CE',
+        curriculumCode: 'CEK18',
+        status: 'active',
+        enrollmentYear: 2023,
+        updatedAt: new Date(),
+      },
+      $setOnInsert: {
+        studentCode: parseStudentCode(user.email),
+        createdAt: new Date(),
+      },
+    };
+
+    const result = await db.collection('students').updateOne(filter, update, { upsert: true });
+    if (result.upsertedCount > 0) {
+      createdCount += 1;
+    } else {
+      updatedCount += 1;
+    }
+  }
+
+  if (createdCount === 0 && updatedCount === 0) {
     console.log('  All users already have student records.');
     return;
   }
 
-  const docs = toCreate.map(u => ({
-    userId: u._id,
-    email: u.email,
-    fullName: u.fullName || u.name || 'Sinh viên',
-    studentCode: parseStudentCode(u.email),
-    cohort: '18',
-    majorCode: 'CE',
-    curriculumCode: 'CEK18',
-    status: 'active',
-    enrollmentYear: 2023,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }));
-
-  await db.collection('students').insertMany(docs);
-  console.log(`  Created ${docs.length} student records:`);
-  docs.forEach(d => console.log(`    ${d.email} -> ${d.studentCode}`));
+  console.log(`  Students OK (created: ${createdCount}, updated: ${updatedCount})`);
 }
 
 async function ensureTimeslots(db) {

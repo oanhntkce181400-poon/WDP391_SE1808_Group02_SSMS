@@ -7,6 +7,17 @@ const curriculumService = require('./curriculum.service');
 const paymentValidationService = require('./paymentValidation.service');
 const registrationPeriodService = require('./registrationPeriod.service');
 
+function timeToMinutes(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function isOverlapped(startA, endA, startB, endB) {
+  return startA < endB && startB < endA;
+}
+
 async function resolveSemester(semesterId, classSection) {
   if (semesterId) {
     return Semester.findById(semesterId).lean();
@@ -221,6 +232,126 @@ const validateWallet = async (studentId, classId) => {
   };
 };
 
+/**
+ * UC91 - Prevent Schedule Conflicts
+ * BR1: Không cho đăng ký 2 lớp trùng lịch
+ * BR2: So sánh theo dayOfWeek, startTime, endTime
+ * BR3: Phải validate trước khi confirm đăng ký
+ */
+const checkScheduleConflict = async (studentId, classSectionId) => {
+  const selectedClass = await ClassSection.findById(classSectionId)
+    .populate('timeslot', 'startTime endTime groupName')
+    .populate('subject', 'subjectCode subjectName')
+    .lean();
+
+  if (!selectedClass) {
+    return {
+      valid: false,
+      hasConflict: true,
+      message: 'Selected class section not found',
+      conflicts: [],
+    };
+  }
+
+  const selectedDay = selectedClass.dayOfWeek;
+  const selectedStart = selectedClass.timeslot?.startTime;
+  const selectedEnd = selectedClass.timeslot?.endTime;
+
+  if (!selectedDay || !selectedStart || !selectedEnd) {
+    return {
+      valid: false,
+      hasConflict: true,
+      message: 'Selected class section schedule is missing or invalid',
+      conflicts: [],
+    };
+  }
+
+  const selectedStartMin = timeToMinutes(selectedStart);
+  const selectedEndMin = timeToMinutes(selectedEnd);
+  if (selectedStartMin == null || selectedEndMin == null) {
+    return {
+      valid: false,
+      hasConflict: true,
+      message: 'Selected class section time is invalid',
+      conflicts: [],
+    };
+  }
+
+  const semester = await resolveSemester(null, selectedClass);
+  const semesterEnrollments = await getSemesterEnrollments(studentId, semester);
+
+  if (!Array.isArray(semesterEnrollments)) {
+    return {
+      valid: false,
+      hasConflict: true,
+      message: 'Cannot retrieve registered classes',
+      conflicts: [],
+    };
+  }
+
+  const existingClasses = semesterEnrollments
+    .map((e) => e.classSection)
+    .filter((cls) => cls && String(cls._id) !== String(classSectionId));
+
+  const conflicts = [];
+
+  for (const cls of existingClasses) {
+    const day = cls.dayOfWeek;
+    const start = cls?.timeslot?.startTime;
+    const end = cls?.timeslot?.endTime;
+
+    if (!day || !start || !end) continue;
+    if (day !== selectedDay) continue;
+
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+    if (startMin == null || endMin == null) continue;
+
+    if (isOverlapped(selectedStartMin, selectedEndMin, startMin, endMin)) {
+      conflicts.push({
+        classId: cls._id,
+        classCode: cls.classCode,
+        className: cls.className,
+        subjectCode: cls?.subject?.subjectCode,
+        subjectName: cls?.subject?.subjectName,
+        dayOfWeek: day,
+        startTime: start,
+        endTime: end,
+      });
+    }
+  }
+
+  if (conflicts.length > 0) {
+    return {
+      valid: true,
+      hasConflict: true,
+      message: 'Schedule conflict detected. Please choose another class section.',
+      selectedClass: {
+        classId: selectedClass._id,
+        classCode: selectedClass.classCode,
+        dayOfWeek: selectedDay,
+        startTime: selectedStart,
+        endTime: selectedEnd,
+      },
+      conflicts,
+    };
+  }
+
+  return {
+    valid: true,
+    hasConflict: false,
+    message: 'No schedule conflict found',
+    selectedClass: {
+      classId: selectedClass._id,
+      classCode: selectedClass.classCode,
+      dayOfWeek: selectedDay,
+      startTime: selectedStart,
+      endTime: selectedEnd,
+    },
+    conflicts: [],
+  };
+};
+
 async function checkOverloadLimit(studentId, semesterId, classId = null) {
   const student = await Student.findById(studentId).lean();
   if (!student) {
@@ -391,6 +522,7 @@ module.exports = {
   validatePrerequisites,
   validateClassCapacity,
   validateWallet,
+  checkScheduleConflict,
   verifyPrerequisiteSubjects,
   checkOverloadLimit,
   checkCreditLimit,

@@ -52,8 +52,9 @@ const getClasses = async (req, res) => {
 const getClassSlots = async (req, res) => {
   try {
     const { classId } = req.params;
+    const userId = req.auth.sub;
 
-    const slots = await attendanceService.getClassSlots(classId);
+    const slots = await attendanceService.getClassSlots(classId, userId);
 
     return res.status(200).json({
       success: true,
@@ -77,8 +78,9 @@ const getClassSlots = async (req, res) => {
 const getSlotAttendance = async (req, res) => {
   try {
     const { classId, slotId } = req.params;
+    const userId = req.auth.sub;
 
-    const records = await attendanceService.getSlotAttendance(classId, slotId);
+    const records = await attendanceService.getSlotAttendance(classId, slotId, userId);
 
     return res.status(200).json({
       success: true,
@@ -105,10 +107,11 @@ const bulkSave = async (req, res) => {
   try {
     // Lấy payload từ body request
     const payload = req.body;
+    const userId = req.auth.sub;
 
     // Gọi service lưu điểm danh
     // Service sẽ tự động gọi applyWarningRule sau khi lưu
-    const result = await attendanceService.bulkSave(payload);
+    const result = await attendanceService.bulkSave(payload, userId);
 
     // Nếu tỷ lệ vắng > 15%, trả về thêm cảnh báo
     const message = result.warningTriggered

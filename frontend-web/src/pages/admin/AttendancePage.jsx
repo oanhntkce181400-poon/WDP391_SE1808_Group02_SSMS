@@ -66,6 +66,84 @@ function dateToSlotId(dateStr) {
   return dateStr; // Dùng luôn ngày làm slotId
 }
 
+function getThreeMonthBounds(baseDate = new Date()) {
+  const start = new Date(baseDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 3);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
+function toYmd(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function toSystemDayOfWeek(date) {
+  const jsDay = date.getDay();
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+function normalizeDateOnly(input) {
+  if (!input) return null;
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatDateVi(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function getAllowedDateOptionsForClass(cls, now = new Date()) {
+  if (!cls) return [];
+  const { start, end } = getThreeMonthBounds(now);
+
+  const dayCandidates = Array.isArray(cls.scheduleDays) && cls.scheduleDays.length > 0
+    ? cls.scheduleDays
+    : (cls.dayOfWeek ? [cls.dayOfWeek] : []);
+
+  const allowedDays = dayCandidates
+    .map((d) => Number(d))
+    .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)
+    .sort((a, b) => a - b);
+
+  if (allowedDays.length === 0) return [];
+
+  const classStart = normalizeDateOnly(cls.startDate);
+  const classEnd = normalizeDateOnly(cls.endDate);
+
+  const results = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const day = toSystemDayOfWeek(cursor);
+    const inAllowedDay = allowedDays.includes(day);
+    const inClassRange =
+      (!classStart || cursor >= classStart) &&
+      (!classEnd || cursor <= classEnd);
+
+    if (inAllowedDay && inClassRange) {
+      results.push(toYmd(cursor));
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return results;
+}
+
 // ─────────────────────────────────────────────────────────────
 // COMPONENT CHÍNH
 // ─────────────────────────────────────────────────────────────
@@ -91,6 +169,7 @@ export default function AttendancePage() {
   const [isSaving, setIsSaving]         = useState(false);
   const [successMsg, setSuccessMsg]     = useState('');
   const [saveWarning, setSaveWarning]   = useState('');
+  const [validationMsg, setValidationMsg] = useState('');
 
   // Ngày tạo buổi mới
   const [newSlotDate, setNewSlotDate] = useState(
@@ -123,6 +202,11 @@ export default function AttendancePage() {
     try {
       const res = await attendanceService.getClassSlots(cls._id);
       setSlots(res.data.data || []);
+      const allowed = getAllowedDateOptionsForClass(cls);
+      if (allowed.length > 0) {
+        const today = toYmd(new Date());
+        setNewSlotDate(allowed.includes(today) ? today : allowed[0]);
+      }
       setView('slots');
     } catch (err) {
       setLoadError(err.response?.data?.message || 'Không tải được danh sách buổi học');
@@ -142,6 +226,7 @@ export default function AttendancePage() {
         slot.slotId,
       );
       setStudents(res.data.data || []);
+      setValidationMsg('');
       setView('attendance');
     } catch (err) {
       setLoadError(err.response?.data?.message || 'Không tải được dữ liệu điểm danh');
@@ -153,6 +238,12 @@ export default function AttendancePage() {
   // ── TẠO BUỔI MỚI (chưa có điểm danh nào) ─────────────────
   async function handleNewSlot() {
     if (!newSlotDate) return;
+
+    const allowedDates = getAllowedDateOptionsForClass(selectedClass);
+    if (allowedDates.length > 0 && !allowedDates.includes(newSlotDate)) {
+      setValidationMsg(`Ngay diem danh khong hop le. Vui long chon mot trong cac ngay: ${allowedDates.join(', ')}`);
+      return;
+    }
 
     // Kiểm tra buổi ngày đó đã có chưa
     const exists = slots.some((s) => s.slotId === newSlotDate);
@@ -173,6 +264,9 @@ export default function AttendancePage() {
     };
     await loadAttendance(newSlot);
   }
+
+  const allowedDateOptions = selectedClass ? getAllowedDateOptionsForClass(selectedClass) : [];
+  const dateBounds = getThreeMonthBounds(new Date());
 
   // ── THAY ĐỔI TRẠNG THÁI ĐIỂM DANH 1 SINH VIÊN ────────────
   function handleStatusChange(studentId, newStatus) {
@@ -203,6 +297,14 @@ export default function AttendancePage() {
   async function handleSave() {
     if (students.length === 0) return;
 
+    const invalid = students.filter((s) => !['Present', 'Late', 'Absent'].includes(s.status));
+    if (invalid.length > 0) {
+      setValidationMsg(`Vui long chon trang thai diem danh cho tat ca sinh vien (${invalid.length} ban chua chon).`);
+      return;
+    }
+
+    setValidationMsg('');
+
     setIsSaving(true);
     setSaveWarning('');
     try {
@@ -218,7 +320,7 @@ export default function AttendancePage() {
         })),
       };
 
-      const res = await attendanceService.bulkSave(payload);
+      const res = await attendanceService.markAttendance(payload);
       const result = res.data.data;
 
       // Hiện cảnh báo nếu tỷ lệ vắng > 15%
@@ -235,7 +337,7 @@ export default function AttendancePage() {
       loadSlots(selectedClass);
     } catch (err) {
       const msg = err.response?.data?.message || 'Lưu thất bại, thử lại sau';
-      alert('Lỗi: ' + msg);
+      setValidationMsg(msg);
     } finally {
       setIsSaving(false);
     }
@@ -265,6 +367,11 @@ export default function AttendancePage() {
             {saveWarning}
           </div>
         )}
+        {validationMsg && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800 text-sm font-medium">
+            {validationMsg}
+          </div>
+        )}
 
         {/* ════════════════════════════════════════════════════
             VIEW 1: DANH SÁCH LỚP HỌC (dạng thẻ)
@@ -290,6 +397,9 @@ export default function AttendancePage() {
             loadError={loadError}
             newSlotDate={newSlotDate}
             onSlotDateChange={setNewSlotDate}
+            allowedDateOptions={allowedDateOptions}
+            minDate={toYmd(dateBounds.start)}
+            maxDate={toYmd(dateBounds.end)}
             onSelectSlot={loadAttendance}
             onNewSlot={handleNewSlot}
             onBack={() => setView('classes')}
@@ -475,6 +585,9 @@ function SlotListView({
   loadError,
   newSlotDate,
   onSlotDateChange,
+  allowedDateOptions,
+  minDate,
+  maxDate,
   onSelectSlot,
   onNewSlot,
   onBack,
@@ -523,13 +636,34 @@ function SlotListView({
       {/* Tạo buổi điểm danh mới */}
       <div className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
         <p className="mb-2 text-sm font-semibold text-indigo-800">📅 Tạo buổi điểm danh mới</p>
+        {Array.isArray(allowedDateOptions) && allowedDateOptions.length > 0 && (
+          <p className="mb-2 text-xs text-indigo-700">
+            Ngày hợp lệ 3 tháng tới: {allowedDateOptions.join(', ')}
+          </p>
+        )}
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={newSlotDate}
-            onChange={(e) => onSlotDateChange(e.target.value)}
-            className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+          {Array.isArray(allowedDateOptions) && allowedDateOptions.length > 0 ? (
+            <select
+              value={newSlotDate}
+              onChange={(e) => onSlotDateChange(e.target.value)}
+              className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              {allowedDateOptions.map((d) => (
+                <option key={d} value={d}>
+                  {formatDateVi(d)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="date"
+              value={newSlotDate}
+              onChange={(e) => onSlotDateChange(e.target.value)}
+              min={minDate}
+              max={maxDate}
+              className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          )}
           <button
             onClick={onNewSlot}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
@@ -804,6 +938,11 @@ function StudentRow({ student, index, onStatusChange, onNoteChange }) {
             </button>
           );
         })}
+        {!student.status && (
+          <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+            Chua chon
+          </span>
+        )}
       </div>
 
       {/* Ô ghi chú */}

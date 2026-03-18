@@ -16,6 +16,9 @@ const classService = {
 
   updateClass: (classId, updates) => axiosClient.patch(`/classes/${classId}`, updates),
 
+  assignLecturer: (classId, lecturerId) =>
+    axiosClient.patch(`/class-sections/${classId}/assign-lecturer`, { lecturerId }),
+
   deleteClass: (classId) => axiosClient.delete(`/classes/${classId}`),
 
   enrollStudent: (classId, studentId) =>
@@ -36,6 +39,8 @@ const classService = {
 
    // UC39 - View Class List with Capacity
    getClassList: () => axiosClient.get('/classes/list'),
+  // UC99 - View Class Roster (student)
+  getClassRoster: (classId) => axiosClient.get(`/class-sections/${classId}/students`),
    // Get class details for student - xem chi tiết lớp học phần
   getClassDetails: (classId) => axiosClient.get(`/classes/${classId}/details`),
   // Reassign class - chuyển sinh viên giữa các lớp

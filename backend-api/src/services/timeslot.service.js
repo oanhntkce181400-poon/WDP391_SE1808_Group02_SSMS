@@ -1,222 +1,233 @@
 const Timeslot = require('../models/timeslot.model');
+const ClassSection = require('../models/classSection.model');
 
 class TimeslotService {
-  // Get all timeslots with pagination
   async getTimeslots({ page = 1, limit = 10, keyword = '' }) {
-    try {
-      const skip = (page - 1) * limit;
-      const query = {};
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(100, Math.max(1, Number(limit) || 10));
+    const skip = (safePage - 1) * safeLimit;
 
-      if (keyword) {
-        query.groupName = { $regex: keyword, $options: 'i' };
-      }
-
-      const [data, total] = await Promise.all([
-        Timeslot.find(query)
-          .sort({ startDate: -1 })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        Timeslot.countDocuments(query),
-      ]);
-
-      return {
-        data,
-        total,
-        page,
-        totalPages: Math.ceil(total / limit),
-      };
-    } catch (error) {
-      throw error;
+    const query = {};
+    if (keyword) {
+      query.$or = [
+        { groupName: { $regex: keyword, $options: 'i' } },
+        { description: { $regex: keyword, $options: 'i' } },
+      ];
     }
+
+    const [data, total] = await Promise.all([
+      Timeslot.find(query)
+        .sort({ startPeriod: 1, startTime: 1, createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
+      Timeslot.countDocuments(query),
+    ]);
+
+    return {
+      data,
+      total,
+      page: safePage,
+      totalPages: Math.ceil(total / safeLimit),
+    };
   }
 
-  // Get single timeslot by ID
   async getTimeslot(id) {
-    try {
-      const timeslot = await Timeslot.findById(id);
-      if (!timeslot) {
-        throw new Error('Timeslot not found');
-      }
-      return timeslot;
-    } catch (error) {
-      throw error;
+    const timeslot = await Timeslot.findById(id).lean();
+    if (!timeslot) {
+      const err = new Error('Timeslot not found');
+      err.statusCode = 404;
+      throw err;
     }
+    return timeslot;
   }
 
-  // Create new timeslot
   async createTimeslot(data) {
-    try {
-      // Validate time format
-      if (!this.isValidTimeFormat(data.startTime)) {
-        throw new Error('Invalid start time format. Use HH:MM format');
-      }
-      if (!this.isValidTimeFormat(data.endTime)) {
-        throw new Error('Invalid end time format. Use HH:MM format');
-      }
+    this.validateTimeslotInput(data, false);
+    const normalized = this.normalizePayload(data);
 
-      // Validate end time after start time
-      if (!this.isEndTimeAfterStartTime(data.startTime, data.endTime)) {
-        throw new Error('End time must be after start time');
-      }
+    await this.ensureUniqueTimeRange(normalized.startTime, normalized.endTime);
+    await this.ensureNoTimeOverlap(normalized.startTime, normalized.endTime);
 
-      // Validate dates
-      const startDate = new Date(data.startDate);
-      const endDate = new Date(data.endDate);
-      if (endDate < startDate) {
-        throw new Error('End date must be after start date');
-      }
-
-      // Check for time overlap with existing timeslots in the same group
-      const overlap = await this.checkTimeOverlap(data.startTime, data.endTime, null, data.groupName);
-      if (overlap) {
-        throw new Error(`Time slot conflicts with existing slot in same group: ${overlap.groupName} (${overlap.startTime} - ${overlap.endTime})`);
-      }
-
-      const timeslot = new Timeslot(data);
-      await timeslot.save();
-      return timeslot;
-    } catch (error) {
-      throw error;
-    }
+    const created = await Timeslot.create(normalized);
+    return created.toObject();
   }
 
-  // Update timeslot
   async updateTimeslot(id, data) {
-    try {
-      const timeslot = await Timeslot.findById(id);
-      if (!timeslot) {
-        throw new Error('Timeslot not found');
-      }
-
-      // Validate time if provided
-      if (data.startTime && !this.isValidTimeFormat(data.startTime)) {
-        throw new Error('Invalid start time format. Use HH:MM format');
-      }
-      if (data.endTime && !this.isValidTimeFormat(data.endTime)) {
-        throw new Error('Invalid end time format. Use HH:MM format');
-      }
-
-      // Check end time after start time
-      const startTime = data.startTime || timeslot.startTime;
-      const endTime = data.endTime || timeslot.endTime;
-      if (!this.isEndTimeAfterStartTime(startTime, endTime)) {
-        throw new Error('End time must be after start time');
-      }
-
-      // Check for time overlap with existing timeslots in the same group (excluding current one)
-      const groupName = data.groupName || timeslot.groupName;
-      const overlap = await this.checkTimeOverlap(startTime, endTime, id, groupName);
-      if (overlap) {
-        throw new Error(`Time slot conflicts with existing slot in same group: ${overlap.groupName} (${overlap.startTime} - ${overlap.endTime})`);
-      }
-
-      // Validate dates if provided
-      if (data.startDate || data.endDate) {
-        const startDate = data.startDate ? new Date(data.startDate) : timeslot.startDate;
-        const endDate = data.endDate ? new Date(data.endDate) : timeslot.endDate;
-        if (endDate < startDate) {
-          throw new Error('End date must be after start date');
-        }
-        if (data.startDate) timeslot.startDate = startDate;
-        if (data.endDate) timeslot.endDate = endDate;
-      }
-
-      // Update fields
-      if (data.groupName) timeslot.groupName = data.groupName;
-      if (data.description !== undefined) timeslot.description = data.description;
-      if (data.startTime) timeslot.startTime = data.startTime;
-      if (data.endTime) timeslot.endTime = data.endTime;
-      if (data.sessionsPerDay) timeslot.sessionsPerDay = data.sessionsPerDay;
-      if (data.status) timeslot.status = data.status;
-
-      await timeslot.save();
-      return timeslot;
-    } catch (error) {
-      throw error;
+    const current = await Timeslot.findById(id);
+    if (!current) {
+      const err = new Error('Timeslot not found');
+      err.statusCode = 404;
+      throw err;
     }
+
+    this.validateTimeslotInput(data, true);
+
+    const merged = {
+      groupName: data.groupName ?? current.groupName,
+      description: data.description ?? current.description,
+      startTime: data.startTime ?? current.startTime,
+      endTime: data.endTime ?? current.endTime,
+      startPeriod: data.startPeriod ?? current.startPeriod,
+      endPeriod: data.endPeriod ?? current.endPeriod,
+      status: data.status ?? current.status,
+    };
+
+    const normalized = this.normalizePayload(merged);
+
+    await this.ensureUniqueTimeRange(normalized.startTime, normalized.endTime, id);
+    await this.ensureNoTimeOverlap(normalized.startTime, normalized.endTime, id);
+
+    const periodChanged =
+      Number(current.startPeriod) !== Number(normalized.startPeriod) ||
+      Number(current.endPeriod) !== Number(normalized.endPeriod);
+
+    if (periodChanged) {
+      const usedCount = await this.countTimeslotDependencies(id);
+      if (usedCount > 0) {
+        const err = new Error('Timeslot đang được sử dụng trong lớp học phần, không thể đổi tiết bắt đầu/kết thúc');
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+
+    current.groupName = normalized.groupName;
+    current.description = normalized.description;
+    current.startTime = normalized.startTime;
+    current.endTime = normalized.endTime;
+    current.startPeriod = normalized.startPeriod;
+    current.endPeriod = normalized.endPeriod;
+    current.status = normalized.status;
+
+    await current.save();
+    return current.toObject();
   }
 
-  // Delete timeslot
   async deleteTimeslot(id) {
-    try {
-      const timeslot = await Timeslot.findById(id);
-      if (!timeslot) {
-        throw new Error('Timeslot not found');
-      }
-
-      await timeslot.deleteOne();
-      return { message: 'Timeslot deleted successfully' };
-    } catch (error) {
-      throw error;
+    const timeslot = await Timeslot.findById(id);
+    if (!timeslot) {
+      const err = new Error('Timeslot not found');
+      err.statusCode = 404;
+      throw err;
     }
-  }
 
-  // Get timeslots by date range
-  async getTimeslotsByDateRange(startDate, endDate) {
-    try {
-      const query = { status: 'active' };
-      
-      if (startDate || endDate) {
-        query.startDate = {};
-        if (startDate) query.startDate.$gte = new Date(startDate);
-        if (endDate) query.startDate.$lte = new Date(endDate);
-      }
-
-      const timeslots = await Timeslot.find(query).sort({ startDate: 1 });
-      return timeslots;
-    } catch (error) {
-      throw error;
+    const usedCount = await this.countTimeslotDependencies(id);
+    if (usedCount > 0) {
+      const err = new Error('Timeslot đang được sử dụng bởi lớp học phần, không thể xóa');
+      err.statusCode = 409;
+      throw err;
     }
+
+    await timeslot.deleteOne();
+    return { message: 'Timeslot deleted successfully' };
   }
 
-  // Helper: Validate time format HH:MM
-  isValidTimeFormat(time) {
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    return timeRegex.test(time);
+  async countTimeslotDependencies(timeslotId) {
+    return ClassSection.countDocuments({
+      timeslot: timeslotId,
+      status: { $in: ['draft', 'scheduled', 'published', 'locked'] },
+    });
   }
 
-  // Helper: Check if end time is after start time
-  isEndTimeAfterStartTime(startTime, endTime) {
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-    return endMinutes > startMinutes;
-  }
-
-  // Helper: Check for time overlap with existing timeslots in the same group
-  async checkTimeOverlap(startTime, endTime, excludeId = null, groupName = null) {
-    try {
-      const query = excludeId ? { _id: { $ne: excludeId } } : {};
-      // Only check timeslots with same groupName to allow different groups to have overlapping times
-      if (groupName) {
-        query.groupName = groupName;
-      }
-      
-      const existingTimeslots = await Timeslot.find(query).lean();
-
-      const [newStartHour, newStartMin] = startTime.split(':').map(Number);
-      const [newEndHour, newEndMin] = endTime.split(':').map(Number);
-      const newStart = newStartHour * 60 + newStartMin;
-      const newEnd = newEndHour * 60 + newEndMin;
-
-      for (const slot of existingTimeslots) {
-        const [existStartHour, existStartMin] = slot.startTime.split(':').map(Number);
-        const [existEndHour, existEndMin] = slot.endTime.split(':').map(Number);
-        const existStart = existStartHour * 60 + existStartMin;
-        const existEnd = existEndHour * 60 + existEndMin;
-
-        // Check for overlap: new slot overlaps if it starts before existing ends AND ends after existing starts
-        if (newStart < existEnd && newEnd > existStart) {
-          return slot;
+  validateTimeslotInput(data, isPartial = false) {
+    const requiredFields = ['groupName', 'startTime', 'endTime', 'startPeriod', 'endPeriod'];
+    if (!isPartial) {
+      for (const field of requiredFields) {
+        if (data[field] == null || data[field] === '') {
+          throw new Error(`Missing required field: ${field}`);
         }
       }
-
-      return null;
-    } catch (error) {
-      throw error;
     }
+
+    if (data.startTime != null && !this.isValidTimeFormat(data.startTime)) {
+      throw new Error('Invalid start time format. Use HH:MM format');
+    }
+    if (data.endTime != null && !this.isValidTimeFormat(data.endTime)) {
+      throw new Error('Invalid end time format. Use HH:MM format');
+    }
+
+    const startTime = data.startTime;
+    const endTime = data.endTime;
+    if (startTime && endTime && !this.isEndTimeAfterStartTime(startTime, endTime)) {
+      throw new Error('End time must be after start time');
+    }
+
+    if (data.startPeriod != null && data.endPeriod != null) {
+      const startPeriod = Number(data.startPeriod);
+      const endPeriod = Number(data.endPeriod);
+      if (!Number.isInteger(startPeriod) || !Number.isInteger(endPeriod)) {
+        throw new Error('startPeriod and endPeriod must be integer');
+      }
+      if (startPeriod < 1 || endPeriod < 1 || startPeriod > 10 || endPeriod > 10) {
+        throw new Error('startPeriod and endPeriod must be between 1 and 10');
+      }
+      if (endPeriod < startPeriod) {
+        throw new Error('endPeriod must be greater than or equal to startPeriod');
+      }
+    }
+  }
+
+  normalizePayload(data) {
+    return {
+      groupName: String(data.groupName || '').trim(),
+      description: String(data.description || '').trim(),
+      startTime: String(data.startTime || '').trim(),
+      endTime: String(data.endTime || '').trim(),
+      startPeriod: Number(data.startPeriod),
+      endPeriod: Number(data.endPeriod),
+      status: data.status || 'active',
+    };
+  }
+
+  async ensureUniqueTimeRange(startTime, endTime, excludeId = null) {
+    const query = {
+      startTime,
+      endTime,
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    };
+
+    const existing = await Timeslot.findOne(query).lean();
+    if (existing) {
+      const err = new Error('Time slot with same start and end time already exists');
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  async ensureNoTimeOverlap(startTime, endTime, excludeId = null) {
+    const all = await Timeslot.find(excludeId ? { _id: { $ne: excludeId } } : {})
+      .select('groupName startTime endTime')
+      .lean();
+
+    const newStart = this.toMinutes(startTime);
+    const newEnd = this.toMinutes(endTime);
+
+    const conflict = all.find((slot) => {
+      const existStart = this.toMinutes(slot.startTime);
+      const existEnd = this.toMinutes(slot.endTime);
+      return newStart < existEnd && newEnd > existStart;
+    });
+
+    if (conflict) {
+      const err = new Error(
+        `Time slot overlaps with existing slot: ${conflict.groupName} (${conflict.startTime}-${conflict.endTime})`,
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  isValidTimeFormat(time) {
+    return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+  }
+
+  toMinutes(time) {
+    const [h, m] = String(time).split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  isEndTimeAfterStartTime(startTime, endTime) {
+    return this.toMinutes(endTime) > this.toMinutes(startTime);
   }
 }
 

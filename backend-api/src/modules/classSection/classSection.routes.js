@@ -56,13 +56,21 @@ router.get(
 );
 router.get("/:classId/enrollments", authMiddleware, ctrl.getClassEnrollments);
 
-// Class Details for Student - xem chi tiết lớp học phần (KHÔNG cần auth)
-router.get("/:classId/details", ctrl.getClassDetails);
+// Class Details for Student - xem chi tiết lớp học phần (cần auth)
+router.get("/:classId/details", authMiddleware, ctrl.getClassDetails);
 router.post(
   "/:classId/self-enroll",
   authMiddleware,
   rbacMiddleware(["student"]),
   ctrl.selfEnroll,
+);
+
+// Assign lecturer to class section
+router.patch(
+  "/:classId/assign-lecturer",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.assignLecturer,
 );
 
 // Class Section CRUD - PHẢI ĐẶT SAU các route cụ thể

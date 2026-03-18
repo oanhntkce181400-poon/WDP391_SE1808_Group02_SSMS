@@ -37,6 +37,15 @@ router.post(
   registrationController.validateWallet
 );
 
+// UC91 - Prevent Schedule Conflicts
+// POST /api/registrations/check-schedule-conflict
+router.post(
+  '/check-schedule-conflict',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  registrationController.validateScheduleConflict
+);
+
 // Combined validation endpoint
 // POST /api/registrations/validate-all
 router.post(

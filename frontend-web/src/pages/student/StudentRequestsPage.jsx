@@ -15,6 +15,13 @@ const REQUEST_TYPES = [
   'Khác',
 ];
 
+const REQUEST_TYPES_NEED_DATE_RANGE = new Set([
+  'Xin nghỉ học có phép',
+  'Xin hoãn thi',
+  'Xin bảo lưu kết quả học tập',
+  'Xin gia hạn học phí',
+]);
+
 const STATUS_STYLES = {
   Pending:    'bg-yellow-100 text-yellow-800',
   Processing: 'bg-blue-100 text-blue-800',
@@ -184,7 +191,17 @@ export default function StudentRequestsPage() {
 
   function handleFormChange(e) {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === 'requestType') {
+        const next = { ...prev, requestType: value };
+        if (!REQUEST_TYPES_NEED_DATE_RANGE.has(value)) {
+          next.startDate = '';
+          next.endDate = '';
+        }
+        return next;
+      }
+      return { ...prev, [name]: value };
+    });
   }
 
   function openCreateForm() {
@@ -228,6 +245,15 @@ export default function StudentRequestsPage() {
     if (!form.reason.trim()) {
       return 'Vui lòng nhập lý do / nội dung chi tiết';
     }
+
+    if (REQUEST_TYPES_NEED_DATE_RANGE.has(form.requestType) && !form.startDate) {
+      return 'Vui lòng chọn ngày bắt đầu';
+    }
+
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      return 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu';
+    }
+
     return ''; 
   }
 
@@ -299,6 +325,9 @@ export default function StudentRequestsPage() {
       alert('Lỗi: ' + msg);
     }
   }
+
+  const showDateFields = REQUEST_TYPES_NEED_DATE_RANGE.has(form.requestType);
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
 
@@ -577,32 +606,34 @@ export default function StudentRequestsPage() {
               </div>
 
               {/* Ngày bắt đầu và kết thúc */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">
-                    Ngày bắt đầu nghỉ / thi
-                  </label>
-                  <input
-                    type="date"
-                    name="startDate"
-                    value={form.startDate}
-                    onChange={handleFormChange}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+              {showDateFields && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Ngày bắt đầu <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      value={form.startDate}
+                      onChange={handleFormChange}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Ngày kết thúc (nếu có)
+                    </label>
+                    <input
+                      type="date"
+                      name="endDate"
+                      value={form.endDate}
+                      onChange={handleFormChange}
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">
-                    Ngày kết thúc (nếu có)
-                  </label>
-                  <input
-                    type="date"
-                    name="endDate"
-                    value={form.endDate}
-                    onChange={handleFormChange}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Môn học liên quan (tùy chọn) */}
               <div>

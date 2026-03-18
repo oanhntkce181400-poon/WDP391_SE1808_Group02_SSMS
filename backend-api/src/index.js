@@ -55,6 +55,7 @@ app.use("/api/error-logs", require("./routes/errorLog.routes"));
 app.use("/api/announcements", require("./routes/announcement.routes"));
 app.use("/api/file-proxy", require("./routes/fileProxy.routes"));
 app.use("/api/classes", require("./modules/classSection/classSection.routes"));
+app.use("/api/class-sections", require("./routes/classSectionRoster.routes"));
 app.use("/api/waitlist", require("./modules/waitlist/waitlist.routes"));
 app.use("/api/wishlist", require("./modules/wishlist/wishlist.routes"));
 app.use("/api/classes", require("./modules/schedule/schedule.routes"));
