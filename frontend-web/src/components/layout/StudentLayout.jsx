@@ -113,6 +113,12 @@ export default function StudentLayout() {
     { name: 'Giáo trình & Tài liệu', path: '/student/materials', icon: '📚' },
   ];
 
+  navItems.splice(4, 0, {
+    name: 'Đăng ký môn học',
+    path: '/student/registration',
+    icon: '📝',
+  });
+
   const handleLogout = async () => {
     try {
       // Try to logout on server

@@ -8,6 +8,9 @@ const Waitlist = require('../../models/waitlist.model');
 
 const ACTIVE_ENROLLMENT_STATUSES = ['enrolled', 'completed'];
 
+// Repository chỉ phụ trách truy vấn / ghi dữ liệu.
+// Mọi quyết định nghiệp vụ như: sinh viên nào được xếp, khi nào waitlist,
+// chọn lớp nào trước... nằm ở service, không đặt ở đây.
 async function findSemesterById(id) {
   return Semester.findById(id).lean();
 }
@@ -20,6 +23,8 @@ async function findStudentById(id) {
   return Student.findById(id).lean();
 }
 
+// Repository vẫn tự normalize mảng code một lần nữa để phòng trường hợp
+// service hoặc script nội bộ truyền dữ liệu chưa sạch vào.
 function normalizeCodeList(values = []) {
   if (!Array.isArray(values)) {
     return [];
@@ -87,6 +92,11 @@ async function findOpenClassSections({ semesterNum, academicYear, statuses }) {
     .lean();
 }
 
+// Lấy các enrollment hiện có của tập sinh viên trong tập class section đã mở của học kỳ.
+// Dữ liệu này dùng để:
+// - tránh xếp trùng môn
+// - biết student đang chiếm lớp nào
+// - biết student có active enrollment sẵn chưa
 async function findSemesterEnrollments(studentIds, classSectionIds, options = {}) {
   const query = {
     student: { $in: studentIds },
@@ -113,6 +123,8 @@ async function findSemesterWaitlists(studentIds, semesterNum, academicYear) {
     .lean();
 }
 
+// Dùng bulkWrite + upsert để chèn hàng loạt enrollment một cách hiệu quả.
+// filter(student + classSection) giúp chống tạo trùng nếu batch bị chạy lặp.
 async function bulkUpsertEnrollments(enrollmentDocs) {
   if (!Array.isArray(enrollmentDocs) || enrollmentDocs.length === 0) {
     return {
@@ -139,6 +151,8 @@ async function bulkUpsertEnrollments(enrollmentDocs) {
   return ClassEnrollment.bulkWrite(operations, { ordered: false });
 }
 
+// Waitlist cũng được upsert theo bộ khóa student + subject + target semester + year.
+// Như vậy cùng một sinh viên sẽ không bị xếp chờ lặp nhiều lần cho cùng một môn trong cùng học kỳ.
 async function bulkUpsertWaitlists(waitlistDocs) {
   if (!Array.isArray(waitlistDocs) || waitlistDocs.length === 0) {
     return {
@@ -168,6 +182,8 @@ async function bulkUpsertWaitlists(waitlistDocs) {
   return Waitlist.bulkWrite(operations, { ordered: false });
 }
 
+// Sau khi service quyết định được các enrollment mới, repository mới ghi tăng currentEnrollment.
+// Việc cộng dồn trước trong Map rồi bulkWrite một lần giúp giảm số lần round-trip tới DB.
 async function bulkIncrementClassSections(classSectionIncrementMap) {
   const operations = Array.from(classSectionIncrementMap.entries())
     .filter(([, incrementBy]) => Number(incrementBy) > 0)

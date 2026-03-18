@@ -22,6 +22,13 @@ const lookupItems = [
   { label: 'Đánh giá lớp học',           badge: null, isLink: true, path: '/student/feedback' },
 ];
 
+lookupItems.splice(1, 0, {
+  label: 'Đăng ký môn học',
+  badge: 'MỚI',
+  icon: '📝',
+  path: '/student/registration',
+});
+
 const reportItems = [
   { label: 'Điểm danh (Attendance)',  path: '/student/schedule' },
   { label: 'Bảng điểm học tập',       path: null },
@@ -355,7 +362,7 @@ export default function StudentHome() {
                       }`}
                     >
                       <span className="flex items-center gap-2">
-                        <span className="text-lg">🔍</span>
+                        <span className="text-lg">{item.icon || '🔍'}</span>
                         {item.label}
                       </span>
                       <div className="flex items-center gap-2">

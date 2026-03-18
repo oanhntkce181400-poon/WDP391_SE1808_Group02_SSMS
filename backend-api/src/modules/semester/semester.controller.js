@@ -2,6 +2,9 @@ const service = require("./semester.service");
 
 function handleError(res, err) {
   const msg = String(err?.message || "");
+  if (err?.statusCode) {
+    return res.status(err.statusCode).json({ success: false, message: msg || "Internal server error" });
+  }
   if (msg.includes("not found"))
     return res.status(404).json({ success: false, message: msg });
   if (msg.includes("required") || msg.includes("already exists"))
