@@ -29,6 +29,75 @@ function formatSemester(doc) {
   };
 }
 
+function buildSemesterWritePayload(doc) {
+  if (!doc) return {};
+  return {
+    code: doc.code,
+    name: doc.name,
+    semesterType: doc.semesterType || 'regular',
+    semesterNum: doc.semesterNum,
+    academicYear: doc.academicYear,
+    startDate: doc.startDate || null,
+    endDate: doc.endDate || null,
+    description: doc.description || null,
+    isCurrent: Boolean(doc.isCurrent),
+    isActive: doc.isActive !== false,
+  };
+}
+
+function buildAutoEnrollmentFailure(semesterDoc, autoEnrollment) {
+  const summary = autoEnrollment?.summary || {};
+  const summaryMessage = autoEnrollment?.summary
+    ? ` (${summary.failed || 0} errors, ${summary.totalEnrollments || 0} enrollments, ${summary.waitlisted || 0} waitlists)`
+    : '';
+
+  const error = new Error(
+    autoEnrollment?.message || `Auto enrollment failed for semester ${semesterDoc?.code || ''}${summaryMessage}`,
+  );
+  error.statusCode = 409;
+  error.autoEnrollment = autoEnrollment;
+  return error;
+}
+
+async function rollbackCurrentSemesterChange({
+  targetSemesterId,
+  previousSemesterSnapshot = null,
+  previousCurrentSemesterId = null,
+  deleteTarget = false,
+}) {
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      await repo.clearCurrentFlag(null, { session });
+
+      if (deleteTarget) {
+        await repo.deleteById(targetSemesterId, { session });
+      } else if (previousSemesterSnapshot) {
+        await repo.updateById(
+          targetSemesterId,
+          buildSemesterWritePayload(previousSemesterSnapshot),
+          { session },
+        );
+      }
+
+      if (
+        previousCurrentSemesterId &&
+        (!previousSemesterSnapshot ||
+          String(previousCurrentSemesterId) !== String(previousSemesterSnapshot._id))
+      ) {
+        await repo.updateById(
+          previousCurrentSemesterId,
+          { isCurrent: true, isActive: true },
+          { session },
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+}
+
 async function listSemesters(query = {}) {
   const { academicYear, isCurrent, semesterType, isActive, page, limit } = query;
   const filter = {};
@@ -84,6 +153,7 @@ async function createSemester(data) {
 
   const existing = await repo.findByCode(code);
   if (existing) throw new Error("Semester code already exists");
+  const previousCurrentSemester = normalizedIsCurrent ? await repo.findCurrent() : null;
 
   const session = await mongoose.startSession();
   let doc;
@@ -118,12 +188,26 @@ async function createSemester(data) {
   if (payload.isCurrent) {
     try {
       const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(String(doc._id));
+      if (autoEnrollment?.success === false) {
+        throw buildAutoEnrollmentFailure(doc, autoEnrollment);
+      }
       payload.autoEnrollment = autoEnrollment;
     } catch (error) {
-      payload.autoEnrollment = {
-        success: false,
-        message: error.message || "Failed to trigger auto enrollment",
-      };
+      try {
+        await rollbackCurrentSemesterChange({
+          targetSemesterId: doc._id,
+          previousCurrentSemesterId: previousCurrentSemester?._id || null,
+          deleteTarget: true,
+        });
+      } catch (rollbackError) {
+        error.message = `${error.message || "Failed to trigger auto enrollment"}. Rollback failed: ${rollbackError.message}`;
+      }
+
+      if (!String(error.message || '').includes('Rollback failed')) {
+        error.message = `${error.message || "Failed to trigger auto enrollment"}. Semester creation was rolled back.`;
+      }
+      error.statusCode = error.statusCode || 409;
+      throw error;
     }
   }
 
@@ -142,6 +226,11 @@ async function updateSemester(id, data) {
   if (nextIsCurrent && !nextIsActive) {
     throw new Error("Current semester must remain active");
   }
+
+  const previousCurrentSemester =
+    isCurrent !== undefined && willSetCurrent && !existingSemester.isCurrent
+      ? await repo.findCurrent()
+      : null;
 
   const update = {
     ...rest, 
@@ -170,12 +259,26 @@ async function updateSemester(id, data) {
   if (isCurrent !== undefined && willSetCurrent && !existingSemester.isCurrent) {
     try {
       const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(id);
+      if (autoEnrollment?.success === false) {
+        throw buildAutoEnrollmentFailure(updated, autoEnrollment);
+      }
       payload.autoEnrollment = autoEnrollment;
     } catch (error) {
-      payload.autoEnrollment = {
-        success: false,
-        message: error.message || "Failed to trigger auto enrollment",
-      };
+      try {
+        await rollbackCurrentSemesterChange({
+          targetSemesterId: id,
+          previousSemesterSnapshot: existingSemester,
+          previousCurrentSemesterId: previousCurrentSemester?._id || null,
+        });
+      } catch (rollbackError) {
+        error.message = `${error.message || "Failed to trigger auto enrollment"}. Rollback failed: ${rollbackError.message}`;
+      }
+
+      if (!String(error.message || '').includes('Rollback failed')) {
+        error.message = `${error.message || "Failed to trigger auto enrollment"}. Semester update was rolled back.`;
+      }
+      error.statusCode = error.statusCode || 409;
+      throw error;
     }
   }
 

@@ -7,6 +7,7 @@
     "dev": "nodemon src/index.js",
     "seed": "node src/database/seeds/index.js",
     "seed:feature-fixtures": "node scripts/seed-feature-fixtures.js",
+    "seed:lecturer-timetable-demo": "node scripts/seed-lecturer-timetable-demo.js",
     "fix:waitlist-indexes": "node scripts/sync-waitlist-indexes.js",
     "normalize:user-roles": "node scripts/normalize-user-roles.js",
     "verify:feature-flows": "node scripts/verify-feature-flows.js",

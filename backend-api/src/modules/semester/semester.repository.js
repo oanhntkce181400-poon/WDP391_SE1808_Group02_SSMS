@@ -38,6 +38,14 @@ async function findByCode(code) {
   return Semester.findOne({ code }).lean();
 }
 
+async function findCurrent(options = {}) {
+  return Semester.findOne(
+    { isCurrent: true },
+    null,
+    options.session ? { session: options.session } : {},
+  ).lean();
+}
+
 async function clearCurrentFlag(excludeId = null, options = {}) {
   const filter = { isCurrent: true };
   if (excludeId) filter._id = { $ne: excludeId };
@@ -69,6 +77,7 @@ module.exports = {
   findAll,
   findById,
   findByCode,
+  findCurrent,
   clearCurrentFlag,
   create,
   updateById,

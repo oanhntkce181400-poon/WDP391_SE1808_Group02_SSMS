@@ -11,7 +11,7 @@ async function countClasses(filter) {
 
 async function findClasses(filter, { skip, limit, sort } = {}) {
   return ClassSection.find(filter)
-    .populate("subject", "subjectCode subjectName credits")
+    .populate("subject", "subjectCode subjectName credits prerequisites")
     .populate("teacher", "teacherCode fullName email department")
     .populate("room", "roomCode roomName capacity")
     .populate("timeslot", "groupName startTime endTime")

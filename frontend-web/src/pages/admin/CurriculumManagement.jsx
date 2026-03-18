@@ -212,7 +212,8 @@ export default function CurriculumManagement() {
               const plainCourses = Array.isArray(sem.courses)
                 ? sem.courses.map((c) => ({
                     code: c.code || c.subjectCode,
-                    _id: c._id || c.subject?._id, // Preserve Subject ID for relational mapping
+                    _id: c._id || c.subjectId || c.subject?._id, // Legacy compatibility
+                    subjectId: c.subjectId || c.subject?._id || c._id || null,
                     name: c.name || c.subjectName,
                     credits: c.credits || c.subject?.credits || 0,
                     hasPrerequisite: !!c.hasPrerequisite,
@@ -644,6 +645,7 @@ export default function CurriculumManagement() {
           endDate: sem.endDate || null,
           courses: sem.courses.map(c => ({
             _id: c._id,
+            subjectId: c.subjectId || c._id || null,
             subjectCode: c.code,
             subjectName: c.name,
             credits: c.credits,

@@ -1,9 +1,110 @@
 // Curriculum Service - Database operations for Curriculum
 const Curriculum = require('../models/curriculum.model');
-require('../models/subject.model');
+const Subject = require('../models/subject.model');
 
 function normalizeText(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function toPlainObject(doc) {
+  return doc?.toObject ? doc.toObject() : { ...doc };
+}
+
+function getPopulatedSubject(course) {
+  const subject = course?.subject;
+  return subject && typeof subject === 'object' && subject._id ? subject : null;
+}
+
+function normalizeResolvedSubject(subject) {
+  if (!subject?._id) return null;
+  return {
+    _id: subject._id,
+    subjectCode: subject.subjectCode,
+    subjectName: subject.subjectName,
+    credits: subject.credits,
+  };
+}
+
+async function resolveRelationalCourseSubjects(courses = []) {
+  const CurriculumCourse = require('../models/curriculumCourse.model');
+  const plainCourses = courses.map(toPlainObject);
+  const missingSubjectCodes = Array.from(
+    new Set(
+      plainCourses
+        .filter((course) => !getPopulatedSubject(course))
+        .map((course) => normalizeText(course.subjectCode))
+        .filter(Boolean),
+    ),
+  );
+
+  if (missingSubjectCodes.length === 0) {
+    return plainCourses.map((course) => ({
+      ...course,
+      resolvedSubject: normalizeResolvedSubject(getPopulatedSubject(course)),
+    }));
+  }
+
+  const fallbackSubjects = await Subject.find({
+    subjectCode: { $in: missingSubjectCodes },
+  })
+    .select('_id subjectCode subjectName credits')
+    .lean();
+
+  const fallbackByCode = new Map(
+    fallbackSubjects.map((subject) => [normalizeText(subject.subjectCode), normalizeResolvedSubject(subject)]),
+  );
+
+  const repairOps = plainCourses
+    .map((course) => {
+      const fallbackSubject = fallbackByCode.get(normalizeText(course.subjectCode));
+      if (!fallbackSubject || !course._id) return null;
+
+      return {
+        updateOne: {
+          filter: { _id: course._id },
+          update: {
+            $set: {
+              subject: fallbackSubject._id,
+              subjectCode: fallbackSubject.subjectCode,
+              subjectName: fallbackSubject.subjectName,
+              credits: course.credits ?? fallbackSubject.credits ?? 0,
+            },
+          },
+        },
+      };
+    })
+    .filter(Boolean);
+
+  if (repairOps.length > 0) {
+    try {
+      await CurriculumCourse.bulkWrite(repairOps, { ordered: false });
+    } catch (error) {
+      // Best effort repair only. Consumers still get the fallback subject in-memory.
+    }
+  }
+
+  return plainCourses.map((course) => ({
+    ...course,
+    resolvedSubject:
+      normalizeResolvedSubject(getPopulatedSubject(course)) ||
+      fallbackByCode.get(normalizeText(course.subjectCode)) ||
+      null,
+  }));
+}
+
+function mapRelationalCourseForClient(course) {
+  const subject =
+    course?.resolvedSubject || normalizeResolvedSubject(getPopulatedSubject(course));
+
+  return {
+    _id: subject?._id || null,
+    code: course.subjectCode || subject?.subjectCode || course.code,
+    name: course.subjectName || subject?.subjectName || course.name,
+    credits: course.credits ?? subject?.credits ?? 0,
+    hasPrerequisite: !!course.hasPrerequisite,
+    subjectId: subject?._id || null,
+    subject,
+  };
 }
 
 /**
@@ -256,19 +357,8 @@ const curriculumService = {
         for (const sem of semesters) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
             .populate('subject', 'subjectCode subjectName credits');
-          sem.courses = courses.map(c => ({
-            _id: c.subject?._id || c._id,
-            code: c.subjectCode || c.code,
-            name: c.subjectName || c.name,
-            credits: c.credits ?? c.subject?.credits ?? 0,
-            hasPrerequisite: !!c.hasPrerequisite,
-            subjectId: c.subject?._id,
-            subject: c.subject ? {
-              _id: c.subject._id,
-              subjectCode: c.subject.subjectCode,
-              subjectName: c.subject.subjectName
-            } : null
-          }));
+          const resolvedCourses = await resolveRelationalCourseSubjects(courses);
+          sem.courses = resolvedCourses.map(mapRelationalCourseForClient);
           sem.id = sem.semesterOrder;
         }
         
@@ -419,12 +509,12 @@ const curriculumService = {
               const code = (c.subjectCode || c.code || '').trim();
               const name = (c.subjectName || c.name || '').trim();
               const subjectDoc = subjectsByCode[code] || null;
-              const subjectId = c.subjectId || c._id || (subjectDoc && subjectDoc._id);
-              if (!subjectId && !subjectDoc) continue;
+              const subjectId = subjectDoc?._id || c.subjectId || null;
+              if (!subjectId) continue;
               courseDocs.push({
                 curriculum: id,
                 semester: semesterDoc._id,
-                subject: subjectId || subjectDoc._id,
+                subject: subjectId,
                 subjectCode: code || subjectDoc?.subjectCode,
                 subjectName: name || subjectDoc?.subjectName,
                 credits: c.credits ?? subjectDoc?.credits ?? 0,
@@ -511,23 +601,9 @@ const curriculumService = {
         for (const sem of semesters) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
             .populate('subject', 'subjectCode subjectName credits');
+          const resolvedCourses = await resolveRelationalCourseSubjects(courses);
 
-          sem.courses = courses.map(c => ({
-            _id: c.subject?._id || c._id,
-            code: c.subjectCode || c.code,
-            name: c.subjectName || c.name,
-            credits: c.credits ?? c.subject?.credits ?? 0,
-            hasPrerequisite: !!c.hasPrerequisite,
-            subjectId: c.subject?._id,
-            subject: c.subject
-              ? {
-                  _id: c.subject._id,
-                  subjectCode: c.subject.subjectCode,
-                  subjectName: c.subject.subjectName,
-                  credits: c.subject.credits,
-                }
-              : null,
-          }));
+          sem.courses = resolvedCourses.map(mapRelationalCourseForClient);
 
           // Normalize id field for frontend compatibility
           sem.id = sem.semesterOrder;
@@ -569,12 +645,13 @@ const curriculumService = {
         // Get courses for this semester
         const courses = await CurriculumCourse.find({ semester: semesterDoc._id })
           .populate('subject', 'subjectCode subjectName credits');
-        
-        return courses.map(course => ({
-          subject: course.subject,
-          credits: course.credits,
+        const resolvedCourses = await resolveRelationalCourseSubjects(courses);
+
+        return resolvedCourses.map((course) => ({
+          subject: course.resolvedSubject,
+          credits: course.credits ?? course.resolvedSubject?.credits ?? 0,
           isRequired: course.isRequired,
-          notes: course.notes
+          notes: course.notes,
         }));
       } else {
         // Embedded structure - find semester by semester number
