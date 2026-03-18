@@ -154,6 +154,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="teaching-schedule" replace />} />
         <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
+        <Route path="attendance" element={<AttendancePage />} />
         <Route path="grades/:classSectionId" element={<LecturerGradesEntryPage />} />
         <Route path="profile" element={<DashboardPage />} />
       </Route>
