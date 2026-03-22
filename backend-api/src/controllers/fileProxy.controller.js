@@ -39,6 +39,8 @@ const extractCloudinaryInfo = (cloudinaryUrl) => {
     // Remove version if exists (v1234567890)
     pathAfterUpload = pathAfterUpload.replace(/^v\d+\//, '');
     
+    const pathAfterUploadWithoutVersion = pathAfterUpload;
+
     // Extract format/extension
     const lastDotIndex = pathAfterUpload.lastIndexOf('.');
     let format = null;
@@ -49,9 +51,19 @@ const extractCloudinaryInfo = (cloudinaryUrl) => {
       publicId = pathAfterUpload.substring(0, lastDotIndex);
     }
     
-    console.log('Extracted Cloudinary info:', { publicId, resourceType, format });
+    console.log('Extracted Cloudinary info:', {
+      publicId,
+      resourceType,
+      format,
+      pathAfterUploadWithoutVersion,
+    });
     
-    return { publicId, resourceType, format };
+    return {
+      publicId,
+      resourceType,
+      format,
+      pathAfterUploadWithoutVersion,
+    };
   } catch (error) {
     console.error('Error extracting Cloudinary info:', error);
     return null;
@@ -89,24 +101,116 @@ const generateSignedUrl = (publicId, resourceType = 'auto', format = null) => {
   }
 };
 
+const getFileExtension = (filename = '') => {
+  const normalized = String(filename || '').trim();
+  const dotIndex = normalized.lastIndexOf('.');
+  if (dotIndex === -1 || dotIndex === normalized.length - 1) return null;
+  return normalized.substring(dotIndex + 1).toLowerCase();
+};
+
+const buildCloudinaryFallbackUrls = (cloudinaryUrl, filename) => {
+  const info = extractCloudinaryInfo(cloudinaryUrl);
+  if (!info?.publicId && !info?.pathAfterUploadWithoutVersion) {
+    return [];
+  }
+
+  const candidateUrls = [];
+  const extensionFromFilename = getFileExtension(filename);
+  const parsedPath = info.pathAfterUploadWithoutVersion || '';
+
+  // Some raw uploads keep extension inside public_id, others split into public_id + format.
+  const publicIdCandidates = Array.from(
+    new Set(
+      [
+        info.publicId,
+        parsedPath,
+        extensionFromFilename && info.publicId
+          ? `${info.publicId}.${extensionFromFilename}`
+          : null,
+      ].filter(Boolean)
+    )
+  );
+
+  const formatCandidates = Array.from(
+    new Set([
+      info.format || null,
+      extensionFromFilename || null,
+      null,
+    ])
+  );
+
+  const resourceTypeCandidates = Array.from(
+    new Set([
+      info.resourceType || 'auto',
+      'raw',
+      'image',
+      'auto',
+    ])
+  );
+
+  resourceTypeCandidates.forEach((resourceType) => {
+    publicIdCandidates.forEach((publicId) => {
+      formatCandidates.forEach((format) => {
+        candidateUrls.push(generateSignedUrl(publicId, resourceType, format));
+      });
+    });
+  });
+
+  // Ensure unique, non-empty candidates
+  return Array.from(new Set(candidateUrls.filter(Boolean)));
+};
+
+const buildCloudinaryIdFallbackUrls = (cloudinaryId, filename) => {
+  const normalizedId = String(cloudinaryId || '').trim();
+  if (!normalizedId) return [];
+
+  const extensionFromFilename = getFileExtension(filename);
+  const formatCandidates = Array.from(new Set([extensionFromFilename || null, null]));
+  const resourceTypeCandidates = ['raw', 'image', 'auto'];
+  const candidateUrls = [];
+
+  resourceTypeCandidates.forEach((resourceType) => {
+    formatCandidates.forEach((format) => {
+      candidateUrls.push(generateSignedUrl(normalizedId, resourceType, format));
+    });
+  });
+
+  return Array.from(new Set(candidateUrls.filter(Boolean)));
+};
+
 /**
  * Proxy download file from Cloudinary with custom filename
  */
 const downloadFile = async (req, res) => {
   try {
-    const { url, filename } = req.query;
+    const { url, filename, cloudinaryId } = req.query;
+    const state = req._proxyState || { triedUrls: new Set(), retryCount: 0, maxRetryCount: 20 };
 
-    if (!url || !filename) {
+    if ((!url && !cloudinaryId) || !filename) {
       return res.status(400).json({
         success: false,
-        message: 'Missing url or filename parameter',
+        message: 'Missing filename and download source (url/cloudinaryId)',
       });
     }
 
-    console.log('File proxy request:', { url, filename });
+    let requestUrl = url;
+    if (!requestUrl && cloudinaryId) {
+      const cloudinaryIdUrls = buildCloudinaryIdFallbackUrls(cloudinaryId, filename);
+      requestUrl = cloudinaryIdUrls[0];
+    }
+
+    if (!requestUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to resolve download URL from request data',
+      });
+    }
+
+    console.log('File proxy request:', { url: requestUrl, filename, cloudinaryId });
+    state.triedUrls.add(requestUrl);
 
     // Parse URL to determine protocol
-    const parsedUrl = new URL(url);
+    const parsedUrl = new URL(requestUrl);
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
     // Options for request
@@ -128,43 +232,49 @@ const downloadFile = async (req, res) => {
       if ([301, 302, 307, 308].includes(fileResponse.statusCode)) {
         const redirectUrl = fileResponse.headers.location;
         console.log('Redirecting to:', redirectUrl);
+
+        if (!redirectUrl) {
+          return res.status(502).json({
+            success: false,
+            message: 'Invalid redirect response from file source',
+          });
+        }
+
+        if (state.retryCount >= state.maxRetryCount || state.triedUrls.has(redirectUrl)) {
+          return res.status(502).json({
+            success: false,
+            message: 'Too many redirects while downloading file',
+          });
+        }
+        state.retryCount += 1;
         
         // Retry with new URL
         return downloadFile(
-          { query: { url: redirectUrl, filename } },
+          { query: { url: redirectUrl, filename, cloudinaryId }, _proxyState: state },
           res
         );
       }
 
-      // Handle 401 Unauthorized - Try with signed URL
-      if (fileResponse.statusCode === 401 && url.includes('cloudinary.com')) {
-        console.log('Got 401, trying with signed URL...');
-        
-        // Extract cloudinary info (public_id, resource_type, format)
-        const cloudinaryInfo = extractCloudinaryInfo(url);
-        
-        if (cloudinaryInfo && cloudinaryInfo.publicId) {
-          const { publicId, resourceType, format } = cloudinaryInfo;
-          const signedUrl = generateSignedUrl(publicId, resourceType, format);
-          
-          if (signedUrl) {
-            console.log('Retrying with signed URL');
-            // Retry with signed URL
+      if (fileResponse.statusCode !== 200) {
+        // Cloudinary PDF and some raw files may return 404/401 on the original URL.
+        // Retry with signed URLs and alternative resource_type paths before failing.
+        if (requestUrl.includes('cloudinary.com') && state.retryCount < state.maxRetryCount) {
+          const fallbackUrls = [
+            ...buildCloudinaryIdFallbackUrls(cloudinaryId, filename),
+            ...buildCloudinaryFallbackUrls(requestUrl, filename),
+          ];
+          const nextUrl = fallbackUrls.find((candidate) => !state.triedUrls.has(candidate));
+
+          if (nextUrl) {
+            state.retryCount += 1;
+            console.log('Retrying Cloudinary download with fallback URL:', nextUrl);
             return downloadFile(
-              { query: { url: signedUrl, filename } },
+              { query: { url: nextUrl, filename, cloudinaryId }, _proxyState: state },
               res
             );
           }
         }
-        
-        console.error('Failed to generate signed URL');
-        return res.status(401).json({
-          success: false,
-          message: 'File access denied. Please re-upload the file.',
-        });
-      }
 
-      if (fileResponse.statusCode !== 200) {
         console.error('Failed to fetch file, status:', fileResponse.statusCode);
         return res.status(fileResponse.statusCode).json({
           success: false,
