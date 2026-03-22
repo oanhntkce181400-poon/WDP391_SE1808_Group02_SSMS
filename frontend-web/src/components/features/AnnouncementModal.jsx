@@ -252,7 +252,7 @@ export default function AnnouncementModal({ isOpen, onClose, onSubmit, announcem
                     <button
                       key={index}
                       type="button"
-                      onClick={() => downloadCloudinaryFile(att.url, att.fileName)}
+                      onClick={() => downloadCloudinaryFile(att.url, att.fileName, att.cloudinaryId)}
                       className="flex items-center gap-3 text-sm bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 w-full text-left"
                     >
                       <span className="text-xl">📄</span>
