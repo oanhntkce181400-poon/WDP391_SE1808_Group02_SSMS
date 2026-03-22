@@ -1,11 +1,11 @@
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Semester = require('../models/semester.model');
-const Wallet = require('../models/wallet.model');
 const Student = require('../models/student.model');
 const curriculumService = require('./curriculum.service');
 const paymentValidationService = require('./paymentValidation.service');
 const registrationPeriodService = require('./registrationPeriod.service');
+const { getOrCreateWallet } = require('./wallet.service');
 
 function timeToMinutes(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return null;
@@ -208,17 +208,12 @@ const validateWallet = async (studentId, classId) => {
   }
 
   const subject = classSection.subject;
-  const totalFee = subject.credits * (subject.tuitionFee || 100);
+  const credits = Number(subject?.credits || 0);
+  const pricePerCredit = Number(subject?.tuitionFee || 100);
+  const totalFee = credits * pricePerCredit;
 
-  const wallet = await Wallet.findOne({ userId: student.userId }).exec();
-
-  if (!wallet) {
-    return {
-      isSufficient: false,
-      message: 'Wallet not found',
-      totalFee,
-    };
-  }
+  // Auto-create wallet for legacy accounts that do not have one yet.
+  const wallet = await getOrCreateWallet(student.userId);
 
   const isSufficient = wallet.balance >= totalFee;
 
@@ -227,8 +222,8 @@ const validateWallet = async (studentId, classId) => {
     message: isSufficient ? 'Sufficient balance' : 'Insufficient balance',
     currentBalance: wallet.balance,
     totalFee,
-    credits: subject.credits,
-    pricePerCredit: subject.tuitionFee || 100,
+    credits,
+    pricePerCredit,
   };
 };
 

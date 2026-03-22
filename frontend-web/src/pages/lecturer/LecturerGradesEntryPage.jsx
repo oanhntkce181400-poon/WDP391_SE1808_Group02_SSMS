@@ -34,6 +34,7 @@ export default function LecturerGradesEntryPage() {
   const [changeLogs, setChangeLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
+  // Khi classSectionId thay đổi: kiểm tra ID rồi tải thông tin lớp + danh sách sinh viên
   useEffect(() => {
     if (!classSectionId) {
       setError('Không tìm thấy ID lớp học. Vui lòng quay lại và chọn lớp.');
@@ -44,6 +45,7 @@ export default function LecturerGradesEntryPage() {
     fetchClassInfo();
   }, [classSectionId]);
 
+  // Gọi API lấy thông tin chi tiết của lớp hiện tại
   const fetchClassInfo = async () => {
     try {
       const response = await axiosClient.get(`/classes/${classSectionId}`);
@@ -53,6 +55,7 @@ export default function LecturerGradesEntryPage() {
     }
   };
 
+  // Gọi API lấy danh sách sinh viên của lớp và tạo dữ liệu draft cho các ô nhập điểm
   const fetchEnrollments = async () => {
     try {
       setLoading(true);
@@ -81,6 +84,7 @@ export default function LecturerGradesEntryPage() {
     }
   };
 
+  // Chuẩn hóa input điểm: rỗng -> null, sai số -> null, còn lại ép về khoảng 0-10
   const normalizeScoreInput = (rawValue) => {
     if (rawValue === '') {
       return null;
@@ -94,15 +98,18 @@ export default function LecturerGradesEntryPage() {
     return Math.min(10, Math.max(0, numValue));
   };
 
+  // Format điểm để hiển thị: null/undefined -> '-', có điểm -> 1 chữ số thập phân
   const formatScore = (score) => {
     if (score === null || score === undefined) return '—';
     return Number(score).toFixed(1);
   };
 
+  // Kiểm tra enrollment đã chốt điểm chưa để khóa thao tác sửa/lưu
   const isFinalizedEnrollment = (enrollment) => {
     return enrollment?.isFinalized === true || enrollment?.status === 'completed';
   };
 
+  // Cập nhật điểm draft theo từng ô input khi giảng viên nhập
   const handleDraftChange = (enrollmentId, field, value) => {
     setGradeDrafts((prev) => ({
       ...prev,
@@ -113,6 +120,7 @@ export default function LecturerGradesEntryPage() {
     }));
   };
 
+  // Lưu điểm cho 1 sinh viên: validate dữ liệu, gọi API lưu, rồi tải lại danh sách
   const handleSaveRow = async (enrollment) => {
     try {
       if (!enrollment?._id || !enrollment?.student?._id) {
@@ -135,11 +143,11 @@ export default function LecturerGradesEntryPage() {
         },
       });
 
-      setSuccess(`Da luu diem cho ${enrollment.student?.fullName || 'sinh vien'}.`);
+      setSuccess(`Đã lưu điểm cho ${enrollment.student?.fullName || 'sinh viên'}.`);
       await fetchEnrollments();
     } catch (err) {
       console.error('Error saving row grade:', err);
-      setError(err.response?.data?.message || 'Khong the luu diem. Vui long thu lai.');
+      setError(err.response?.data?.message || 'Không thể lưu điểm. Vui lòng thử lại.');
     } finally {
       setSavingRowId('');
     }
@@ -149,7 +157,8 @@ export default function LecturerGradesEntryPage() {
     try {
       if (!classSectionId) return;
 
-      const confirmed = window.confirm('Bạn chắc chắn muốn công bố điểm chính thức cho lớp này? Hành động này sẽ final hóa điểm và thông báo đến sinh viên.');
+      // Ask for confirmation before publishing final grades
+      const confirmed = window.confirm('Bạn có chắc chắn muốn công bố điểm cuối cùng?');
       if (!confirmed) return;
 
       setPublishing(true);
@@ -157,11 +166,13 @@ export default function LecturerGradesEntryPage() {
       setSuccess(null);
 
       const response = await gradesService.submitFinalClassGrades(classSectionId);
-      const result = response?.data || {};
 
-      setSuccess(
-        `${result.message || 'Công bố điểm thành công.'} (Email: ${result.emailsSent || 0}, Notification: ${result.notificationsSent || 0})`
-      );
+      // Show fixed success message required by the feature spec
+      if (response?.data?.success) {
+        setSuccess('Grades have been published and emailed to students');
+      } else {
+        setSuccess(response?.data?.message || 'Publish grades finished');
+      }
       await fetchEnrollments();
     } catch (err) {
       console.error('Error publishing official grades:', err);
@@ -265,7 +276,7 @@ export default function LecturerGradesEntryPage() {
               disabled={publishing || !hasUnfinalizedRows}
               className="px-4 py-2 rounded bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:bg-slate-300"
             >
-              {publishing ? 'Đang công bố...' : 'Công bố điểm'}
+              {publishing ? 'Publishing...' : 'Publish Grades'}
             </button>
           </div>
         </div>

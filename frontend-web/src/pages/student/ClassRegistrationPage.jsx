@@ -122,6 +122,26 @@ export default function ClassRegistrationPage() {
     return 'Available';
   };
 
+  const getPageItems = (currentPage, totalPages) => {
+    if (!totalPages || totalPages <= 1) return [];
+
+    const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+    const normalized = [...pages]
+      .filter((p) => p >= 1 && p <= totalPages)
+      .sort((a, b) => a - b);
+
+    const items = [];
+    normalized.forEach((p, index) => {
+      const prev = normalized[index - 1];
+      if (index > 0 && p - prev > 1) {
+        items.push('ellipsis');
+      }
+      items.push(p);
+    });
+
+    return items;
+  };
+
   const validateSingleClass = async (classId) => {
     try {
       const response = await registrationService.validateAll(classId);
@@ -413,9 +433,33 @@ export default function ClassRegistrationPage() {
                 >
                   Prev
                 </button>
-                <span className="text-sm text-slate-600">
-                  Page {page} / {pagination.totalPages}
-                </span>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {getPageItems(page, pagination.totalPages).map((item, index) => {
+                    if (item === 'ellipsis') {
+                      return (
+                        <span key={`ellipsis-${index}`} className="px-1 text-sm text-slate-500">
+                          ...
+                        </span>
+                      );
+                    }
+
+                    const isActive = item === page;
+                    return (
+                      <button
+                        key={item}
+                        onClick={() => setPage(item)}
+                        disabled={isActive}
+                        className={`min-w-9 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          isActive
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                        } disabled:cursor-default disabled:opacity-100`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
                 <button
                   onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                   disabled={page === pagination.totalPages}

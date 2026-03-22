@@ -101,6 +101,7 @@ export default function StudentLayout() {
     { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
     { name: 'Thông báo', path: '/student/announcements', icon: '📢' },
     { name: 'Khung chương trình của tôi', path: '/student/curriculum', icon: '📖' },
+    { name: 'Đăng ký tín chỉ', path: '/student/registration', icon: '📝' },
     { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Báo cáo điểm danh', path: '/student/attendance-report', icon: '✅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📄' },
