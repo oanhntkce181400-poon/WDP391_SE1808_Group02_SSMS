@@ -1,0 +1,97 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="BulkUpdateClassStatus" name="Bulk Update Class Status">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Bulk Update Class Status&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSectionRouter -->
+        <mxCell id="ClassSectionRouter" value="&lt;b&gt;ClassSectionRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSectionRouter-route" value="POST /api/classes/bulk-status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSectionRouter">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSectionController -->
+        <mxCell id="ClassSectionController" value="&lt;b&gt;ClassSectionController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSectionController-methods" value="+bulkUpdateStatus(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSectionController">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSectionService -->
+        <mxCell id="ClassSectionService" value="&lt;b&gt;ClassSectionService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="70" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSectionService-methods" value="+bulkUpdateStatus(classIds, newStatus): Result" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSectionService">
+          <mxGeometry y="30" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSectionRepository -->
+        <mxCell id="ClassSectionRepository" value="&lt;b&gt;ClassSectionRepository&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="200" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSectionRepository-methods" value="+findByIds(ids): ClassSection[]&#xa;+saveAll(entities): ClassSection[]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSectionRepository">
+          <mxGeometry y="30" width="300" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- BulkUpdateStatusDTO -->
+        <mxCell id="BulkUpdateStatusDTO" value="&lt;b&gt;BulkUpdateStatusDTO&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="BulkUpdateStatusDTO-fields" value="+ids: string[]&#xa;+status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="BulkUpdateStatusDTO">
+          <mxGeometry y="30" width="220" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSection (Entity) -->
+        <mxCell id="ClassSection" value="&lt;b&gt;ClassSection&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="360" width="260" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSection-fields" value="-id: ObjectId&#xa;-classCode: string&#xa;-subject: ObjectId&#xa;-semester: number&#xa;-academicYear: string&#xa;-maxCapacity: number&#xa;-currentEnrollment: number&#xa;-status: string&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSection">
+          <mxGeometry y="30" width="260" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- BulkUpdateResultDTO -->
+        <mxCell id="BulkUpdateResultDTO" value="&lt;b&gt;BulkUpdateResultDTO&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="BulkUpdateResultDTO-fields" value="+success: number&#xa;+failed: number&#xa;+message: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="BulkUpdateResultDTO">
+          <mxGeometry y="30" width="220" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Associations -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionRouter-route" target="ClassSectionController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="360" y="100" as="sourcePoint" /><mxPoint x="420" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionController-methods" target="ClassSectionService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="700" y="100" as="sourcePoint" /><mxPoint x="780" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionService" target="ClassSectionRepository">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="930" y="130" as="sourcePoint" /><mxPoint x="930" y="200" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3-lbl" value="uses" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+        <mxCell id="rel3b" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionRepository" target="ClassSection">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="930" y="290" as="sourcePoint" /><mxPoint x="510" y="360" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3b-lbl" value="maps to" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3b"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Dependency: uses DTO -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionController-methods" target="BulkUpdateStatusDTO">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="420" y="90" as="sourcePoint" /><mxPoint x="190" y="360" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSectionService-methods" target="BulkUpdateResultDTO">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="1080" y="100" as="sourcePoint" /><mxPoint x="700" y="395" as="targetPoint" /></mxGeometry>
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware (admin/staff)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="140" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

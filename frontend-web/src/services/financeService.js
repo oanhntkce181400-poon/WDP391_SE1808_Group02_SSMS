@@ -48,9 +48,14 @@ const financeService = {
     return axiosClient.get('/finance/payments/curriculum-status');
   },
 
-  // Tạo thanh toán theo kỳ của khung chương trình
+  // Tạo thanh toán theo kỳ của khung chương trình (qua ngân hàng / PayOS)
   createCurriculumPayment() {
     return axiosClient.post('/finance/payments/create-curriculum');
+  },
+
+  // Thanh toán học phí bằng ví sinh viên
+  payTuitionByWallet() {
+    return axiosClient.post('/finance/payments/pay-by-wallet');
   },
 
   // Xác nhận thanh toán và tự động đăng ký môn học

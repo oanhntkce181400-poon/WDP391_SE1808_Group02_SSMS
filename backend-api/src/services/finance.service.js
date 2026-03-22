@@ -233,25 +233,44 @@ async function getMyTuitionSummary(userId, semesterId) {
 
 // ─────────────────────────────────────────────────────────────
 // confirmPayment: Xác nhận thanh toán PayOS và lưu vào DB
+// ⚠️ BẢO MẬT: LUÔN xác minh với PayOS trước khi cộng tiền
 // Input: userId, orderCode, amount, status
 // Output: Payment object vừa tạo
 // ─────────────────────────────────────────────────────────────
 async function confirmPayment({ userId, orderCode, amount, status }) {
-  if (status !== 'PAID') {
-    const err = new Error('Thanh toán chưa hoàn tất');
+  const payosService = require('./payos.service');
+
+  // Bước 1: Xác minh với PayOS - KHÔNG BAO GIỜ tin client
+  let payosPaymentStatus = null;
+  try {
+    const payosResponse = await payosService.getOrder(orderCode);
+    if (payosResponse.code === '00') {
+      payosPaymentStatus = payosResponse.data.status;
+    }
+  } catch (payosError) {
+    console.error('❌ Lỗi khi xác minh với PayOS:', payosError.message);
+    const err = new Error('Không thể xác minh thanh toán với PayOS');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  // Bước 2: Chỉ chấp nhận nếu PayOS xác nhận PAID
+  if (payosPaymentStatus !== 'PAID') {
+    const err = new Error(`Thanh toán chưa hoàn tất (PayOS status: ${payosPaymentStatus || 'UNKNOWN'})`);
     err.statusCode = 400;
     throw err;
   }
 
-  const student = await findStudentByUserId(userId);
-
-  // Kiểm tra xem đã có payment với orderCode này chưa
-  const existingPayment = await Payment.findOne({ orderCode }).lean();
+  // Bước 3: Kiểm tra xem đã có payment với orderCode này chưa (prevent double-spending)
+  const existingPayment = await Payment.findOne({ orderCode: String(orderCode) }).lean();
   if (existingPayment) {
-    return existingPayment; // Đã xử lý rồi
+    // Đã xử lý rồi - trả về payment cũ, không tạo mới
+    return existingPayment;
   }
 
-  // Dùng mã kỳ curriculum để lịch sử thanh toán trả về đúng trên trang Học phí
+  const student = await findStudentByUserId(userId);
+
+  // Bước 4: Dùng mã kỳ curriculum để lịch sử thanh toán trả về đúng trên trang Học phí
   let semesterCode;
   try {
     const paymentValidation = require('./paymentValidation.service');
@@ -262,7 +281,7 @@ async function confirmPayment({ userId, orderCode, amount, status }) {
     semesterCode = semester?.code || `sem-${Date.now()}`;
   }
 
-  // Tạo bản ghi thanh toán mới
+  // Bước 5: Tạo bản ghi thanh toán
   const payment = await Payment.create({
     student: student._id,
     semesterCode: semesterCode,
@@ -270,7 +289,7 @@ async function confirmPayment({ userId, orderCode, amount, status }) {
     paidAt: new Date(),
     method: 'online',
     note: `PayOS - OrderCode: ${orderCode}`,
-    orderCode: orderCode,
+    orderCode: String(orderCode),
     status: 'completed',
   });
 
@@ -565,7 +584,7 @@ async function createCurriculumPayment(userId) {
       paymentStatus
     };
   }
-  
+
   // Tạo mô tả thanh toán
   const description = `HP ${paymentStatus.curriculumSemesterName} - ${student.studentCode}`;
   const productName = `Học phí ${paymentStatus.curriculumSemesterName}`;
@@ -600,6 +619,67 @@ async function createCurriculumPayment(userId) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────
+// payTuitionByWallet: Thanh toán học phí bằng ví sinh viên
+// Input: userId
+// Output: { success, payment, balance } hoặc throw
+// ─────────────────────────────────────────────────────────────
+async function payTuitionByWallet(userId) {
+  const walletService = require('./wallet.service');
+  const paymentValidation = require('./paymentValidation.service');
+
+  const student = await findStudentByUserId(userId);
+  const paymentStatus = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+
+  if (paymentStatus.hasPaid) {
+    const err = new Error('Bạn đã thanh toán học phí kỳ này rồi');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let amount = paymentStatus.tuitionFee?.finalTuitionFee ?? 0;
+  if (amount <= 0) {
+    const err = new Error('Không có học phí cần thanh toán');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const semesterCode = paymentStatus.semesterCode;
+  const curriculumSemesterName = paymentStatus.curriculumSemesterName || 'Học kỳ';
+
+  const balance = await walletService.getBalance(userId);
+  if (balance < amount) {
+    const err = new Error(`Số dư ví không đủ. Cần ${amount.toLocaleString('vi-VN')} ₫, hiện có ${balance.toLocaleString('vi-VN')} ₫`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const orderCode = `WALLET-${Date.now()}`;
+  const withdrawResult = await walletService.withdraw(userId, {
+    amount,
+    description: `Thanh toán học phí ${curriculumSemesterName}`,
+    orderCode,
+  });
+
+  const payment = await Payment.create({
+    student: student._id,
+    semesterCode,
+    amount,
+    paidAt: new Date(),
+    method: 'wallet',
+    note: 'Thanh toán bằng ví sinh viên',
+    orderCode,
+    status: 'completed',
+  });
+
+  return {
+    success: true,
+    payment,
+    balance: withdrawResult.balance,
+    message: 'Thanh toán học phí bằng ví thành công',
+  };
+}
+
 module.exports = {
   getMyTuitionSummary,
   resolveSemester,
@@ -609,5 +689,6 @@ module.exports = {
   getAllStudentsPaymentSummary,
   getMyCurriculumPaymentStatus,
   createCurriculumPayment,
+  payTuitionByWallet,
   getTuitionExcess,
 };

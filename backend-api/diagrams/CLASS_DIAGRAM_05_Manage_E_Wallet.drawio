@@ -1,0 +1,119 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="ManageEWallet" name="Manage E-Wallet">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Manage E-Wallet&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- WalletRouter -->
+        <mxCell id="WalletRouter" value="&lt;b&gt;WalletRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="WalletRouter-route" value="GET /api/wallet&#xa;GET /api/wallet/transactions&#xa;POST /api/wallet/deposit&#xa;POST /api/wallet/confirm&#xa;POST /api/wallet/refund-tuition-excess" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WalletRouter">
+          <mxGeometry y="30" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- WalletController -->
+        <mxCell id="WalletController" value="&lt;b&gt;WalletController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="70" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="WalletController-methods" value="+getMyWallet(req): Response&#xa;+getMyTransactions(req): Response&#xa;+createDeposit(req): Response&#xa;+confirmDeposit(req): Response&#xa;+refundTuitionExcess(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WalletController">
+          <mxGeometry y="30" width="280" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- WalletService -->
+        <mxCell id="WalletService" value="&lt;b&gt;WalletService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="70" width="300" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="WalletService-methods" value="+getWalletInfo(userId): WalletInfo&#xa;+getTransactions(userId, options): Result&#xa;+createDepositPaymentLink(userId, amount): Result&#xa;+confirmDeposit(userId, orderCode, amount): Result&#xa;+refundTuitionExcess(userId): Result&#xa;-getOrCreateWallet(userId): Wallet&#xa;-deposit(userId, data): Result" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WalletService">
+          <mxGeometry y="30" width="300" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Wallet (Entity) -->
+        <mxCell id="Wallet" value="&lt;b&gt;Wallet&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="260" width="220" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="Wallet-fields" value="-id: ObjectId&#xa;-userId: ObjectId (ref User)&#xa;-balance: number&#xa;-totalEarned: number&#xa;-totalSpent: number&#xa;-currency: string&#xa;-status: string&#xa;-lastTransactionAt: Date&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Wallet">
+          <mxGeometry y="30" width="220" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- WalletTransaction (Entity) -->
+        <mxCell id="WalletTransaction" value="&lt;b&gt;WalletTransaction&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="260" width="240" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="WalletTransaction-fields" value="-id: ObjectId&#xa;-wallet: ObjectId (ref Wallet)&#xa;-type: string&#xa;-amount: number&#xa;-balanceBefore: number&#xa;-balanceAfter: number&#xa;-description: string&#xa;-orderCode: string&#xa;-paymentMethod: string&#xa;-status: string&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WalletTransaction">
+          <mxGeometry y="30" width="240" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- User (Entity) -->
+        <mxCell id="User" value="&lt;b&gt;User&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="260" width="200" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="User-fields" value="-id: ObjectId&#xa;-fullName: string&#xa;-email: string&#xa;-passwordHash: string&#xa;-role: string&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="User">
+          <mxGeometry y="30" width="200" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- PayOSService (external dependency) -->
+        <mxCell id="PayOSService" value="&lt;b&gt;PayOSService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="480" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="PayOSService-methods" value="+createPaymentLink(payload): PaymentLink" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="PayOSService">
+          <mxGeometry y="30" width="220" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Association: Router -> Controller -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletRouter-route" target="WalletController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="130" as="sourcePoint" /><mxPoint x="400" y="130" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel1-lbl" value="&#171;uses&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel1"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Association: Controller -> Service -->
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletController-methods" target="WalletService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="680" y="130" as="sourcePoint" /><mxPoint x="760" y="130" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2-lbl" value="&#171;uses&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel2"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Association: WalletService -> Wallet (service uses Wallet model) -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletService" target="Wallet">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="910" y="210" as="sourcePoint" /><mxPoint x="510" y="260" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3-lbl" value="&#171;uses&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Association: WalletService -> WalletTransaction -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletService" target="WalletTransaction">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="835" y="210" as="sourcePoint" /><mxPoint x="820" y="260" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4-lbl" value="&#171;uses&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel4"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Composition: WalletTransaction *-> Wallet (transaction belongs to wallet, cannot exist without) -->
+        <mxCell id="rel5" value="" style="endArrow=diamondThin;endFill=1;endSize=16;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletTransaction-fields" target="Wallet-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="700" y="350" as="sourcePoint" /><mxPoint x="620" y="330" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5-lbl" value="wallet&#xa;1" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel5"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Association: Wallet -> User (wallet references user) -->
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Wallet-fields" target="User-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="400" y="330" as="sourcePoint" /><mxPoint x="280" y="320" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel6-lbl" value="userId&#xa;1" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel6"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Dependency: WalletService ..> PayOSService (uses for deposit link) -->
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletService" target="PayOSService">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="910" y="210" as="sourcePoint" /><mxPoint x="870" y="480" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel7-lbl" value="&#171;depends on&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel7"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Note: AuthMiddleware -->
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="210" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WalletRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="210" y="190" as="sourcePoint" /><mxPoint x="140" y="210" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

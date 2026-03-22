@@ -315,7 +315,9 @@ async function createDepositPaymentLink(userId, amount) {
 }
 
 /**
- * Xác nhận nạp tiền (gọi từ webhook, sau khi kiểm tra PayOS, hoặc khi user bấm "Tôi đã chuyển khoản")
+ * Xác nhận nạp tiền vào ví.
+ * BẢO MẬT: Luôn xác minh với PayOS trước khi cộng tiền — không tin client.
+ * Chỉ cộng tiền khi PayOS trả về status === 'PAID'.
  */
 async function confirmDeposit(userId, orderCode, amount) {
   const numAmount = Number(amount);
@@ -333,9 +335,41 @@ async function confirmDeposit(userId, orderCode, amount) {
     return { success: true, message: 'Đã xử lý trước đó', transaction: existing };
   }
 
-  // Nạp tiền
+  // Xác minh với PayOS — không bao giờ tin client
+  let payosStatus = null;
+  let payosAmount = null;
+  try {
+    const payosResponse = await payosService.getOrder(code);
+    if (payosResponse.code === '00' && payosResponse.data) {
+      payosStatus = payosResponse.data.status;
+      payosAmount = payosResponse.data.amount;
+    }
+  } catch (payosError) {
+    console.error('Lỗi xác minh PayOS khi nạp ví:', payosError.message);
+    const err = new Error('Không thể xác minh giao dịch với PayOS. Vui lòng thử lại sau.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if (payosStatus !== 'PAID') {
+    const err = new Error(
+      payosStatus === 'CANCELLED'
+        ? 'Giao dịch đã bị hủy.'
+        : payosStatus === 'EXPIRED'
+          ? 'Giao dịch đã hết hạn. Vui lòng tạo yêu cầu nạp tiền mới.'
+          : 'Thanh toán chưa hoàn tất. Vui lòng chuyển khoản và chờ vài phút rồi bấm "Kiểm tra thanh toán".'
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Dùng số tiền từ PayOS để tránh gian lận
+  const amountToDeposit = payosAmount != null && Number.isFinite(Number(payosAmount))
+    ? Math.round(Number(payosAmount))
+    : Math.round(numAmount);
+
   return await deposit(userId, {
-    amount: Math.round(numAmount),
+    amount: amountToDeposit,
     description: 'Nạp tiền qua PayOS',
     orderCode: code,
     paymentMethod: 'payos',

@@ -72,7 +72,8 @@ async function confirmDeposit(req, res) {
     res.json(result);
   } catch (error) {
     console.error('Error confirming deposit:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const status = error.statusCode || 500;
+    res.status(status).json({ success: false, message: error.message });
   }
 }
 

@@ -1,0 +1,109 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="ManageClassrooms" name="Manage Classrooms">
+    <mxGraphModel dx="1300" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="800">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Manage Classrooms&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- RoomRouter -->
+        <mxCell id="RoomRouter" value="&lt;b&gt;RoomRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="RoomRouter-route" value="POST /api/rooms&#xa;GET /api/rooms&#xa;GET /api/rooms/search&#xa;GET /api/rooms/:id&#xa;PUT /api/rooms/:id&#xa;DELETE /api/rooms/:id&#xa;GET /api/rooms/:id/usage-history" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RoomRouter">
+          <mxGeometry y="30" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- RoomController -->
+        <mxCell id="RoomController" value="&lt;b&gt;RoomController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="70" width="280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="RoomController-methods" value="+createRoom(req): Response&#xa;+getRooms(req): Response&#xa;+searchRooms(req): Response&#xa;+getRoomById(req): Response&#xa;+updateRoom(req): Response&#xa;+deleteRoom(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RoomController">
+          <mxGeometry y="30" width="280" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- RoomService -->
+        <mxCell id="RoomService" value="&lt;b&gt;RoomService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="70" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="RoomService-methods" value="+createRoom(data): Room&#xa;+getRooms(filters): Result&#xa;+getRoomById(id): Room&#xa;+updateRoom(id, data): Room&#xa;+deleteRoom(id): void&#xa;+getRoomUsageHistory(roomId): Usage[]&#xa;-buildRoomUsageMap(roomIds): Map&#xa;-attachUsageToRoom(room, usageMap): RoomWithUsage" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RoomService">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Room -->
+        <mxCell id="Room" value="&lt;b&gt;Room&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="260" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Room-fields" value="-id: ObjectId&#xa;-roomCode: string&#xa;-roomName: string&#xa;-roomType: string&#xa;-capacity: number&#xa;-status: string (available, occupied)&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Room">
+          <mxGeometry y="30" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Schedule -->
+        <mxCell id="Schedule" value="&lt;b&gt;Schedule&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="260" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Schedule-fields" value="-id: ObjectId&#xa;-room: ObjectId (ref Room)&#xa;-classSection: ObjectId (ref ClassSection)&#xa;-dayOfWeek: number&#xa;-startTime: string&#xa;-endTime: string&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Schedule">
+          <mxGeometry y="30" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSection -->
+        <mxCell id="ClassSection" value="&lt;b&gt;ClassSection&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="260" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSection-fields" value="-id: ObjectId&#xa;-classCode: string&#xa;-subject: ObjectId&#xa;-semester: number&#xa;-academicYear: string&#xa;-status: string&#xa;-maxCapacity: number&#xa;-currentEnrollment: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSection">
+          <mxGeometry y="30" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Semester -->
+        <mxCell id="Semester" value="&lt;b&gt;Semester&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="260" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="Semester-fields" value="-id: ObjectId&#xa;-semesterNum: number&#xa;-academicYear: string&#xa;-isCurrent: boolean&#xa;-startDate: Date&#xa;-endDate: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Semester">
+          <mxGeometry y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations: Router -> Controller -> Service -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomRouter-route" target="RoomController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="125" as="sourcePoint" /><mxPoint x="400" y="125" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomController-methods" target="RoomService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="680" y="125" as="sourcePoint" /><mxPoint x="760" y="125" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Service uses Room, Schedule, Semester -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomService" target="Room">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="910" y="170" as="sourcePoint" /><mxPoint x="190" y="260" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomService" target="Schedule">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="910" y="170" as="sourcePoint" /><mxPoint x="450" y="260" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomService" target="Semester">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="910" y="170" as="sourcePoint" /><mxPoint x="960" y="260" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Schedule -> Room (Association) -->
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Schedule-fields" target="Room-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="315" as="sourcePoint" /><mxPoint x="300" y="320" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel6-lbl" value="room" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel6"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- Schedule -> ClassSection (Association) -->
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Schedule-fields" target="ClassSection-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="560" y="315" as="sourcePoint" /><mxPoint x="600" y="310" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel7-lbl" value="classSection" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel7"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- ClassSection uses Semester (by semester num + academicYear - aggregation: can exist without Semester entity) -->
+        <mxCell id="rel8" value="" style="endArrow=diamondThin;endFill=0;endSize=16;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSection-fields" target="Semester-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="820" y="310" as="sourcePoint" /><mxPoint x="860" y="305" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel8-lbl" value="semester,&#xa;academicYear" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel8"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;Room routes may use&#xa;AuthMiddleware, RBAC&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="200" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RoomRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="210" y="180" as="sourcePoint" /><mxPoint x="140" y="200" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
