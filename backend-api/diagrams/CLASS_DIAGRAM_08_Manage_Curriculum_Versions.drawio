@@ -1,0 +1,112 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="ManageCurriculumVersions" name="Manage Curriculum Versions">
+    <mxGraphModel dx="1400" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Manage Curriculum Versions&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="420" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumRouter -->
+        <mxCell id="CurriculumRouter" value="&lt;b&gt;CurriculumRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="300" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="CurriculumRouter-route" value="GET /api/curriculums&#xa;GET /api/curriculums/:id&#xa;GET /api/curriculums/:id/details&#xa;POST /api/curriculums&#xa;PUT /api/curriculums/:id&#xa;DELETE /api/curriculums/:id&#xa;GET /api/curriculums/:curriculumId/semesters/list&#xa;GET /api/curriculums/semesters/:semesterId&#xa;POST /api/curriculums/:curriculumId/semesters&#xa;PUT /api/curriculums/semesters/:semesterId&#xa;DELETE /api/curriculums/semesters/:semesterId&#xa;GET /api/curriculums/semesters/:semesterId/courses&#xa;POST /api/curriculums/.../courses&#xa;PUT /api/curriculums/courses/:courseId&#xa;DELETE /api/curriculums/courses/:courseId" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="CurriculumRouter">
+          <mxGeometry y="30" width="300" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumController -->
+        <mxCell id="CurriculumController" value="&lt;b&gt;CurriculumController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="440" y="70" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="CurriculumController-methods" value="+getCurriculums(req): Response&#xa;+getCurriculumById(req): Response&#xa;+getCurriculumWithDetails(req): Response&#xa;+createCurriculum(req): Response&#xa;+updateCurriculum(req): Response&#xa;+deleteCurriculum(req): Response&#xa;+getSemesters(req): Response&#xa;+getSemesterById(req): Response&#xa;+createSemester(req): Response&#xa;+updateSemester(req): Response&#xa;+deleteSemester(req): Response&#xa;+getCourses(req): Response&#xa;+addCourse(req): Response&#xa;+updateCourse(req): Response&#xa;+deleteCourse(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="CurriculumController">
+          <mxGeometry y="30" width="300" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumService, CurriculumSemesterService, CurriculumCourseService -->
+        <mxCell id="CurriculumService" value="&lt;b&gt;CurriculumService&lt;/b&gt;&#xa;&lt;b&gt;CurriculumSemesterService&lt;/b&gt;&#xa;&lt;b&gt;CurriculumCourseService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="820" y="70" width="320" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="CurriculumService-methods" value="+getCurriculums(filters): Curriculum[]&#xa;+getCurriculumById(id): Curriculum&#xa;+getCurriculumWithDetails(id): CurriculumWithDetails&#xa;+createCurriculum(data): Curriculum&#xa;+updateCurriculum(id, data): Curriculum&#xa;+getSemesters(curriculumId): CurriculumSemester[]&#xa;+createSemester(curriculumId, data): CurriculumSemester&#xa;+getCourses(semesterId): CurriculumCourse[]&#xa;+addCourse(semesterId, data): CurriculumCourse&#xa;+updateCourse(courseId, data): CurriculumCourse&#xa;+deleteCourse(courseId): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="CurriculumService">
+          <mxGeometry y="30" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Curriculum -->
+        <mxCell id="Curriculum" value="&lt;b&gt;Curriculum&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="280" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Curriculum-fields" value="-id: ObjectId&#xa;-code: string&#xa;-major: string&#xa;-academicYear: string&#xa;-name: string&#xa;-isActive: boolean&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Curriculum">
+          <mxGeometry y="30" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumSemester -->
+        <mxCell id="CurriculumSemester" value="&lt;b&gt;CurriculumSemester&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="280" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="CurriculumSemester-fields" value="-id: ObjectId&#xa;-curriculum: ObjectId (ref Curriculum)&#xa;-semesterOrder: number&#xa;-name: string&#xa;-createdAt: Date&#xa;-updatedAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="CurriculumSemester">
+          <mxGeometry y="30" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumCourse -->
+        <mxCell id="CurriculumCourse" value="&lt;b&gt;CurriculumCourse&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="280" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="CurriculumCourse-fields" value="-id: ObjectId&#xa;-curriculumSemester: ObjectId (ref CurriculumSemester)&#xa;-subject: ObjectId (ref Subject)&#xa;-credits: number&#xa;-isRequired: boolean&#xa;-order: number&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="CurriculumCourse">
+          <mxGeometry y="30" width="240" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Subject -->
+        <mxCell id="Subject" value="&lt;b&gt;Subject&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="900" y="280" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="Subject-fields" value="-id: ObjectId&#xa;-subjectCode: string&#xa;-subjectName: string&#xa;-credits: number&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Subject">
+          <mxGeometry y="30" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations: Router -> Controller -> Service -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumRouter-route" target="CurriculumController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="380" y="140" as="sourcePoint" /><mxPoint x="440" y="140" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumController-methods" target="CurriculumService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="740" y="140" as="sourcePoint" /><mxPoint x="820" y="140" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Service uses Curriculum, CurriculumSemester, CurriculumCourse, Subject -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumService" target="Curriculum">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="980" y="170" as="sourcePoint" /><mxPoint x="190" y="280" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumService" target="CurriculumSemester">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="980" y="170" as="sourcePoint" /><mxPoint x="460" y="280" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumService" target="CurriculumCourse">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="980" y="170" as="sourcePoint" /><mxPoint x="740" y="280" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumService" target="Subject">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="980" y="170" as="sourcePoint" /><mxPoint x="1000" y="280" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Composition: CurriculumSemester *-> Curriculum (semester cannot exist without curriculum) -->
+        <mxCell id="rel7" value="" style="endArrow=diamondThin;endFill=1;endSize=16;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumSemester-fields" target="Curriculum-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="325" as="sourcePoint" /><mxPoint x="300" y="340" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel7-lbl" value="curriculum&#xa;1" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel7"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- Composition: CurriculumCourse *-> CurriculumSemester -->
+        <mxCell id="rel8" value="" style="endArrow=diamondThin;endFill=1;endSize=16;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumCourse-fields" target="CurriculumSemester-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="620" y="330" as="sourcePoint" /><mxPoint x="580" y="325" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel8-lbl" value="curriculumSemester&#xa;1" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel8"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- Association: CurriculumCourse -> Subject (course references subject; Subject can exist independently) -->
+        <mxCell id="rel9" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumCourse-fields" target="Subject-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="860" y="330" as="sourcePoint" /><mxPoint x="900" y="325" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel9-lbl" value="subject" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel9"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;Curriculum routes may use&#xa;AuthMiddleware, RBAC (admin/staff)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="220" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="CurriculumRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="230" y="210" as="sourcePoint" /><mxPoint x="160" y="220" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

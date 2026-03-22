@@ -296,6 +296,25 @@ async function getTuitionExcess(req, res) {
   }
 }
 
+// POST /api/finance/payments/pay-by-wallet - Thanh toán học phí bằng ví sinh viên
+async function payTuitionByWallet(req, res) {
+  try {
+    const userId = req.auth.sub;
+    const result = await financeService.payTuitionByWallet(userId);
+    return res.status(200).json({
+      success: true,
+      data: result,
+      message: result.message,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Lỗi hệ thống',
+    });
+  }
+}
+
 module.exports = {
   getMyTuitionSummary,
   confirmPayment,
@@ -305,4 +324,5 @@ module.exports = {
   createCurriculumPayment,
   confirmPaymentWithEnrollment,
   getTuitionExcess,
+  payTuitionByWallet,
 };

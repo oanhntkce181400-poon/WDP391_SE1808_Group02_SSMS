@@ -33,6 +33,7 @@ const PAYMENT_METHOD = {
   cash: 'Tiền mặt',
   bank_transfer: 'Chuyển khoản',
   online: 'Online',
+  wallet: 'Ví sinh viên',
   other: 'Khác',
 };
 
@@ -46,8 +47,11 @@ export default function TuitionPage() {
   const [paymentData, setPaymentData] = useState(null);
   const [bankInfo, setBankInfo] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPaymentChoiceModal, setShowPaymentChoiceModal] = useState(false);
   const [isRefundingExcess, setIsRefundingExcess] = useState(false);
   const [tuitionExcess, setTuitionExcess] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [isPayingByWallet, setIsPayingByWallet] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -65,15 +69,18 @@ export default function TuitionPage() {
     setIsLoading(true);
     setError('');
     try {
-      const [statusRes, historyRes, excessRes] = await Promise.all([
+      const [statusRes, historyRes, excessRes, walletRes] = await Promise.all([
         financeService.getCurriculumPaymentStatus(),
         financeService.getPaymentHistory(null),
         financeService.getTuitionExcess().catch(() => ({ data: { data: null } })),
+        walletService.getMyWallet().catch(() => ({ data: { data: null } })),
       ]);
       setCurriculumStatus(statusRes.data.data);
       const allPayments = historyRes.data.data || [];
       setPaymentHistory(allPayments);
       setTuitionExcess(excessRes.data?.data ?? null);
+      const wallet = walletRes.data?.data ?? walletRes.data;
+      setWalletBalance(wallet?.balance ?? null);
     } catch (err) {
       const status = err.response?.status;
       if (status === 404) setError('Không tìm thấy học kỳ. Vui lòng liên hệ phòng Đào tạo.');
@@ -114,11 +121,41 @@ export default function TuitionPage() {
     }
   };
 
-  const handlePayNow = async () => {
+  const handleOpenPaymentChoice = () => {
     if (!curriculumStatus || hasPaid) {
       toast.warning('Bạn đã thanh toán học phí kỳ này rồi.');
       return;
     }
+    setShowPaymentChoiceModal(true);
+  };
+
+  const handlePayByWallet = async () => {
+    if (!curriculumStatus || hasPaid || isPayingByWallet) return;
+    const balance = walletBalance ?? 0;
+    if (balance < remainingDebt) {
+      toast.error(`Số dư ví không đủ. Cần ${formatMoney(remainingDebt)}, hiện có ${formatMoney(balance)}.`);
+      return;
+    }
+    setIsPayingByWallet(true);
+    try {
+      const res = await financeService.payTuitionByWallet();
+      if (res.data?.success) {
+        setShowPaymentChoiceModal(false);
+        toast.success(res.data?.message || 'Thanh toán học phí bằng ví thành công.');
+        loadData();
+      } else {
+        toast.error(res.data?.message || 'Thanh toán thất bại.');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Có lỗi xảy ra khi thanh toán bằng ví.');
+    } finally {
+      setIsPayingByWallet(false);
+    }
+  };
+
+  const handlePayByBank = async () => {
+    setShowPaymentChoiceModal(false);
+    if (!curriculumStatus || hasPaid) return;
     setIsCreatingPayment(true);
     try {
       const res = await financeService.createCurriculumPayment();
@@ -230,11 +267,11 @@ export default function TuitionPage() {
           </div>
           {!hasPaid && remainingDebt > 0 && (
             <button
-              onClick={handlePayNow}
-              disabled={isCreatingPayment}
+              onClick={handleOpenPaymentChoice}
+              disabled={isCreatingPayment || isPayingByWallet}
               className="rounded-lg bg-[#5D5FEF] px-4 py-2 text-sm font-medium text-white hover:bg-[#4a4dcf] disabled:opacity-50"
             >
-              {isCreatingPayment ? 'Đang tạo...' : 'Thanh toán ngay'}
+              {isCreatingPayment ? 'Đang tạo...' : isPayingByWallet ? 'Đang xử lý...' : 'Thanh toán ngay'}
             </button>
           )}
         </div>
@@ -336,6 +373,64 @@ export default function TuitionPage() {
           )}
         </div>
       </div>
+
+      {/* Modal chọn hình thức: Ví hoặc Ngân hàng */}
+      {showPaymentChoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h3 className="text-lg font-semibold text-slate-800">Chọn hình thức thanh toán</h3>
+              <button
+                onClick={() => setShowPaymentChoiceModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3 p-5">
+              <p className="text-sm text-slate-600">
+                Số tiền cần thanh toán: <strong className="text-red-600">{formatMoney(remainingDebt)}</strong>
+              </p>
+              <button
+                type="button"
+                onClick={handlePayByWallet}
+                disabled={isPayingByWallet || (walletBalance ?? 0) < remainingDebt}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-purple-200 bg-purple-50 px-4 py-4 text-left transition hover:border-purple-300 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-xl">👛</span>
+                  <div>
+                    <p className="font-semibold text-slate-800">Thanh toán bằng ví sinh viên</p>
+                    <p className="text-xs text-slate-500">
+                      Số dư: {formatMoney(walletBalance ?? 0)}
+                      {(walletBalance ?? 0) < remainingDebt && (
+                        <span className="ml-1 text-amber-600">(Không đủ, vui lòng nạp thêm)</span>
+                      )}
+                    </p>
+                  </div>
+                </span>
+                {isPayingByWallet ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={handlePayByBank}
+                disabled={isCreatingPayment}
+                className="flex w-full items-center justify-between rounded-xl border-2 border-blue-200 bg-blue-50 px-4 py-4 text-left transition hover:border-blue-300 hover:bg-blue-100 disabled:opacity-60"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-xl">🏦</span>
+                  <div>
+                    <p className="font-semibold text-slate-800">Thanh toán qua ngân hàng</p>
+                    <p className="text-xs text-slate-500">QR / Chuyển khoản / Cổng PayOS</p>
+                  </div>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal thanh toán: QR + chuyển khoản + Mở cổng PayOS */}
       {showPaymentModal && paymentData && (

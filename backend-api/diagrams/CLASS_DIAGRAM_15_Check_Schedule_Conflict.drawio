@@ -1,0 +1,103 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="CheckScheduleConflict" name="Check Schedule Conflict">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Check Schedule Conflict&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ScheduleRouter -->
+        <mxCell id="ScheduleRouter" value="&lt;b&gt;ScheduleRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ScheduleRouter-route" value="POST /api/classes/:classId/schedules/check-conflict" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ScheduleRouter">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ScheduleController -->
+        <mxCell id="ScheduleController" value="&lt;b&gt;ScheduleController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ScheduleController-methods" value="+checkConflict(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ScheduleController">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ScheduleService -->
+        <mxCell id="ScheduleService" value="&lt;b&gt;ScheduleService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="70" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ScheduleService-methods" value="+checkConflict(classSectionId, scheduleData):&#xa;  ConflictResult" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ScheduleService">
+          <mxGeometry y="30" width="300" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ScheduleRepository -->
+        <mxCell id="ScheduleRepository" value="&lt;b&gt;ScheduleRepository&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="200" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ScheduleRepository-methods" value="+findByClassSection(id): Schedule[]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ScheduleRepository">
+          <mxGeometry y="30" width="300" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Schedule -->
+        <mxCell id="Schedule" value="&lt;b&gt;Schedule&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="340" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Schedule-fields" value="-id: ObjectId&#xa;-classSection: ObjectId&#xa;-room: ObjectId&#xa;-dayOfWeek: number&#xa;-startTime: string&#xa;-endTime: string&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Schedule">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSection -->
+        <mxCell id="ClassSection" value="&lt;b&gt;ClassSection&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="340" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSection-fields" value="-id: ObjectId&#xa;-classCode: string&#xa;-subject: ObjectId&#xa;-semester: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSection">
+          <mxGeometry y="30" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Room -->
+        <mxCell id="Room" value="&lt;b&gt;Room&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="340" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Room-fields" value="-id: ObjectId&#xa;-roomCode: string&#xa;-roomName: string&#xa;-capacity: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Room">
+          <mxGeometry y="30" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ConflictResultDTO -->
+        <mxCell id="ConflictResultDTO" value="&lt;b&gt;ConflictResultDTO&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="490" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ConflictResultDTO-fields" value="+hasConflict: boolean&#xa;+roomConflicts: Room[]&#xa;+classConflicts: ClassSection[]&#xa;+message: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ConflictResultDTO">
+          <mxGeometry y="30" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ScheduleRouter-route" target="ScheduleController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="360" y="100" as="sourcePoint" /><mxPoint x="420" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ScheduleController-methods" target="ScheduleService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="700" y="100" as="sourcePoint" /><mxPoint x="780" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ScheduleService" target="ScheduleRepository">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="930" y="140" as="sourcePoint" /><mxPoint x="930" y="200" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3-lbl" value="uses" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+        <mxCell id="rel3b" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ScheduleRepository" target="Schedule">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="930" y="270" as="sourcePoint" /><mxPoint x="200" y="340" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3b-lbl" value="maps to" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3b"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Dependency: returns DTO -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ScheduleService" target="ConflictResultDTO">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="930" y="70" as="sourcePoint" /><mxPoint x="550" y="490" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4-lbl" value="&#171;returns&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel4"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware (admin/staff)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="140" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

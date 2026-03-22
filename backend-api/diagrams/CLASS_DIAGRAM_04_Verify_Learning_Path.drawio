@@ -1,0 +1,109 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="VerifyLearningPath" name="Verify Learning Path (Prerequisites)">
+    <mxGraphModel dx="1200" dy="750" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="750">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Verify Learning Path (Prerequisites)&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="450" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- RegistrationRouter -->
+        <mxCell id="RegistrationRouter" value="&lt;b&gt;RegistrationRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="RegistrationRouter-route" value="POST /api/registrations/validate&#xa;(validate prerequisites)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegistrationRouter">
+          <mxGeometry y="30" width="260" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- RegistrationController -->
+        <mxCell id="RegistrationController" value="&lt;b&gt;RegistrationController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="RegistrationController-methods" value="+validatePrerequisites(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegistrationController">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- RegistrationService -->
+        <mxCell id="RegistrationService" value="&lt;b&gt;RegistrationService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="70" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="RegistrationService-methods" value="+validatePrerequisites(studentId, classId):&#xa;  { eligible, message, missingPrerequisites? }" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="RegistrationService">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSection -->
+        <mxCell id="ClassSection" value="&lt;b&gt;ClassSection&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="220" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSection-fields" value="-id: ObjectId&#xa;-classCode: string&#xa;-subject: ObjectId (ref Subject)&#xa;-semester: number&#xa;-academicYear: string&#xa;-maxCapacity: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSection">
+          <mxGeometry y="30" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ClassEnrollment -->
+        <mxCell id="ClassEnrollment" value="&lt;b&gt;ClassEnrollment&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="220" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassEnrollment-fields" value="-id: ObjectId&#xa;-student: ObjectId&#xa;-classSection: ObjectId&#xa;-status: string (enrolled, completed)&#xa;-grade: number&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassEnrollment">
+          <mxGeometry y="30" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Subject -->
+        <mxCell id="Subject" value="&lt;b&gt;Subject&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="220" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Subject-fields" value="-id: ObjectId&#xa;-subjectCode: string&#xa;-subjectName: string&#xa;-credits: number&#xa;-prerequisites: [{ code, name }]&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Subject">
+          <mxGeometry y="30" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- ValidatePrerequisitesResult (DTO) -->
+        <mxCell id="ValidateResultDTO" value="&lt;b&gt;ValidatePrerequisitesResult&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="400" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ValidateResultDTO-fields" value="+eligible: boolean&#xa;+message: string&#xa;+missingPrerequisites?: { code, name }[]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ValidateResultDTO">
+          <mxGeometry y="30" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations: Router -> Controller -> Service -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationRouter-route" target="RegistrationController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="100" as="sourcePoint" /><mxPoint x="400" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationController-methods" target="RegistrationService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="680" y="100" as="sourcePoint" /><mxPoint x="760" y="100" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Service uses ClassSection, ClassEnrollment, Subject -->
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationService" target="ClassSection">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="900" y="130" as="sourcePoint" /><mxPoint x="190" y="220" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationService" target="ClassEnrollment">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="900" y="130" as="sourcePoint" /><mxPoint x="450" y="220" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationService" target="Subject">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="900" y="130" as="sourcePoint" /><mxPoint x="720" y="220" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <!-- Dependency: Service returns DTO -->
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationService" target="ValidateResultDTO">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="900" y="70" as="sourcePoint" /><mxPoint x="520" y="400" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel6-lbl" value="&#171;returns&#187;" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel6"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- ClassSection -> Subject (Association) -->
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassSection-fields" target="Subject-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="300" y="265" as="sourcePoint" /><mxPoint x="600" y="280" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel7-lbl" value="subject" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel7"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- ClassEnrollment -> ClassSection (Association) -->
+        <mxCell id="rel8" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ClassEnrollment-fields" target="ClassSection-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="340" y="275" as="sourcePoint" /><mxPoint x="300" y="265" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel8-lbl" value="classSection" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel8"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware (student)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="140" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="RegistrationRouter" target="note1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"><mxPoint x="210" y="130" as="sourcePoint" /><mxPoint x="150" y="150" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

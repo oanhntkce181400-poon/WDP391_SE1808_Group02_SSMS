@@ -348,8 +348,11 @@ export default function WalletPage() {
                 }}
                 className="w-full rounded-lg border border-slate-300 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Tôi đã chuyển khoản
+                Kiểm tra thanh toán
               </button>
+              <p className="text-xs text-slate-400 text-center mt-1">
+                Sau khi chuyển khoản, bấm để hệ thống xác minh với ngân hàng
+              </p>
             </div>
           </div>
         </div>

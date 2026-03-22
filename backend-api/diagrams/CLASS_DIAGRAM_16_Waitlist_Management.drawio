@@ -1,0 +1,100 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="WaitlistManagement" name="Waitlist Management">
+    <mxGraphModel dx="1500" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="900">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: Waitlist Management&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="350" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- WaitlistRouter -->
+        <mxCell id="WaitlistRouter" value="&lt;b&gt;WaitlistRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="70" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="WaitlistRouter-route" value="POST /api/waitlist&#xa;GET /api/waitlist/my&#xa;DELETE /api/waitlist/:id&#xa;GET /api/waitlist/admin/all&#xa;DELETE /api/waitlist/:id/admin" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WaitlistRouter">
+          <mxGeometry y="30" width="280" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- WaitlistController -->
+        <mxCell id="WaitlistController" value="&lt;b&gt;WaitlistController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="420" y="70" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="WaitlistController-methods" value="+joinWaitlist(req): Response&#xa;+getMyWaitlist(req): Response&#xa;+cancelWaitlist(req): Response&#xa;+getWaitlist(req): Response (admin)&#xa;+deleteWaitlist(req): Response (admin)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WaitlistController">
+          <mxGeometry y="30" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- WaitlistService -->
+        <mxCell id="WaitlistService" value="&lt;b&gt;WaitlistService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="70" width="320" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="WaitlistService-methods" value="+joinWaitlist(userId, classSectionId): Waitlist&#xa;+getMyWaitlist(userId): Waitlist[]&#xa;+cancelWaitlist(id, userId): void&#xa;+getWaitlist(filters): Waitlist[]&#xa;+deleteWaitlist(id): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WaitlistService">
+          <mxGeometry y="30" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- WaitlistRepository -->
+        <mxCell id="WaitlistRepository" value="&lt;b&gt;WaitlistRepository&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="240" width="320" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="WaitlistRepository-methods" value="+findByStudentId(id): Waitlist[]&#xa;+findByClassSectionId(id): Waitlist[]&#xa;+save(waitlist): Waitlist&#xa;+delete(id): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="WaitlistRepository">
+          <mxGeometry y="30" width="320" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Waitlist (Entity) -->
+        <mxCell id="Waitlist" value="&lt;b&gt;Waitlist&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="400" width="260" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="Waitlist-fields" value="-id: ObjectId&#xa;-student: ObjectId (ref Student)&#xa;-classSection: ObjectId (ref ClassSection)&#xa;-position: number&#xa;-status: string&#xa;-notifiedAt: Date&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Waitlist">
+          <mxGeometry y="30" width="260" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Student (Entity) -->
+        <mxCell id="Student" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="400" width="180" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Student-fields" value="-id: ObjectId&#xa;-studentCode: string&#xa;-fullName: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="Student">
+          <mxGeometry y="30" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ClassSection (Entity) -->
+        <mxCell id="ClassSection" value="&lt;b&gt;ClassSection&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="400" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassSection-fields" value="-id: ObjectId&#xa;-classCode: string&#xa;-subject: ObjectId&#xa;-maxCapacity: number&#xa;-currentEnrollment: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;portConstraint=eastwest;fontSize=10;" vertex="1" parent="ClassSection">
+          <mxGeometry y="30" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations -->
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="WaitlistRouter-route" target="WaitlistController-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="360" y="120" as="sourcePoint" /><mxPoint x="420" y="120" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="WaitlistController-methods" target="WaitlistService-methods">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="720" y="120" as="sourcePoint" /><mxPoint x="800" y="120" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WaitlistService" target="WaitlistRepository">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="960" y="170" as="sourcePoint" /><mxPoint x="960" y="240" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3-lbl" value="uses" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+        <mxCell id="rel3b" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="WaitlistRepository" target="Waitlist">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="960" y="330" as="sourcePoint" /><mxPoint x="430" y="400" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel3b-lbl" value="maps to" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel3b"><mxGeometry x="-1" y="1" relative="1" as="geometry"><mxPoint y="-10" as="offset" /></mxGeometry></mxCell>
+        
+        <!-- Association: Waitlist -> Student -->
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Waitlist-fields" target="Student-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="300" y="470" as="sourcePoint" /><mxPoint x="260" y="440" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel4-lbl" value="student" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel4"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+        <!-- Association: Waitlist -> ClassSection -->
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="Waitlist-fields" target="ClassSection-fields">
+          <mxGeometry width="160" relative="1" as="geometry"><mxPoint x="560" y="470" as="sourcePoint" /><mxPoint x="600" y="445" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="rel5-lbl" value="classSection" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="rel5"><mxGeometry x="-0.1" y="1" relative="1" as="geometry"><mxPoint y="-8" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware,&#xa;RBACMiddleware (student, admin)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="190" width="140" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

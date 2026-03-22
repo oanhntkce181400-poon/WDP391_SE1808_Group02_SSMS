@@ -151,52 +151,134 @@ exports.cancelOrder = async (req, res) => {
 };
 
 // [POST] /api/payment/webhook - Webhook từ PayOS
+// Cải thiện: Thêm xử lý auto-enrollment, chống duplicate, logging chi tiết
 exports.webhook = async (req, res) => {
+  const webhookData = req.body;
+  const orderCode = webhookData.orderCode;
+
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('📥 PayOS Webhook nhận được:', {
+    orderCode,
+    amount: webhookData.amount,
+    code: webhookData.code,
+    desc: webhookData.desc,
+    transactionDateTime: webhookData.transactionDateTime,
+  });
+  console.log('═══════════════════════════════════════════════════════════');
+
   try {
-    const webhookData = req.body;
-    console.log('PayOS Webhook:', webhookData);
-    
-    // Xác thực webhook signature
+    // Bước 1: Xác thực webhook signature
     const isValidSignature = payosService.verifyWebhookSignature(
       webhookData.signature,
       webhookData
     );
-    
+
     if (!isValidSignature) {
+      console.error(`❌ Webhook rejected: Invalid signature for orderCode ${orderCode}`);
       return res.status(400).json({
         error: -1,
         message: 'Invalid signature',
       });
     }
-    
-    // Cập nhật trạng thái đơn hàng trong database
-    const paymentOrder = await PaymentOrder.findOne({ orderCode: parseInt(webhookData.orderCode) });
-    
-    if (paymentOrder) {
-      paymentOrder.status = webhookData.code === '00' ? 'PAID' : 'FAILED';
-      paymentOrder.paidAt = new Date();
+    console.log(`✅ Webhook signature verified for orderCode ${orderCode}`);
+
+    // Bước 2: Tìm PaymentOrder
+    const paymentOrder = await PaymentOrder.findOne({ orderCode: parseInt(orderCode) });
+
+    if (!paymentOrder) {
+      console.error(`❌ Webhook: PaymentOrder not found for orderCode ${orderCode}`);
+      return res.status(404).json({
+        error: -1,
+        message: 'Payment order not found',
+      });
+    }
+
+    // Bước 3: Kiểm tra trạng thái hiện tại - tránh xử lý trùng lặp
+    if (paymentOrder.status === 'PAID') {
+      console.log(`⚠️ Webhook: Order ${orderCode} đã được xử lý trước đó, bỏ qua`);
+      return res.status(200).json({
+        error: 0,
+        message: 'Payment already processed',
+        data: { orderCode, status: 'PAID' },
+      });
+    }
+
+    // Bước 4: Xử lý thanh toán thành công
+    if (webhookData.code === '00') {
+      console.log(`💰 Processing PAID webhook for orderCode ${orderCode}`);
+
+      // Cập nhật PaymentOrder
+      paymentOrder.status = 'PAID';
+      paymentOrder.paidAt = new Date(webhookData.transactionDateTime || Date.now());
       await paymentOrder.save();
-      
-      // Nếu thanh toán thành công, lưu vào bảng Payment
-      if (webhookData.code === '00') {
+
+      // Kiểm tra duplicate Payment (bảo mật)
+      const existingPayment = await Payment.findOne({ orderCode: String(orderCode) });
+      if (existingPayment) {
+        console.log(`⚠️ Payment đã tồn tại cho orderCode ${orderCode}, bỏ qua tạo mới`);
+      } else {
+        // Tạo Payment record
         const payment = new Payment({
           student: paymentOrder.studentId,
           semesterCode: paymentOrder.semesterCode,
           amount: webhookData.amount,
-          paidAt: new Date(),
-          note: `Thanh toán qua PayOS - ${paymentOrder.description}`,
+          paidAt: paymentOrder.paidAt,
+          note: `PayOS - OrderCode: ${orderCode} - ${paymentOrder.description}`,
           method: 'online',
+          status: 'completed',
+          orderCode: String(orderCode),
         });
         await payment.save();
+        console.log(`✅ Payment created for orderCode ${orderCode}, amount: ${webhookData.amount}`);
+
+        // Bước 5: Auto-enrollment sau thanh toán thành công
+        try {
+          const autoEnrollment = require('../services/autoEnrollment.service');
+          const paymentValidation = require('../services/paymentValidation.service');
+
+          const paymentStatus = await paymentValidation.checkSemesterPaymentRequirement(
+            paymentOrder.studentId
+          );
+
+          if (paymentStatus.mustPay && !paymentStatus.hasPaid) {
+            console.log(`📚 Bắt đầu auto-enrollment cho student ${paymentOrder.studentId}`);
+            const enrollmentResult = await autoEnrollment.autoEnrollAfterPayment(
+              paymentOrder.studentId,
+              paymentStatus.currentCurriculumSemester
+            );
+            console.log(`✅ Auto-enrollment completed:`, enrollmentResult);
+          } else {
+            console.log(`ℹ️ Auto-enrollment skipped: hasPaid = ${paymentStatus.hasPaid}`);
+          }
+        } catch (enrollmentError) {
+          // Ghi log lỗi nhưng không block webhook response
+          console.error(`❌ Auto-enrollment error for orderCode ${orderCode}:`, enrollmentError.message);
+        }
       }
+    } else {
+      // Xử lý thanh toán thất bại
+      console.log(`❌ Processing FAILED webhook for orderCode ${orderCode}, code: ${webhookData.code}`);
+      paymentOrder.status = 'FAILED';
+      await paymentOrder.save();
     }
-    
-    return res.status(200).json({ error: 0, message: 'Webhook received' });
+
+    console.log(`✅ Webhook processed successfully for orderCode ${orderCode}`);
+    return res.status(200).json({
+      error: 0,
+      message: 'Webhook received and processed',
+      data: {
+        orderCode,
+        status: webhookData.code === '00' ? 'PAID' : 'FAILED',
+        amount: webhookData.amount,
+      },
+    });
+
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error(`❌ Webhook error for orderCode ${orderCode}:`, error);
     return res.status(500).json({
       error: -1,
-      message: 'Có lỗi xảy ra',
+      message: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

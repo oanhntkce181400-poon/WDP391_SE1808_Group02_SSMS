@@ -44,6 +44,13 @@ router.post(
   financeController.createCurriculumPayment,
 );
 
+// Thanh toán học phí bằng ví sinh viên
+router.post(
+  '/payments/pay-by-wallet',
+  authMiddleware,
+  financeController.payTuitionByWallet,
+);
+
 // Xác nhận thanh toán và tự động đăng ký môn học
 router.post(
   '/payments/confirm-with-enrollment',
