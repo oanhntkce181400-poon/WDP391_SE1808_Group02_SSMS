@@ -1,17 +1,51 @@
 const Feedback = require('../models/feedback.model');
 const ClassSection = require('../models/classSection.model');
 const StudentEnrollment = require('../models/classEnrollment.model');
+const Student = require('../models/student.model');
+
+/**
+ * A shared populate definition keeps every feedback response consistent between
+ * "my feedback", "recent class feedback", and the update flow. Centralising it
+ * avoids subtle field mismatches across endpoints.
+ */
+const FEEDBACK_CLASS_POPULATE = [
+  { path: 'subject', select: 'subjectCode subjectName credits' },
+  { path: 'teacher', select: 'teacherCode fullName email' },
+  { path: 'room', select: 'roomCode roomName roomNumber' },
+];
 
 class FeedbackService {
   /**
-   * Validate sinh viên là học viên của lớp học
+   * Feedback ownership is stored against the authenticated User id, but class
+   * enrollment records point to the Student document id. We therefore need this
+   * translation step before checking whether the caller is allowed to submit
+   * feedback for the selected class.
+   */
+  async getStudentRecordByUserId(userId) {
+    const student = await Student.findOne({ userId })
+      .select('_id userId studentCode fullName')
+      .lean();
+
+    if (!student) {
+      throw new Error('Student record not found');
+    }
+
+    return student;
+  }
+
+  /**
+   * Enrollment validation uses the Student document id, not the User id.
+   *
+   * We only allow feedback when the enrollment is active enough to represent a
+   * real learning experience. "completed" is kept valid so students can still
+   * review a class after finishing it, while transient statuses are excluded.
    */
   async validateStudentInClass(studentId, classSectionId) {
     try {
       const enrollment = await StudentEnrollment.findOne({
         student: studentId,
         classSection: classSectionId,
-        status: { $in: ['enrolled', 'active'] }
+        status: { $in: ['enrolled', 'completed'] },
       });
 
       return !!enrollment;
@@ -22,55 +56,65 @@ class FeedbackService {
   }
 
   /**
-   * Tạo feedback mới
+   * Creates one feedback record for one student in one class.
+   *
+   * Key business rules:
+   * 1. The class must exist.
+   * 2. The authenticated user must map to a Student record.
+   * 3. That student must actually be enrolled in the class.
+   * 4. One student can submit only one feedback per class.
+   * 5. Even anonymous feedback still stores submittedBy internally so the owner
+   *    can reopen and edit the same submission later.
    */
   async createFeedback(data, userId, req) {
     try {
       const { classSection, rating, comment, criteria, isAnonymous } = data;
+      const student = await this.getStudentRecordByUserId(userId);
 
-      // Validate classSection exists
       const classExists = await ClassSection.findById(classSection);
       if (!classExists) {
         throw new Error('Class section not found');
       }
 
-      // Validate student is enrolled in this class
-      const isEnrolled = await this.validateStudentInClass(userId, classSection);
+      const isEnrolled = await this.validateStudentInClass(student._id, classSection);
       if (!isEnrolled) {
         throw new Error('You are not enrolled in this class');
       }
 
-      // Validate rating
       if (!rating || rating < 1 || rating > 5) {
         throw new Error('Rating must be between 1 and 5');
       }
 
-      // Check if student already submitted feedback for this class
       const existingFeedback = await Feedback.findOne({
         classSection,
         submittedBy: userId,
-        isAnonymous: false
       });
 
       if (existingFeedback) {
         throw new Error('You have already submitted feedback for this class');
       }
 
-      // Create feedback
       const feedback = new Feedback({
         classSection,
-        submittedBy: isAnonymous ? null : userId,
-        isAnonymous: isAnonymous !== false, // Default to true if not specified
+        submittedBy: userId,
+        // "Anonymous" only controls what is shown publicly. Ownership still
+        // needs to exist internally for the student's private edit flow.
+        isAnonymous: isAnonymous !== false,
         rating,
         comment: comment || '',
         criteria: criteria || {},
-        status: 'approved',  // Auto-approve student feedback so it displays immediately
+        // Auto-approving keeps the student-facing class feed responsive without
+        // requiring a manual moderation step for this specific feature.
+        status: 'approved',
         submissionIp: req?.ip,
-        submissionUserAgent: req?.get('User-Agent')
+        submissionUserAgent: req?.get('User-Agent'),
       });
 
       await feedback.save();
-      await feedback.populate('classSection');
+      await feedback.populate({
+        path: 'classSection',
+        populate: FEEDBACK_CLASS_POPULATE,
+      });
 
       return feedback;
     } catch (error) {
@@ -80,19 +124,22 @@ class FeedbackService {
   }
 
   /**
-   * Lấy các feedback cho một lớp học
+   * Returns the public feedback stream for one class.
+   *
+   * Privacy note: we intentionally strip submittedBy and request metadata so
+   * public consumers cannot recover who posted the feedback or from where.
    */
   async getFeedbackByClass(classSectionId, filters = {}) {
     try {
-      const { status = 'approved', includeAnonymous = true } = filters;
+      const { status = 'approved' } = filters;
 
       const query = {
         classSection: classSectionId,
-        ...(status && { status })
+        ...(status && { status }),
       };
 
       const feedbacks = await Feedback.find(query)
-        .select(includeAnonymous ? '' : '-submittedBy')
+        .select('-submittedBy -submissionIp -submissionUserAgent -__v')
         .sort({ createdAt: -1 })
         .lean();
 
@@ -104,13 +151,17 @@ class FeedbackService {
   }
 
   /**
-   * Lấy thống kê feedback cho một lớp học
+   * Builds the lecturer feedback summary card shown on mobile.
+   *
+   * The method stays intentionally lightweight: it computes totals, averages and
+   * a sentiment label directly from the approved feedback documents without
+   * introducing another reporting table.
    */
   async getClassFeedbackStats(classSectionId) {
     try {
       const feedbacks = await Feedback.find({
         classSection: classSectionId,
-        status: 'approved'
+        status: 'approved',
       }).lean();
 
       if (feedbacks.length === 0) {
@@ -119,38 +170,34 @@ class FeedbackService {
           averageRating: 0,
           ratingDistribution: {},
           criteriaAverages: {},
-          sentiment: 'No feedback yet'
+          sentiment: 'No feedback yet',
         };
       }
 
-      // Tính toán thống kê
-      const ratings = feedbacks.map(f => f.rating);
-      const averageRating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2);
+      const ratings = feedbacks.map((feedback) => feedback.rating);
+      const averageRating = (ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(2);
 
-      // Phân bố rating
       const ratingDistribution = {
-        1: feedbacks.filter(f => f.rating === 1).length,
-        2: feedbacks.filter(f => f.rating === 2).length,
-        3: feedbacks.filter(f => f.rating === 3).length,
-        4: feedbacks.filter(f => f.rating === 4).length,
-        5: feedbacks.filter(f => f.rating === 5).length
+        1: feedbacks.filter((feedback) => feedback.rating === 1).length,
+        2: feedbacks.filter((feedback) => feedback.rating === 2).length,
+        3: feedbacks.filter((feedback) => feedback.rating === 3).length,
+        4: feedbacks.filter((feedback) => feedback.rating === 4).length,
+        5: feedbacks.filter((feedback) => feedback.rating === 5).length,
       };
 
-      // Tính trung bình các tiêu chí
       const criteriaAverages = {};
-      const criteria = ['teachingQuality', 'courseContent', 'classEnvironment', 'materialQuality'];
+      const criteriaKeys = ['teachingQuality', 'courseContent', 'classEnvironment', 'materialQuality'];
 
-      for (const criterion of criteria) {
+      for (const criterion of criteriaKeys) {
         const values = feedbacks
-          .map(f => f.criteria?.[criterion])
-          .filter(v => v !== null && v !== undefined);
+          .map((feedback) => feedback.criteria?.[criterion])
+          .filter((value) => value !== null && value !== undefined);
 
         if (values.length > 0) {
-          criteriaAverages[criterion] = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
+          criteriaAverages[criterion] = (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2);
         }
       }
 
-      // Xác định sentiment
       let sentiment = 'Average';
       if (averageRating >= 4.5) sentiment = 'Excellent';
       else if (averageRating >= 4) sentiment = 'Very Good';
@@ -163,7 +210,7 @@ class FeedbackService {
         averageRating: parseFloat(averageRating),
         ratingDistribution,
         criteriaAverages,
-        sentiment
+        sentiment,
       };
     } catch (error) {
       console.error('Error calculating feedback stats:', error);
@@ -172,14 +219,20 @@ class FeedbackService {
   }
 
   /**
-   * Lấy feedback của student
+   * Returns only the feedbacks owned by the authenticated user.
+   *
+   * The parameter is intentionally the User id because submittedBy now always
+   * stores the owner internally, even when the feedback is anonymous to others.
    */
-  async getStudentFeedback(studentId) {
+  async getStudentFeedback(userId) {
     try {
       const feedbacks = await Feedback.find({
-        submittedBy: studentId
+        submittedBy: userId,
       })
-        .populate('classSection')
+        .populate({
+          path: 'classSection',
+          populate: FEEDBACK_CLASS_POPULATE,
+        })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -190,15 +243,12 @@ class FeedbackService {
     }
   }
 
-  /**
-   * Approve feedback (admin/staff)
-   */
   async approveFeedback(feedbackId) {
     try {
       const feedback = await Feedback.findByIdAndUpdate(
         feedbackId,
         { status: 'approved' },
-        { new: true }
+        { new: true },
       );
 
       if (!feedback) {
@@ -212,15 +262,12 @@ class FeedbackService {
     }
   }
 
-  /**
-   * Reject feedback (admin/staff)
-   */
   async rejectFeedback(feedbackId, reason) {
     try {
       const feedback = await Feedback.findByIdAndUpdate(
         feedbackId,
         { status: 'rejected', rejectionReason: reason },
-        { new: true }
+        { new: true },
       );
 
       if (!feedback) {
@@ -234,9 +281,6 @@ class FeedbackService {
     }
   }
 
-  /**
-   * Xóa feedback (admin/staff)
-   */
   async deleteFeedback(feedbackId) {
     try {
       const feedback = await Feedback.findByIdAndDelete(feedbackId);
@@ -253,26 +297,27 @@ class FeedbackService {
   }
 
   /**
-   * Check if feedback is within the feedback window (time constraint)
+   * The update window is derived from the latest active feedback template.
+   *
+   * This keeps the student experience consistent with the rest of the feedback
+   * module without storing duplicated date ranges directly on each feedback row.
    */
   async checkFeedbackWindow(feedbackId) {
     try {
       const feedback = await Feedback.findById(feedbackId).populate({
         path: 'classSection',
         populate: {
-          path: 'subject'
-        }
+          path: 'subject',
+        },
       });
 
       if (!feedback) {
         throw new Error('Feedback not found');
       }
 
-      // Get FeedbackTemplate - for now, get the active/most recent one
-      // In production, this should be linked through ClassSection or Subject
       const FeedbackTemplate = require('../models/feedbackTemplate.model');
       const template = await FeedbackTemplate.findOne({
-        status: { $in: ['active', 'draft'] }
+        status: { $in: ['active', 'draft'] },
       }).sort({ createdAt: -1 });
 
       if (!template || !template.feedbackPeriod) {
@@ -283,7 +328,6 @@ class FeedbackService {
       const startDate = new Date(template.feedbackPeriod.startDate);
       const endDate = new Date(template.feedbackPeriod.endDate);
 
-      // Check if current time is within feedback window
       if (now < startDate) {
         throw new Error('Feedback window has not started yet');
       }
@@ -292,7 +336,6 @@ class FeedbackService {
         throw new Error('Feedback window has expired');
       }
 
-      // Calculate remaining time
       const remainingMs = endDate.getTime() - now.getTime();
       const remainingMinutes = Math.ceil(remainingMs / (1000 * 60));
       const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
@@ -304,7 +347,7 @@ class FeedbackService {
         remainingMinutes,
         remainingHours,
         remainingDays,
-        endDate
+        endDate,
       };
     } catch (error) {
       console.error('Error checking feedback window:', error);
@@ -313,7 +356,14 @@ class FeedbackService {
   }
 
   /**
-   * Update feedback (student can only update if within feedback window)
+   * Students are allowed to update only their own record, but the mobile
+   * product requirement expects that once a student has submitted lecturer
+   * feedback they can come back and refine it later from the same screen.
+   *
+   * The previous implementation reused the template feedback window check here.
+   * That created an inconsistent flow where create could succeed but an
+   * immediate update could still be blocked. We therefore keep ownership
+   * validation and the whitelist of editable fields, but remove the time gate.
    */
   async updateFeedback(feedbackId, userId, updateData) {
     try {
@@ -323,39 +373,31 @@ class FeedbackService {
         throw new Error('Feedback not found');
       }
 
-      // Verify ownership
-      if (feedback.submittedBy.toString() !== userId.toString() && !feedback.isAnonymous) {
+      if (!feedback.submittedBy || feedback.submittedBy.toString() !== userId.toString()) {
         throw new Error('You do not have permission to update this feedback');
       }
 
-      // Check if within feedback window
-      const windowCheck = await this.checkFeedbackWindow(feedbackId);
-      if (!windowCheck.isValid) {
-        throw new Error('Cannot update feedback outside of feedback window');
-      }
-
-      // Update allowed fields only
       const allowedFields = ['rating', 'comment', 'criteria'];
       const update = {};
 
-      allowedFields.forEach(field => {
+      allowedFields.forEach((field) => {
         if (field in updateData) {
           update[field] = updateData[field];
         }
       });
 
-      // Validate rating if provided
-      if ('rating' in update) {
-        if (!update.rating || update.rating < 1 || update.rating > 5) {
-          throw new Error('Rating must be between 1 and 5');
-        }
+      if ('rating' in update && (!update.rating || update.rating < 1 || update.rating > 5)) {
+        throw new Error('Rating must be between 1 and 5');
       }
 
       const updatedFeedback = await Feedback.findByIdAndUpdate(
         feedbackId,
         update,
-        { new: true, runValidators: true }
-      ).populate('classSection');
+        { new: true, runValidators: true },
+      ).populate({
+        path: 'classSection',
+        populate: FEEDBACK_CLASS_POPULATE,
+      });
 
       return updatedFeedback;
     } catch (error) {
@@ -365,7 +407,10 @@ class FeedbackService {
   }
 
   /**
-   * Delete feedback (student can only delete if within feedback window)
+   * Student self-delete follows the same ownership rule as update.
+   *
+   * Removing the old feedback-window dependency keeps create/update/delete
+   * behavior consistent for the student's own lecturer feedback history.
    */
   async deleteStudentFeedback(feedbackId, userId) {
     try {
@@ -375,15 +420,8 @@ class FeedbackService {
         throw new Error('Feedback not found');
       }
 
-      // Verify ownership
-      if (feedback.submittedBy.toString() !== userId.toString() && !feedback.isAnonymous) {
+      if (!feedback.submittedBy || feedback.submittedBy.toString() !== userId.toString()) {
         throw new Error('You do not have permission to delete this feedback');
-      }
-
-      // Check if within feedback window
-      const windowCheck = await this.checkFeedbackWindow(feedbackId);
-      if (!windowCheck.isValid) {
-        throw new Error('Cannot delete feedback outside of feedback window');
       }
 
       const deletedFeedback = await Feedback.findByIdAndDelete(feedbackId);
@@ -395,32 +433,60 @@ class FeedbackService {
   }
 
   /**
-   * Lấy feedback window info for a feedback
+   * The mobile screen still calls this endpoint to decide whether the current
+   * user may edit the selected feedback.
+   *
+   * Instead of exposing template-window status, we now answer the more useful
+   * question for this UI: "is the authenticated caller allowed to edit this
+   * feedback?" Admin/staff can inspect any record, while students may only
+   * inspect their own feedback metadata.
    */
-  async getFeedbackWindowInfo(feedbackId) {
+  async getFeedbackWindowInfo(feedbackId, userId, role = '') {
     try {
-      const windowInfo = await this.checkFeedbackWindow(feedbackId);
-      return windowInfo;
+      const feedback = await Feedback.findById(feedbackId).select('submittedBy');
+
+      if (!feedback) {
+        throw new Error('Feedback not found');
+      }
+
+      const normalizedRole = String(role || '').toLowerCase();
+      const canBypassOwnership = normalizedRole === 'admin' || normalizedRole === 'staff';
+
+      if (
+        !canBypassOwnership &&
+        (!feedback.submittedBy || feedback.submittedBy.toString() !== userId.toString())
+      ) {
+        throw new Error('You do not have permission to view this feedback');
+      }
+
+      return {
+        isValid: true,
+        error: null,
+        remainingMs: null,
+        remainingMinutes: null,
+        remainingHours: null,
+        remainingDays: null,
+        mode: 'owner-edit',
+      };
     } catch (error) {
-      // If there's an error, return expired status
       return {
         isValid: false,
         error: error.message,
         remainingMs: 0,
         remainingMinutes: 0,
         remainingHours: 0,
-        remainingDays: 0
+        remainingDays: 0,
       };
     }
   }
 
-  /**
-   * Lấy tất cả feedback pending
-   */
   async getPendingFeedback(limit = 20, skip = 0) {
     try {
       const feedbacks = await Feedback.find({ status: 'pending' })
-        .populate('classSection')
+        .populate({
+          path: 'classSection',
+          populate: FEEDBACK_CLASS_POPULATE,
+        })
         .sort({ createdAt: -1 })
         .limit(limit)
         .skip(skip)
@@ -432,7 +498,7 @@ class FeedbackService {
         data: feedbacks,
         total,
         limit,
-        skip
+        skip,
       };
     } catch (error) {
       console.error('Error fetching pending feedback:', error);

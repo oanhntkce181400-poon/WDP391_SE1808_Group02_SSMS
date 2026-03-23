@@ -1,11 +1,11 @@
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Semester = require('../models/semester.model');
-const Wallet = require('../models/wallet.model');
 const Student = require('../models/student.model');
 const curriculumService = require('./curriculum.service');
 const paymentValidationService = require('./paymentValidation.service');
 const registrationPeriodService = require('./registrationPeriod.service');
+const { getOrCreateWallet } = require('./wallet.service');
 
 function timeToMinutes(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return null;
@@ -18,6 +18,11 @@ function isOverlapped(startA, endA, startB, endB) {
   return startA < endB && startB < endA;
 }
 
+// Mọi rule trong trang đăng ký môn đều cần biết "đang xét học kỳ nào".
+// Thứ tự ưu tiên:
+// 1. semesterId FE truyền lên
+// 2. nếu đang check theo class section thì suy ra semester từ class đó
+// 3. fallback về học kỳ current của hệ thống
 async function resolveSemester(semesterId, classSection) {
   if (semesterId) {
     return Semester.findById(semesterId).lean();
@@ -34,6 +39,12 @@ async function resolveSemester(semesterId, classSection) {
   return Semester.findOne({ isCurrent: true }).lean();
 }
 
+// Lấy toàn bộ enrollment active/completed của sinh viên trong đúng học kỳ đang xét.
+// Dữ liệu này được tái sử dụng cho:
+// - overload limit
+// - credit limit
+// - schedule conflict
+// - eligibility summary trên FE
 async function getSemesterEnrollments(studentId, semester) {
   if (!semester) {
     return [];
@@ -57,6 +68,13 @@ async function getSemesterEnrollments(studentId, semester) {
     .lean();
 }
 
+// Xác định "bộ môn chuẩn" mà curriculum cho phép trong kỳ hiện tại của sinh viên.
+// Đây là chìa khóa để phân biệt:
+// - môn đúng chương trình học
+// - môn ngoài chương trình -> overload
+//
+// currentCurriculumSemester được ưu tiên nếu student đã có sẵn, vì đây là dữ liệu
+// nghiệp vụ rõ ràng hơn việc tự tính từ enrollmentYear.
 async function getCurriculumSubjectIdSet(student, semester) {
   const curriculum = await curriculumService.getCurriculumForStudent({
     majorCode: student.majorCode,
@@ -102,7 +120,15 @@ async function getCurriculumSubjectIdSet(student, semester) {
 }
 
 /**
- * UC43 - Validate Prerequisites
+ * Check Course Prerequisites
+ *
+ * Ý nghĩa nghiệp vụ:
+ * - sinh viên chỉ được đăng ký môn mới nếu đã hoàn thành các môn tiên quyết
+ * - điều kiện pass hiện tại là enrollment completed và grade >= 5
+ *
+ * Lưu ý:
+ * - FE truyền classId, không truyền subjectCode trực tiếp
+ * - service sẽ đi từ class -> subject -> prerequisites để check
  */
 const validatePrerequisites = async (studentId, classId) => {
   const classSection = await ClassSection.findById(classId)
@@ -118,6 +144,7 @@ const validatePrerequisites = async (studentId, classId) => {
 
   const subject = classSection.subject;
 
+  // Môn không có prerequisite thì pass ngay.
   if (!subject.prerequisites || subject.prerequisites.length === 0) {
     return {
       eligible: true,
@@ -136,6 +163,7 @@ const validatePrerequisites = async (studentId, classId) => {
     })
     .exec();
 
+  // Gom các subjectCode mà sinh viên đã học xong và đạt.
   const passedSubjectCodes = completedEnrollments
     .map((enrollment) => enrollment.classSection?.subject?.subjectCode)
     .filter(Boolean);
@@ -147,6 +175,7 @@ const validatePrerequisites = async (studentId, classId) => {
     }
   }
 
+  // Chỉ cần thiếu 1 môn tiên quyết là chặn đăng ký.
   if (missingPrerequisites.length > 0) {
     return {
       eligible: false,
@@ -208,17 +237,12 @@ const validateWallet = async (studentId, classId) => {
   }
 
   const subject = classSection.subject;
-  const totalFee = subject.credits * (subject.tuitionFee || 100);
+  const credits = Number(subject?.credits || 0);
+  const pricePerCredit = Number(subject?.tuitionFee || 100);
+  const totalFee = credits * pricePerCredit;
 
-  const wallet = await Wallet.findOne({ userId: student.userId }).exec();
-
-  if (!wallet) {
-    return {
-      isSufficient: false,
-      message: 'Wallet not found',
-      totalFee,
-    };
-  }
+  // Auto-create wallet for legacy accounts that do not have one yet.
+  const wallet = await getOrCreateWallet(student.userId);
 
   const isSufficient = wallet.balance >= totalFee;
 
@@ -227,8 +251,8 @@ const validateWallet = async (studentId, classId) => {
     message: isSufficient ? 'Sufficient balance' : 'Insufficient balance',
     currentBalance: wallet.balance,
     totalFee,
-    credits: subject.credits,
-    pricePerCredit: subject.tuitionFee || 100,
+    credits,
+    pricePerCredit,
   };
 };
 
@@ -353,6 +377,10 @@ const checkScheduleConflict = async (studentId, classSectionId) => {
 };
 
 async function checkOverloadLimit(studentId, semesterId, classId = null) {
+  // Rule overload hiện tại:
+  // - tối đa 2 môn overload trong một kỳ
+  // - overload = môn nằm ngoài curriculum semester hiện tại của sinh viên
+  // - nếu enrollment trước đó đã đánh dấu isOverload=true thì cũng tính luôn
   const student = await Student.findById(studentId).lean();
   if (!student) {
     return {
@@ -379,6 +407,7 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
 
   const { subjectIdSet } = await getCurriculumSubjectIdSet(student, semester);
 
+  // currentOverloadCount = số môn overload mà sinh viên đã đăng ký từ trước.
   const currentOverloadCount = normalizedEnrollments.filter((enrollment) => {
     if (enrollment.isOverload === true) return true;
     if (!subjectIdSet.size) return enrollment.isOverload === true;
@@ -388,6 +417,8 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
   let projectedOverloadCount = currentOverloadCount;
   let enrollingCourseIsOverload = false;
 
+  // Nếu FE đang kiểm tra cho một class cụ thể thì project thêm trạng thái của môn sắp đăng ký,
+  // từ đó biết sau khi bấm Register thì có vượt quá 2 môn overload hay không.
   if (classSection?.subject?._id) {
     const subjectId = classSection.subject._id.toString();
     const alreadyEnrolled = normalizedEnrollments.some((e) => e.subjectId === subjectId);
@@ -417,6 +448,10 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
 }
 
 async function checkCreditLimit(studentId, semesterId, newCredits = 0, maxCredits = 20) {
+  // Rule credit:
+  // - tính tổng tín chỉ đã có trong học kỳ hiện tại
+  // - cộng thêm số tín chỉ của lớp sắp đăng ký
+  // - nếu vượt maxCredits thì reject
   const normalizedMaxCredits = Number(maxCredits) > 0 ? Number(maxCredits) : 20;
   const normalizedNewCredits = Number(newCredits) > 0 ? Number(newCredits) : 0;
 
@@ -443,6 +478,17 @@ async function checkCreditLimit(studentId, semesterId, newCredits = 0, maxCredit
 }
 
 async function getStudentEligibilitySummary(studentId, classId = null) {
+  // Đây là API backend cho khối "Your limits" trên FE.
+  // Nó gom 3 nhóm rule chính về một payload:
+  // - overload
+  // - credit
+  // - cohort access
+  //
+  // FE dùng summary này để:
+  // - vẽ progress bar tín chỉ
+  // - hiện overload x/2
+  // - hiện Cohort K...
+  // - disable Register nếu một trong các rule fail
   const student = await Student.findById(studentId).lean();
   if (!student) {
     const error = new Error('Student not found');

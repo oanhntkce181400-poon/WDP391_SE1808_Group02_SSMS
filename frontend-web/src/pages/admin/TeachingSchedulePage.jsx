@@ -118,6 +118,8 @@ export default function TeachingSchedulePage() {
 
   const teachingClasses = data?.classes || [];
 
+  // FE nhận classes + schedules từ API teaching schedule rồi flatten thành từng "buổi dạy".
+  // Danh sách này dùng để dựng bảng timetable theo thứ và ca học.
   const scheduleEntries = useMemo(() => {
     return teachingClasses.flatMap((cls) =>
       (cls.schedules || []).map((schedule, index) => ({
@@ -138,6 +140,8 @@ export default function TeachingSchedulePage() {
   }, [teachingClasses]);
 
   const timetableSlots = useMemo(() => {
+    // Gom các timeslot unique từ toàn bộ classes của giảng viên,
+    // để render ra các hàng "CA1, CA2..." trên bảng lịch.
     const slotMap = new Map();
     teachingClasses.forEach((cls) => {
       if (!cls?.timeslot?._id) return;
@@ -156,6 +160,10 @@ export default function TeachingSchedulePage() {
     [teachingClasses],
   );
 
+  // 3 ô thống kê trên UI đều lấy từ đây:
+  // - Tổng lớp phụ trách
+  // - Tổng sinh viên
+  // - Buổi dạy đã xếp lịch
   const teachingStats = useMemo(() => {
     const totalStudents = teachingClasses.reduce(
       (sum, cls) => sum + Number(cls.currentEnrollment || 0),
@@ -175,6 +183,8 @@ export default function TeachingSchedulePage() {
     setHint('');
 
     try {
+      // API này chính là BE của feature "View Lecturer Timetable".
+      // Nếu teacherId rỗng thì ưu tiên lấy lịch theo account hiện tại.
       const params = teacherId ? { teacherId } : {};
       const response = await scheduleService.getTeachingSchedule(params);
       setData(response?.data?.data || null);
@@ -635,6 +645,7 @@ export default function TeachingSchedulePage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
+              {/* Bộ thống kê tổng quan để giảng viên/admin nhìn nhanh workload của một học kỳ. */}
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="text-sm text-slate-500">Tổng lớp phụ trách</div>
                 <div className="mt-2 text-3xl font-bold text-slate-900">{teachingStats.totalClasses}</div>

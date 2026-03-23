@@ -30,6 +30,35 @@ async function getAll(req, res) {
   }
 }
 
+async function getMyClasses(req, res) {
+  try {
+    const userId = req.auth?.sub || req.auth?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    /*
+     * The mobile feedback screen needs the actual enrolled class sections for the
+     * authenticated student. The service already performs the User -> Student ->
+     * ClassEnrollment lookup chain against MongoDB, so the controller only needs
+     * to resolve auth context and shape the HTTP response.
+     */
+    const data = await service.getMyClasses(userId);
+
+    return res.json({
+      success: true,
+      data,
+      total: data.length,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 async function getById(req, res) {
   try {
     const data = await service.getClassById(req.params.classId);
@@ -377,6 +406,7 @@ async function getClassRoster(req, res) {
 
 module.exports = {
   getAll,
+  getMyClasses,
   getById,
   create,
   update,

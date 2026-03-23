@@ -47,6 +47,7 @@ import StudentCurriculumPage from "./pages/student/StudentCurriculumPage";
 import AcademicCalendarPage from "./pages/student/AcademicCalendarPage";
 import WalletPage from "./pages/student/WalletPage";
 import WalletResultPage from "./pages/student/WalletResultPage";
+import StudentFeedbackPage from "./pages/student/StudentFeedbackPage";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
 import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
@@ -79,6 +80,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="subjects" element={<SubjectManagement />} />
         <Route
           path="prerequisites/:subjectId"
@@ -143,6 +145,7 @@ export default function App() {
         <Route path="grades" element={<ViewGradesPage />} />
         <Route path="attendance-report" element={<AttendanceReportPage />} />
         <Route path="academic-calendar" element={<AcademicCalendarPage />} />
+        <Route path="feedback" element={<StudentFeedbackPage />} />
         <Route path="wishlist" element={<CourseWishlistPage />} />
         <Route path="waitlist" element={<CourseWishlistPage />} />
         <Route path="applications" element={<StudentRequestsPage />} />

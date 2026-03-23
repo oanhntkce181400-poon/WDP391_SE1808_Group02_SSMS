@@ -297,7 +297,7 @@ export default function AnnouncementPage() {
                       {selectedAnnouncement.attachments.map((file, index) => (
                         <button
                           key={index}
-                          onClick={() => downloadCloudinaryFile(file.url, file.fileName)}
+                          onClick={() => downloadCloudinaryFile(file.url, file.fileName, file.cloudinaryId)}
                           className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors w-full text-left"
                         >
                           <span className="text-2xl"><i className="fa-solid fa-file"></i></span>

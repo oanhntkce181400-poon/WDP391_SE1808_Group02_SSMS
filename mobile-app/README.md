@@ -1,69 +1,54 @@
 # Mobile App
 
-Ứng dụng mobile (React Native / Expo) cho sinh viên.
+React Native / Expo app for the student-facing mobile experience.
 
-## 1. Cấu trúc thư mục chính
-
-```txt
-mobile-app/
-├── android/                # Code native Android (tự sinh)
-├── ios/                    # Code native iOS (tự sinh)
-├── src/
-│   ├── assets/             # Fonts, images (logo trường)
-│   ├── components/
-│   │   ├── common/         # Button, InputField, LoadingSpinner
-│   │   └── layout/         # ScreenWrapper, Header
-│   ├── navigation/         # Cấu hình React Navigation
-│   │   ├── AppNavigator.js # Root navigator
-│   │   ├── AuthStack.js    # Login, ForgotPassword
-│   │   └── MainStack.js    # BottomTab (Home, Profile, Schedule)
-│   ├── screens/
-│   │   ├── auth/           # LoginScreen, ForgotPasswordScreen
-│   │   └── student/        # HomeScreen, ProfileScreen
-│   ├── services/           # Gọi API (axiosClient, authService)
-│   ├── stores/             # State (useAuthStore - Zustand)
-│   ├── utils/              # storage (AsyncStorage), validation (Zod schemas)
-│   └── hooks/              # useAuth, useProfile
-├── App.js                  # Entry point
-└── package.json
-```
-
-## 2. Cài đặt
+## Install
 
 ```bash
 cd mobile-app
 npm install
 ```
 
-(hoặc `yarn install`, tuỳ bạn).
+## Environment
 
-## 3. Chạy app (Expo)
+Expo reads `EXPO_PUBLIC_*` variables from the local `.env` file.
 
-```bash
-npm run start
+Files:
+
+- `.env`: active local config used by the app
+- `.env.example`: template for new machines
+- `src/config/env.js`: shared resolver used by API and socket clients
+
+Current variables:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.4:3000/api
+EXPO_PUBLIC_SOCKET_URL=http://192.168.1.4:3000
 ```
 
-Sau đó dùng Expo Go (trên điện thoại) quét QR code để mở app.
+If your computer gets a new LAN IP, update the host in `.env`.
 
-## 4. Liên hệ với Backend
+## Run
+
+```bash
+npx expo start -c
+```
+
+Other commands:
+
+```bash
+npm run android
+npm run ios
+npm run web
+```
+
+## Backend links
 
 - Axios client: `src/services/axiosClient.js`
-  - Cần chỉnh `baseURL` trỏ tới backend API thật (ví dụ: `http://10.0.2.2:3000/api` cho Android emulator).
-  - Thêm interceptor gắn token và xử lý refresh token giống web.
-- Auth service: `src/services/authService.js`.
-- Lưu token & user:
-  - Store Zustand: `src/stores/useAuthStore.js`.
-  - Lưu trữ lâu dài: `src/utils/storage.js` (AsyncStorage).
+- Socket client: `src/contexts/SocketContext.js`
+- Shared env config: `src/config/env.js`
 
-## 5. Các task quan trọng
+## Notes
 
-- **Task #1**: Login form tại `src/screens/auth/LoginScreen.js`.
-- **Task #4**: Profile screen tại `src/screens/student/ProfileScreen.js`.
-- Điều hướng:
-  - Auth flow trong `src/navigation/AuthStack.js`.
-  - Main flow (BottomTab) trong `src/navigation/MainStack.js`.
-
-## 6. Gợi ý tiếp theo
-
-- Hoàn thiện `AppNavigator` trong `src/navigation/AppNavigator.js` và sử dụng nó trong `App.js`.
-- Cài đặt `@react-navigation/native`, `@react-navigation/stack`, `@react-navigation/bottom-tabs`, `@react-native-async-storage/async-storage`, ...
+- Expo Go on the phone must support the same Expo SDK as this project.
+- For physical devices, prefer the LAN IP in `.env` instead of `localhost`.
