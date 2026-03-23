@@ -15,6 +15,13 @@ const INITIAL_FORM = {
   isActive: true,
 };
 
+function formatDuration(durationMs) {
+  const value = Number(durationMs);
+  if (!Number.isFinite(value) || value < 0) return null;
+  if (value < 1000) return `${value} ms`;
+  return `${(value / 1000).toFixed(2)} giây`;
+}
+
 function Field({ label, required = false, children }) {
   return (
     <div>
@@ -134,6 +141,9 @@ export default function SemesterManagement() {
     setModalLoading(true);
 
     try {
+      // FE của chức năng "Activate Automatic Enrollment":
+      // chỉ khi admin bật isCurrent từ false -> true thì mới hiện confirm.
+      // Việc này giúp admin hiểu rằng đổi học kỳ current sẽ kéo theo auto-enrollment ngay.
       const shouldTriggerAutoEnrollment = formData.isCurrent && !selectedSemester?.isCurrent;
       if (
         shouldTriggerAutoEnrollment &&
@@ -162,6 +172,8 @@ export default function SemesterManagement() {
       showToast(selectedSemester ? 'Cập nhật học kỳ thành công.' : 'Tạo học kỳ mới thành công.');
 
       const autoResult = response?.data?.data?.autoEnrollment || null;
+      // BE trả kèm autoEnrollment result ngay trong response create/update semester.
+      // FE giữ lại để hiện summary gần nhất ngay trên màn Semester Management.
       setAutoEnrollmentResult(autoResult);
       if (autoResult?.summary) {
         showToast(
@@ -240,6 +252,9 @@ export default function SemesterManagement() {
 
       {autoEnrollmentResult ? (
         <div className="container mx-auto px-6 pb-2 pt-4">
+          {/* Khối recap nhanh cho feature Activate Automatic Enrollment.
+              Admin không cần mở trang auto-enrollment riêng mà vẫn thấy:
+              tổng SV, số enrollment, waitlist, duplicate và failed của lần chạy gần nhất. */}
           <div
             className={`rounded-lg p-4 ${
               autoEnrollmentResult.success === false
@@ -271,6 +286,11 @@ export default function SemesterManagement() {
                 {autoEnrollmentResult.message || 'Auto-enrollment không trả về summary.'}
               </div>
             )}
+            {autoEnrollmentResult.durationMs ? (
+              <div className="mt-3 text-xs text-slate-600">
+                Thời gian chạy: {formatDuration(autoEnrollmentResult.durationMs)}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -521,7 +541,7 @@ export default function SemesterManagement() {
                 </Field>
               </div>
 
-              <Field label="Mô tả">
+                <Field label="Mô tả">
                 <textarea
                   value={formData.description}
                   onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
@@ -539,6 +559,9 @@ export default function SemesterManagement() {
                     onChange={(event) => setFormData((prev) => ({ ...prev, isCurrent: event.target.checked }))}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
+                  {/* isCurrent = true trên UI nghĩa là:
+                      học kỳ này sẽ trở thành học kỳ hiện tại của hệ thống.
+                      Khi submit, BE sẽ tự trigger auto-enrollment cho học kỳ đó. */}
                   Đặt là học kỳ hiện tại
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -565,7 +588,13 @@ export default function SemesterManagement() {
                   disabled={modalLoading}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {modalLoading ? 'Đang lưu...' : selectedSemester ? 'Cập nhật' : 'Thêm mới'}
+                  {modalLoading
+                    ? formData.isCurrent && !selectedSemester?.isCurrent
+                      ? 'Đang lưu và chạy auto-enrollment...'
+                      : 'Đang lưu...'
+                    : selectedSemester
+                    ? 'Cập nhật'
+                    : 'Thêm mới'}
                 </button>
               </div>
             </form>

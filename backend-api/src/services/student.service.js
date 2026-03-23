@@ -8,6 +8,349 @@ const Wallet = require('../models/wallet.model');
 const Major = require('../models/major.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const bcrypt = require('bcryptjs');
+const ExcelJS = require('exceljs');
+
+// Export files use human-readable labels instead of raw enum values from MongoDB.
+const EXPORT_STATUS_LABELS = {
+  enrolled: 'Enrolled',
+  'on-leave': 'On leave',
+  dropped: 'Dropped',
+  graduated: 'Graduated',
+};
+
+/*
+ * Centralize filter building so the student list API and export API always
+ * interpret search/major/cohort/status in exactly the same way.
+ */
+function buildStudentFilterQuery(filters = {}) {
+  const majorCode = filters.majorCode || filters.major;
+  const academicStatus = filters.academicStatus || filters.status;
+  const query = { isActive: true };
+
+  if (majorCode) {
+    query.majorCode = majorCode;
+  }
+
+  if (filters.cohort) {
+    query.cohort = parseInt(filters.cohort, 10);
+  }
+
+  if (academicStatus) {
+    query.academicStatus = academicStatus;
+  }
+
+  if (filters.search && filters.search.trim()) {
+    query.$or = [
+      { studentCode: { $regex: filters.search.trim(), $options: 'i' } },
+      { fullName: { $regex: filters.search.trim(), $options: 'i' } },
+      { identityNumber: { $regex: filters.search.trim(), $options: 'i' } },
+    ];
+  }
+
+  return query;
+}
+
+// Restrict sorting to approved fields so clients cannot request arbitrary Mongo keys.
+function buildStudentSort(filters = {}) {
+  const allowedFields = new Set([
+    'studentCode',
+    'fullName',
+    'majorCode',
+    'cohort',
+    'academicStatus',
+    'createdAt',
+    'updatedAt',
+  ]);
+
+  const sortBy = allowedFields.has(filters.sortBy) ? filters.sortBy : 'studentCode';
+  const sortOrder = filters.sortOrder === 'desc' ? -1 : 1;
+
+  return { [sortBy]: sortOrder };
+}
+
+/*
+ * Shared data fetcher for both paginated listing and full export. `skip` / `limit`
+ * stay optional so export can fetch the full filtered dataset without pagination.
+ */
+async function findStudentsByFilters(filters = {}, options = {}) {
+  const query = buildStudentFilterQuery(filters);
+  const sort = buildStudentSort(filters);
+
+  let cursor = Student.find(query).sort(sort);
+
+  if (typeof options.skip === 'number' && options.skip > 0) {
+    cursor = cursor.skip(options.skip);
+  }
+
+  if (typeof options.limit === 'number' && options.limit > 0) {
+    cursor = cursor.limit(options.limit);
+  }
+
+  return cursor.lean();
+}
+
+// Flatten a student document into a clean row structure that both Excel and PDF can reuse.
+function formatStudentExportRow(student = {}) {
+  return {
+    studentCode: student.studentCode || '',
+    fullName: student.fullName || '',
+    email: student.email || '',
+    phoneNumber: student.phoneNumber || '',
+    majorCode: student.majorCode || '',
+    cohortLabel: student.cohort ? `K${student.cohort}` : '',
+    classSection: student.classSection || '',
+    academicStatus: EXPORT_STATUS_LABELS[student.academicStatus] || student.academicStatus || '',
+    identityNumber: student.identityNumber || '',
+    enrollmentYear: student.enrollmentYear || '',
+    createdAt: student.createdAt ? new Date(student.createdAt).toISOString().slice(0, 10) : '',
+  };
+}
+
+// Timestamp is embedded into export filenames so downloaded files remain unique and traceable.
+function buildExportTimestamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+// The manual PDF builder only supports ASCII text safely, so we normalize early.
+function normalizeAscii(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Escape PDF control characters before injecting text into content streams.
+function escapePdfText(value = '') {
+  return String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+}
+
+// Long lines are wrapped manually because the lightweight PDF stream below has no layout engine.
+function wrapPdfText(text, maxChars = 92) {
+  const normalized = normalizeAscii(text);
+  if (!normalized) return [''];
+  if (normalized.length <= maxChars) return [normalized];
+
+  const words = normalized.split(' ');
+  const lines = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+      continue;
+    }
+
+    const candidate = `${currentLine} ${word}`;
+    if (candidate.length <= maxChars) {
+      currentLine = candidate;
+      continue;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+/*
+ * We generate a minimal PDF buffer by hand instead of pulling in a heavier PDF library.
+ * The output is simple but enough for tabular admin exports:
+ * - one built-in Helvetica font,
+ * - multiple pages when needed,
+ * - text rows placed line-by-line.
+ */
+function buildPdfBuffer(lines = []) {
+  const linesPerPage = 48;
+  const pages = [];
+
+  // Split raw lines into page-sized chunks before building low-level PDF objects.
+  for (let index = 0; index < lines.length; index += linesPerPage) {
+    pages.push(lines.slice(index, index + linesPerPage));
+  }
+
+  if (pages.length === 0) {
+    pages.push(['Student export report', '', 'No student records matched the selected filters.']);
+  }
+
+  const objects = [];
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+  const kids = [];
+  let objectId = 4;
+
+  pages.forEach((pageLines) => {
+    const pageObjectId = objectId++;
+    const contentObjectId = objectId++;
+    kids.push(`${pageObjectId} 0 R`);
+
+    // Text commands: begin text object, select font, move to top margin, then print line by line.
+    const streamLines = [
+      'BT',
+      '/F1 10 Tf',
+      '50 790 Td',
+      '14 TL',
+    ];
+
+    pageLines.forEach((line, lineIndex) => {
+      streamLines.push(`${lineIndex === 0 ? '' : 'T* ' }(${escapePdfText(line)}) Tj`.trim());
+    });
+
+    streamLines.push('ET');
+
+    const stream = streamLines.join('\n');
+    objects[contentObjectId] = `<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream`;
+    objects[pageObjectId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
+  });
+
+  objects[2] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
+
+  // Assemble PDF objects and keep byte offsets so the xref table points to every object correctly.
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+
+  for (let index = 1; index < objects.length; index += 1) {
+    if (!objects[index]) continue;
+    offsets[index] = Buffer.byteLength(pdf, 'utf8');
+    pdf += `${index} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+
+  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += '0000000000 65535 f \n';
+
+  for (let index = 1; index < objects.length; index += 1) {
+    const offset = offsets[index] || 0;
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  }
+
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return Buffer.from(pdf, 'utf8');
+}
+
+// Excel export is the richer format, so we add column widths, a styled header row, and an auto filter.
+async function generateStudentExcelBuffer(rows = []) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Students');
+
+  worksheet.columns = [
+    { header: 'Student Code', key: 'studentCode', width: 18 },
+    { header: 'Full Name', key: 'fullName', width: 28 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Phone', key: 'phoneNumber', width: 16 },
+    { header: 'Major', key: 'majorCode', width: 12 },
+    { header: 'Cohort', key: 'cohortLabel', width: 10 },
+    { header: 'Class Section', key: 'classSection', width: 16 },
+    { header: 'Status', key: 'academicStatus', width: 14 },
+    { header: 'Identity Number', key: 'identityNumber', width: 20 },
+    { header: 'Enrollment Year', key: 'enrollmentYear', width: 16 },
+    { header: 'Created At', key: 'createdAt', width: 14 },
+  ];
+
+  worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: '1D4ED8' },
+  };
+
+  rows.forEach((row) => worksheet.addRow(row));
+  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  worksheet.autoFilter = {
+    from: 'A1',
+    to: 'K1',
+  };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
+/*
+ * PDF export trades styling for portability. Each student becomes a small text block
+ * so admins can still read the file comfortably when opening it on any device.
+ */
+function generateStudentPdfBuffer(rows = [], filters = {}) {
+  const filterParts = [];
+  if (filters.cohort) filterParts.push(`Cohort: K${filters.cohort}`);
+  if (filters.majorCode || filters.major) filterParts.push(`Major: ${filters.majorCode || filters.major}`);
+  if (filters.academicStatus || filters.status) {
+    const statusKey = filters.academicStatus || filters.status;
+    filterParts.push(`Status: ${EXPORT_STATUS_LABELS[statusKey] || statusKey}`);
+  }
+
+  const lines = [
+    'Student export report',
+    `Generated at: ${new Date().toISOString()}`,
+    filterParts.length > 0 ? `Filters: ${filterParts.join(' | ')}` : 'Filters: none',
+    '',
+  ];
+
+  if (rows.length === 0) {
+    lines.push('No student records matched the selected filters.');
+    return buildPdfBuffer(lines);
+  }
+
+  rows.forEach((row, index) => {
+    const mainLine = `${index + 1}. ${row.studentCode} | ${row.fullName} | ${row.majorCode} | ${row.cohortLabel} | ${row.academicStatus}`;
+    const detailLine = `   Email: ${row.email || '-'} | Phone: ${row.phoneNumber || '-'} | Class: ${row.classSection || '-'} | ID: ${row.identityNumber || '-'}`;
+    const metaLine = `   Enrollment year: ${row.enrollmentYear || '-'} | Created: ${row.createdAt || '-'}`;
+
+    wrapPdfText(mainLine).forEach((line) => lines.push(line));
+    wrapPdfText(detailLine).forEach((line) => lines.push(line));
+    wrapPdfText(metaLine).forEach((line) => lines.push(line));
+    lines.push('');
+  });
+
+  return buildPdfBuffer(lines);
+}
+
+/*
+ * Main export coordinator:
+ * 1. validate requested format,
+ * 2. fetch the fully filtered dataset,
+ * 3. map documents into flat export rows,
+ * 4. delegate to Excel or PDF formatter,
+ * 5. return buffer + headers so the controller can send it directly.
+ */
+async function exportStudents(filters = {}) {
+  const format = String(filters.format || 'excel').toLowerCase();
+  if (!['excel', 'pdf'].includes(format)) {
+    const error = new Error('Unsupported export format. Use excel or pdf.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const students = await findStudentsByFilters(filters);
+  const rows = students.map(formatStudentExportRow);
+  const timestamp = buildExportTimestamp();
+
+  if (format === 'pdf') {
+    return {
+      buffer: generateStudentPdfBuffer(rows, filters),
+      contentType: 'application/pdf',
+      fileName: `students-export-${timestamp}.pdf`,
+    };
+  }
+
+  return {
+    buffer: await generateStudentExcelBuffer(rows),
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    fileName: `students-export-${timestamp}.xlsx`,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────
 // HELPER: Tạo mã sinh viên tự động
@@ -365,6 +708,33 @@ async function getStudents(filters = {}) {
   };
 }
 
+/*
+ * Paginated student listing intentionally reuses the same helpers as export so
+ * the admin table and downloaded report always describe the same dataset.
+ */
+async function getStudentsList(filters = {}) {
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.max(1, parseInt(filters.limit, 10) || 20);
+  const query = buildStudentFilterQuery(filters);
+  const skip = (page - 1) * limit;
+
+  // Reuse the same query helper as export so list totals and export totals always describe the same dataset.
+  const [students, total] = await Promise.all([
+    findStudentsByFilters(filters, { skip, limit }),
+    Student.countDocuments(query),
+  ]);
+
+  return {
+    students,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // 3. LẤY CHI TIẾT SINH VIÊN
 // ─────────────────────────────────────────────────────────────
@@ -577,7 +947,8 @@ async function getStudentByUserId(userId) {
 
 module.exports = {
   createStudent,
-  getStudents,
+  getStudents: getStudentsList,
+  exportStudents,
   getStudentById,
   getStudentByUserId,
   updateStudent,

@@ -24,6 +24,30 @@ const studentService = {
     return axiosClient.get(url);
   },
 
+  // Export reuses the same filters as the on-screen list, but asks Axios to
+  // keep the response as raw binary so the page can download Excel/PDF files.
+  exportStudents: async (params = {}) => {
+    /*
+     * Export reuses the same filters as the list view so admins can download
+     * exactly what they are currently looking at instead of starting a separate flow.
+     */
+    const queryParams = new URLSearchParams();
+
+    if (params.search) queryParams.append('search', params.search);
+    if (params.majorCode) queryParams.append('majorCode', params.majorCode);
+    if (params.major) queryParams.append('major', params.major);
+    if (params.cohort) queryParams.append('cohort', params.cohort);
+    if (params.academicStatus) queryParams.append('academicStatus', params.academicStatus);
+    if (params.status) queryParams.append('status', params.status);
+    if (params.format) queryParams.append('format', params.format);
+
+    const url = `/students/export${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    return axiosClient.get(url, {
+      // The page handles the file as a Blob so it can download both Excel and PDF responses.
+      responseType: 'blob',
+    });
+  },
+
   // ─────────────────────────────────────────────────────────────
   // Lấy chi tiết sinh viên
   // ─────────────────────────────────────────────────────────────

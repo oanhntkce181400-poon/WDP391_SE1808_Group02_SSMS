@@ -40,6 +40,14 @@ router.get(
 
 // GET /api/students/me/curriculum - Lấy khung chương trình của sinh viên hiện tại (qua token)
 // Phải đặt TRƯỚC /:id để không bị match nhầm id = "me"
+// Export must stay before `/me` and `/:id` so the literal segment `export` is not treated as an id.
+router.get(
+  '/export',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  studentController.exportStudents
+);
+
 router.get(
   '/me',
   authMiddleware,

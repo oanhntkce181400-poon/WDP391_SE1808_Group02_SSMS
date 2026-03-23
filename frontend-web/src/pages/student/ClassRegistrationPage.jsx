@@ -31,6 +31,12 @@ export default function ClassRegistrationPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Gọi API summary để lấy toàn bộ "giới hạn đăng ký" của sinh viên.
+  // Khối dữ liệu này nuôi trực tiếp 4 feature trên UI:
+  // - Limit Course Overload
+  // - Verify Student Cohort Eligibility
+  // - Check Maximum Credit Limit
+  // - disable Register theo eligibility tổng hợp
   const fetchEligibility = async () => {
     try {
       const response = await registrationService.getEligibilitySummary();
@@ -46,6 +52,8 @@ export default function ClassRegistrationPage() {
       return;
     }
 
+    // FE chủ động validate trước từng class để badge/cảnh báo hiện sẵn khi page load,
+    // thay vì đợi người dùng bấm Register mới biết bị chặn vì prerequisite/overload/cohort.
     const entries = await Promise.all(
       classList.map(async (cls) => {
         try {
@@ -105,6 +113,7 @@ export default function ClassRegistrationPage() {
   const overloadInfo = eligibility?.limits?.overload;
   const cohortInfo = eligibility?.limits?.cohortAccess;
 
+  // Progress bar "x/y tín chỉ" dùng currentCredits và maxCredits từ BE.
   const creditPercent = useMemo(() => {
     if (!creditInfo?.maxCredits) return 0;
     return Math.min(100, Math.round((creditInfo.currentCredits / creditInfo.maxCredits) * 100));
@@ -192,6 +201,8 @@ export default function ClassRegistrationPage() {
       return;
     }
 
+    // Nếu pre-validation chưa có thì check lại trước khi đăng ký thật.
+    // Đây là chốt cuối FE trước khi gọi selfEnroll.
     let validation = validationResults[cls._id];
     if (!validation) {
       validation = await validateSingleClass(cls._id);
@@ -251,6 +262,9 @@ export default function ClassRegistrationPage() {
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            {/* "Your limits" là vùng FE gom 3 rule chính:
+                cohort, overload, credit.
+                Đây là phần dễ nhất để demo các chức năng 5, 10, 11, 13 trên UI. */}
             <div className="mb-2 text-sm font-semibold text-slate-700">Your limits</div>
             <div className="text-sm text-slate-600">
               Cohort: <span className="font-semibold text-slate-900">K{eligibility?.student?.cohort || '-'}</span>
@@ -283,6 +297,10 @@ export default function ClassRegistrationPage() {
               {classes.map((cls) => {
                 const validation = validationResults[cls._id];
                 const validationErrors = validation?.validationErrors || [];
+                // cannotRegister là tổng hợp tất cả điều kiện chặn ở tầng UI:
+                // - lớp đầy
+                // - cohort bị chặn
+                // - validation backend trả class không đủ điều kiện
                 const cannotRegister =
                   cls.isFull ||
                   isCohortBlocked ||

@@ -6,6 +6,29 @@ const studentService = require('../services/student.service');
 const curriculumService = require('../services/curriculum.service');
 const gpaService = require('../services/gpa.service');
 
+/*
+ * List and export endpoints intentionally share one query-normalization helper.
+ * The frontend sometimes sends `major` / `status`, while the backend service
+ * prefers `majorCode` / `academicStatus`. Normalizing once here keeps both
+ * endpoints consistent and avoids duplicated mapping logic.
+ */
+// Accept both old and new query aliases so list/export endpoints stay backward
+// compatible while the newer admin UI can still send clearer parameter names.
+function buildStudentFilters(query = {}) {
+  return {
+    search: query.search,
+    majorCode: query.majorCode || query.major,
+    major: query.major,
+    cohort: query.cohort,
+    academicStatus: query.academicStatus || query.status,
+    status: query.status,
+    page: query.page || 1,
+    limit: query.limit || 20,
+    sortBy: query.sortBy || 'studentCode',
+    sortOrder: query.sortOrder || 'asc',
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // POST /api/students - Tạo sinh viên mới
 // ─────────────────────────────────────────────────────────────
@@ -37,16 +60,7 @@ const createStudent = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 const getStudents = async (req, res) => {
   try {
-    const filters = {
-      search: req.query.search,
-      majorCode: req.query.majorCode,
-      cohort: req.query.cohort,
-      academicStatus: req.query.academicStatus,
-      page: req.query.page || 1,
-      limit: req.query.limit || 20,
-      sortBy: req.query.sortBy || 'studentCode',
-      sortOrder: req.query.sortOrder || 'asc',
-    };
+    const filters = buildStudentFilters(req.query);
 
     const result = await studentService.getStudents(filters);
 
@@ -62,6 +76,33 @@ const getStudents = async (req, res) => {
     return res.status(statusCode).json({
       success: false,
       message: error.message || 'Lỗi máy chủ, thử lại sau',
+    });
+  }
+};
+
+// The controller only maps HTTP concerns:
+// - collect filters from query params,
+// - ask the service to produce the correct buffer,
+// - attach download headers so the browser saves the file with the right name.
+const exportStudents = async (req, res) => {
+  try {
+    // Reuse the same filter mapping as the listing endpoint so exported data matches the table view.
+    const filters = buildStudentFilters(req.query);
+    filters.format = req.query.format || 'excel';
+
+    const exported = await studentService.exportStudents(filters);
+
+    // The service already returns the correct MIME type and filename for each format.
+    res.setHeader('Content-Type', exported.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+
+    return res.status(200).send(exported.buffer);
+  } catch (error) {
+    console.error('[StudentController] exportStudents error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to export students',
     });
   }
 };
@@ -901,6 +942,7 @@ const getStudentSemesterList = async (req, res) => {
 module.exports = {
   createStudent,
   getStudents,
+  exportStudents,
   getStudentById,
   getMyProfile,
   updateStudent,

@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { API_BASE_URL } from '../../config/env';
 import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, setItem } from '../../utils/storage';
@@ -52,7 +53,7 @@ export default function LoginScreen() {
       if (backendMessage) {
         setError(backendMessage);
       } else {
-        setError('Không kết nối được API. Hãy bật backend tại http://localhost:3000 rồi thử lại.');
+        setError(`Không kết nối được API. Hãy kiểm tra backend tại ${API_BASE_URL} rồi thử lại.`);
       }
     } finally {
       setLoading(false);
@@ -66,7 +67,7 @@ export default function LoginScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.title}>SSMS Mobile</Text>
-        <Text style={styles.subtitle}>Đăng nhập để xem hồ sơ sinh viên</Text>
+        <Text style={styles.subtitle}>Đăng nhập để sử dụng ứng dụng sinh viên</Text>
 
         <TextInput
           style={styles.input}
