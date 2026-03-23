@@ -23,13 +23,22 @@ function normalizeProfile(raw = {}) {
   };
 }
 
-export default function useProfile() {
+export default function useProfile(options = {}) {
+  const { enabled = true } = options;
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const fetchProfile = useCallback(async (isRefresh = false) => {
+    if (!enabled) {
+      setProfile(null);
+      setError('');
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -49,7 +58,7 @@ export default function useProfile() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     fetchProfile(false);

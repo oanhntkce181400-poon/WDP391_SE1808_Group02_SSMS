@@ -7,6 +7,12 @@ const Semester = require('../../models/semester.model');
 const Teacher = require('../../models/teacher.model');
 const User = require('../../models/user.model');
 
+// Tìm đúng hồ sơ Teacher để lấy lịch dạy.
+// Hệ thống cho phép resolve theo nhiều đường:
+// - teacherId: admin/staff chọn đích danh một giảng viên
+// - teacherCode: dùng mã GV nếu FE/API truyền kiểu search
+// - userId hiện tại: giảng viên tự xem lịch của mình
+// - fallback theo email account hiện tại
 async function resolveTeacher({ userId, teacherId, teacherCode }) {
   if (teacherId) {
     const teacher = await Teacher.findOne({ _id: teacherId, isActive: true }).lean();
@@ -31,6 +37,16 @@ async function resolveTeacher({ userId, teacherId, teacherCode }) {
   return teacher;
 }
 
+// Hàm lõi của feature "View Lecturer Timetable".
+// Luồng xử lý:
+// 1. resolve giảng viên cần xem lịch
+// 2. xác định học kỳ cần lọc (semesterId / semester + academicYear / current semester)
+// 3. lấy toàn bộ class section của giảng viên trong học kỳ đó
+// 4. lấy thêm schedule của từng class
+// 5. trả về payload để FE render:
+//    - teacher info
+//    - semester info
+//    - classes + room + timeslot + schedules
 async function getTeachingSchedule(userId, filters = {}) {
   const teacher = await resolveTeacher({
     userId,
@@ -63,6 +79,8 @@ async function getTeachingSchedule(userId, filters = {}) {
   }
 
   if (!includeAllClasses && (!semesterNum || !academicYear)) {
+    // Lecturer thường chỉ xem học kỳ current, nên nếu FE không truyền filter
+    // thì service tự fallback về học kỳ current của hệ thống.
     const currentSemester = await Semester.findOne({ isCurrent: true }).lean();
     if (currentSemester) {
       semesterNum = semesterNum || currentSemester.semesterNum;
@@ -85,6 +103,8 @@ async function getTeachingSchedule(userId, filters = {}) {
     .sort({ semester: -1, classCode: 1 })
     .lean();
 
+  // schedule nằm ở collection riêng, nên phải query tiếp theo classSection ids
+  // rồi group lại theo từng class để FE dựng bảng timetable.
   const classIds = classes.map((cls) => cls._id);
   const schedules = classIds.length
     ? await Schedule.find({ classSection: { $in: classIds }, status: 'active' })

@@ -34,6 +34,50 @@ const GENDER_LABELS = {
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────
 
+function getDownloadFileName(disposition, fallback) {
+  // Read the backend-supplied filename first so downloaded exports keep the server timestamp.
+  const match = disposition?.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || fallback;
+}
+
+function downloadBlobFile(blob, fileName) {
+  /*
+   * Export endpoints return raw binary data. The browser needs an object URL plus
+   * a temporary anchor click to turn that Blob into a normal file download.
+   */
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function extractExportErrorMessage(err, fallbackMessage) {
+  /*
+   * Export calls use `responseType: 'blob'`, so backend validation failures may
+   * also arrive as binary blobs. Decode them back to JSON text when possible so
+   * the admin sees the real error message from the API.
+   */
+  const responseData = err?.response?.data;
+
+  if (responseData instanceof Blob) {
+    try {
+      const text = await responseData.text();
+      const parsed = JSON.parse(text);
+      if (parsed?.message) {
+        return parsed.message;
+      }
+    } catch (parseError) {
+      console.error('Unable to parse export error blob:', parseError);
+    }
+  }
+
+  return err?.response?.data?.message || fallbackMessage;
+}
+
 function generateRandomPassword(length = 12) {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';
@@ -116,9 +160,12 @@ export default function StudentManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  // Tracks which format is exporting so Excel/PDF buttons can show independent loading feedback.
+  const [isExporting, setIsExporting] = useState('');
 
   // Filters
   const [searchText, setSearchText] = useState('');
+  // These extra filters were added for both on-screen filtering and export scoping.
   const [selectedMajor, setSelectedMajor] = useState('');
   const [selectedCohort, setSelectedCohort] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -185,6 +232,10 @@ export default function StudentManagementPage() {
     setIsLoading(true);
     setError('');
     try {
+      /*
+       * Keep the request payload aligned with the visible filters. The export flow
+       * reuses the same filter shape so the downloaded file matches the current table.
+       */
       const params = {
         page: currentPage,
         limit,
@@ -212,7 +263,31 @@ export default function StudentManagementPage() {
   // ── HANDLERS ───────────────────────────────────────────────
 
   function handleSearch() {
-    setCurrentPage(1);
+    /*
+     * Search should always restart from the first page. When the user is
+     * already there we fetch immediately; otherwise the page change effect will
+     * trigger the reload after state updates.
+     */
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+      return;
+    }
+
+    loadStudents();
+  }
+
+  function handleResetFilters() {
+    setSearchText('');
+    setSelectedMajor('');
+    setSelectedCohort('');
+    setSelectedStatus('');
+
+    // Mirror the search behaviour so cleared filters always refresh correctly.
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+      return;
+    }
+
     loadStudents();
   }
 
@@ -309,6 +384,42 @@ export default function StudentManagementPage() {
     }
   }
 
+  async function handleExport(format) {
+    try {
+      setIsExporting(format);
+      setError('');
+
+      /*
+       * Export reuses the same search/major/cohort/status selections the admin
+       * is already using in the list view. That makes the action predictable:
+       * what is filtered on screen is what gets exported.
+       */
+
+      const response = await studentService.exportStudents({
+        search: searchText.trim(),
+        majorCode: selectedMajor,
+        cohort: selectedCohort,
+        academicStatus: selectedStatus,
+        format,
+      });
+
+      // Prefer the Content-Disposition filename so Excel/PDF downloads stay consistently named.
+      const fileName = getDownloadFileName(
+        response.headers?.['content-disposition'],
+        `students-${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      );
+
+      // Re-wrap the binary response as a Blob before triggering the browser download.
+      downloadBlobFile(new Blob([response.data]), fileName);
+      showSuccess(`Xuất file ${format.toUpperCase()} thành công!`);
+    } catch (err) {
+      console.error('Error exporting students:', err);
+      setError(await extractExportErrorMessage(err, `Không thể xuất file ${format.toUpperCase()}`));
+    } finally {
+      setIsExporting('');
+    }
+  }
+
   function handleEdit(student) {
     setSelectedStudent(student);
     setFormData({
@@ -379,8 +490,38 @@ export default function StudentManagementPage() {
               />
             </div>
 
-            {/* Major filter - Hidden */}
-            {/* Cohort filter - Hidden */}
+            {/* Major/cohort are visible filters so admins can see exactly what the export will include. */}
+            <select
+              value={selectedMajor}
+              onChange={(e) => {
+                setSelectedMajor(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tất cả ngành</option>
+              {majors.map((major) => (
+                <option key={major.majorCode} value={major.majorCode}>
+                  {major.majorCode} - {major.majorName}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedCohort}
+              onChange={(e) => {
+                setSelectedCohort(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Tất cả khóa</option>
+              {cohorts.map((cohort) => (
+                <option key={cohort} value={cohort}>
+                  K{cohort}
+                </option>
+              ))}
+            </select>
 
             {/* Status filter */}
             <select
@@ -400,6 +541,21 @@ export default function StudentManagementPage() {
           </div>
 
           <div className="mt-4 flex gap-2">
+            {/* Only the active format button is disabled while its request is running. */}
+            <button
+              onClick={() => handleExport('excel')}
+              disabled={isExporting === 'excel'}
+              className="px-6 py-2 border border-slate-300 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition disabled:opacity-60"
+            >
+              {isExporting === 'excel' ? 'Đang xuất Excel...' : 'Xuất Excel'}
+            </button>
+            <button
+              onClick={() => handleExport('pdf')}
+              disabled={isExporting === 'pdf'}
+              className="px-6 py-2 border border-slate-300 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition disabled:opacity-60"
+            >
+              {isExporting === 'pdf' ? 'Đang xuất PDF...' : 'Xuất PDF'}
+            </button>
             <button
               onClick={handleSearch}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -407,13 +563,7 @@ export default function StudentManagementPage() {
               Tìm kiếm
             </button>
             <button
-              onClick={() => {
-                setSearchText('');
-                setSelectedMajor('');
-                setSelectedCohort('');
-                setSelectedStatus('');
-                setCurrentPage(1);
-              }}
+              onClick={handleResetFilters}
               className="px-6 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition"
             >
               Xóa bộ lọc

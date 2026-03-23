@@ -19,9 +19,29 @@ function getInitials(name = '') {
     .split(/\s+/)
     .filter(Boolean);
 
-  if (words.length === 0) return 'SV';
+  if (words.length === 0) return 'TK';
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+function normalizeRole(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getRoleLabel(role) {
+  switch (normalizeRole(role)) {
+    case 'admin':
+      return 'Quản trị viên';
+    case 'staff':
+      return 'Nhân viên';
+    case 'lecturer':
+    case 'teacher':
+      return 'Giảng viên';
+    case 'student':
+      return 'Sinh viên';
+    default:
+      return 'Tài khoản';
+  }
 }
 
 function InfoRow({ label, value }) {
@@ -34,15 +54,20 @@ function InfoRow({ label, value }) {
 }
 
 export default function ProfileScreen() {
-  const { profile, loading, refreshing, error, refresh, reload } = useProfile();
+  const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const role = normalizeRole(user?.role);
+  const isStudent = role === 'student';
+  const { profile, loading, refreshing, error, refresh, reload } = useProfile({
+    enabled: isStudent,
+  });
 
   async function handleLogout() {
     logout();
     await removeItem(AUTH_STORAGE_KEY);
   }
 
-  if (loading && !profile) {
+  if (isStudent && loading && !profile) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -51,13 +76,57 @@ export default function ProfileScreen() {
     );
   }
 
-  if (error && !profile) {
+  if (isStudent && error && !profile) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
         <Pressable style={styles.retryButton} onPress={reload}>
           <Text style={styles.retryButtonText}>Thử lại</Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (!isStudent) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.topActions}>
+            <Pressable onPress={handleLogout} style={styles.logoutButton}>
+              <Text style={styles.logoutText}>Đăng xuất</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.headerCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{getInitials(user?.fullName)}</Text>
+            </View>
+
+            <View style={styles.headerInfo}>
+              <Text style={styles.fullName}>{user?.fullName || 'Tài khoản'}</Text>
+              <Text style={styles.subLine}>{user?.email || 'Không có email'}</Text>
+              <View style={styles.cohortPill}>
+                <Text style={styles.cohortPillText}>{getRoleLabel(role)}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.cardTitle}>Thông tin tài khoản</Text>
+            <InfoRow label="Vai trò" value={getRoleLabel(role)} />
+            <InfoRow label="Trạng thái" value={user?.status || 'N/A'} />
+            <InfoRow label="Nhà cung cấp" value={user?.authProvider || 'local'} />
+            <InfoRow label="Email" value={user?.email || 'N/A'} />
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.cardTitle}>Quyền trên mobile</Text>
+            <Text style={styles.infoDescription}>
+              Tài khoản {getRoleLabel(role).toLowerCase()} hiện có thể xem đánh giá giảng viên trên mobile app.
+            </Text>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -210,6 +279,10 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginBottom: 10,
   },
+  infoDescription: {
+    color: '#475569',
+    lineHeight: 20,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -245,8 +318,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   logoutText: {
-    color: '#334155',
-    fontWeight: '600',
-    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '700',
   },
 });
