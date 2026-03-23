@@ -264,8 +264,15 @@ async function getCurrentActivePeriod() {
 }
 
 /**
- * Check cohort access for a registration period.
- * Empty allowedCohorts means all cohorts are allowed.
+ * Verify Student Cohort Eligibility
+ *
+ * Rule:
+ * - nếu allowedCohorts rỗng -> period mở cho tất cả khóa
+ * - nếu allowedCohorts có dữ liệu -> chỉ các cohort nằm trong danh sách mới được phép
+ *
+ * FE hiển thị trực tiếp message từ kết quả này để báo:
+ * - K của sinh viên có hợp lệ không
+ * - nếu không hợp lệ thì khóa nút đăng ký
  */
 function checkCohortAccess(studentCohort, periodAllowedCohorts = []) {
   if (!Array.isArray(periodAllowedCohorts) || periodAllowedCohorts.length === 0) {
@@ -297,6 +304,10 @@ function checkCohortAccess(studentCohort, periodAllowedCohorts = []) {
   };
 }
 
+// Wrapper dùng trong runtime đăng ký môn:
+// 1. tìm period active hiện tại
+// 2. nếu chưa có period active thì tạm coi không chặn cohort
+// 3. nếu có thì áp rule checkCohortAccess ở trên
 async function validateCurrentPeriodCohort(studentCohort) {
   const currentPeriod = await getCurrentActivePeriod();
   if (!currentPeriod) {

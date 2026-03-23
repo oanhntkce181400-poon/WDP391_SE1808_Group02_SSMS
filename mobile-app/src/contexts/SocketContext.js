@@ -1,20 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Platform } from 'react-native';
 import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../config/env';
 import useAuthStore from '../stores/useAuthStore';
 
 function resolveSocketUrl(explicitUrl) {
   if (explicitUrl) return explicitUrl;
-
-  const envSocket = process.env.EXPO_PUBLIC_SOCKET_URL;
-  if (envSocket) return envSocket;
-
-  const envApi = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (envApi) {
-    return String(envApi).replace(/\/api\/?$/, '');
-  }
-
-  return Platform.OS === 'web' ? 'http://localhost:3000' : 'http://10.0.2.2:3000';
+  return SOCKET_URL;
 }
 
 /**

@@ -45,6 +45,11 @@ function buildSemesterWritePayload(doc) {
   };
 }
 
+// Auto-enrollment khi kích hoạt học kỳ hiện tại chạy ở ngoài transaction DB.
+// Nếu batch này fail, service sẽ dùng helper này để phục hồi trạng thái trước đó:
+// - bỏ cờ current của học kỳ vừa set nhầm
+// - khôi phục học kỳ current cũ
+// - hoặc xóa hẳn bản ghi mới tạo nếu lỗi xảy ra trong createSemester
 function buildAutoEnrollmentFailure(semesterDoc, autoEnrollment) {
   const summary = autoEnrollment?.summary || {};
   const summaryMessage = autoEnrollment?.summary
@@ -59,6 +64,11 @@ function buildAutoEnrollmentFailure(semesterDoc, autoEnrollment) {
   return error;
 }
 
+// Rollback dành riêng cho use case "Activate Automatic Enrollment".
+// Ý tưởng:
+// 1. reset toàn bộ isCurrent
+// 2. khôi phục semester đích về snapshot cũ, hoặc xóa nếu là bản ghi vừa tạo
+// 3. bật lại semester current trước đó để hệ thống không rơi vào trạng thái nửa chừng
 async function rollbackCurrentSemesterChange({
   targetSemesterId,
   previousSemesterSnapshot = null,
@@ -153,6 +163,8 @@ async function createSemester(data) {
 
   const existing = await repo.findByCode(code);
   if (existing) throw new Error("Semester code already exists");
+  // Chỉ cần nhớ học kỳ current cũ nếu request đang muốn set học kỳ mới thành current.
+  // Snapshot này sẽ dùng để rollback nếu auto-enrollment phía sau thất bại.
   const previousCurrentSemester = normalizedIsCurrent ? await repo.findCurrent() : null;
 
   const session = await mongoose.startSession();
@@ -161,6 +173,7 @@ async function createSemester(data) {
   try {
     await session.withTransaction(async () => {
       if (normalizedIsCurrent) {
+        // Một thời điểm chỉ nên có 1 học kỳ current.
         await repo.clearCurrentFlag(null, { session });
       }
 
@@ -187,6 +200,8 @@ async function createSemester(data) {
 
   if (payload.isCurrent) {
     try {
+      // Khi admin tạo học kỳ mới và tick "isCurrent", BE tự chạy auto-enrollment ngay.
+      // Đây chính là backend của chức năng "Activate Automatic Enrollment".
       const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(String(doc._id));
       if (autoEnrollment?.success === false) {
         throw buildAutoEnrollmentFailure(doc, autoEnrollment);
@@ -194,6 +209,8 @@ async function createSemester(data) {
       payload.autoEnrollment = autoEnrollment;
     } catch (error) {
       try {
+        // Nếu auto-enrollment fail thì rollback toàn bộ việc vừa set current,
+        // để không có chuyện UI báo học kỳ đã current nhưng sinh viên chưa được xếp lớp.
         await rollbackCurrentSemesterChange({
           targetSemesterId: doc._id,
           previousCurrentSemesterId: previousCurrentSemester?._id || null,
@@ -244,6 +261,7 @@ async function updateSemester(id, data) {
   try {
     await session.withTransaction(async () => {
       if (isCurrent !== undefined && willSetCurrent) {
+        // Update đổi học kỳ khác thành current cũng phải clear cờ current cũ trước.
         await repo.clearCurrentFlag(id, { session });
       }
 
@@ -258,6 +276,8 @@ async function updateSemester(id, data) {
 
   if (isCurrent !== undefined && willSetCurrent && !existingSemester.isCurrent) {
     try {
+      // Đây là nhánh quan trọng nhất của feature:
+      // admin sửa học kỳ cũ và bật isCurrent = true -> tự trigger auto-enrollment.
       const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(id);
       if (autoEnrollment?.success === false) {
         throw buildAutoEnrollmentFailure(updated, autoEnrollment);
@@ -265,6 +285,7 @@ async function updateSemester(id, data) {
       payload.autoEnrollment = autoEnrollment;
     } catch (error) {
       try {
+        // Nếu batch xếp lớp lỗi, khôi phục snapshot học kỳ cũ và current cũ.
         await rollbackCurrentSemesterChange({
           targetSemesterId: id,
           previousSemesterSnapshot: existingSemester,

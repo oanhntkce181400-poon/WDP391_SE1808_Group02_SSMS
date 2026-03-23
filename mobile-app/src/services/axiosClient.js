@@ -1,13 +1,8 @@
 // Axios client for mobile app (with refresh token)
 import axios from 'axios';
-import { Platform } from 'react-native';
+import { API_BASE_URL } from '../config/env';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, removeItem, setItem } from '../utils/storage';
-
-const DEFAULT_API_BASE_URL =
-  Platform.OS === 'web' ? 'http://localhost:3000/api' : 'http://10.0.2.2:3000/api';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
 
 const axiosClient = axios.create({
   baseURL: API_BASE_URL,

@@ -2,99 +2,95 @@ const mongoose = require('mongoose');
 
 const feedbackSchema = new mongoose.Schema(
   {
-    // Thông tin lớp học được đánh giá
+    // The class section being evaluated by the student.
     classSection: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ClassSection',
-      required: true
+      required: true,
     },
 
-    // Người gửi feedback (optional - nếu muốn anonymous thì không cần)
-    // Nếu anonymous = true thì submittedBy sẽ null
+    // We always keep the internal owner reference, even when the feedback is
+    // anonymous to other users. That is what allows the mobile app to reopen
+    // the student's existing submission for update/delete actions later.
     submittedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      default: null
+      default: null,
     },
 
-    // Flag ẩn danh
+    // This flag only controls what the public UI may reveal.
     isAnonymous: {
       type: Boolean,
-      default: true
+      default: true,
     },
 
-    // Đánh giá (1-5 sao)
     rating: {
       type: Number,
       min: 1,
       max: 5,
-      required: true
+      required: true,
     },
 
-    // Ý kiến / comment
     comment: {
       type: String,
       trim: true,
       maxlength: 1000,
-      default: ''
+      default: '',
     },
 
-    // Các tiêu chí đánh giá (optional)
+    // Optional criterion-level ratings used by the mobile lecturer feedback
+    // form. Each field stays nullable so partial submissions remain valid.
     criteria: {
       teachingQuality: {
         type: Number,
         min: 1,
         max: 5,
-        default: null
+        default: null,
       },
       courseContent: {
         type: Number,
         min: 1,
         max: 5,
-        default: null
+        default: null,
       },
       classEnvironment: {
         type: Number,
         min: 1,
         max: 5,
-        default: null
+        default: null,
       },
       materialQuality: {
         type: Number,
         min: 1,
         max: 5,
-        default: null
-      }
+        default: null,
+      },
     },
 
-    // Trạng thái
     status: {
       type: String,
       enum: ['pending', 'approved', 'rejected'],
-      default: 'pending'
+      default: 'pending',
     },
 
-    // Metadata
     submissionIp: String,
     submissionUserAgent: String,
     rejectionReason: {
       type: String,
-      default: null
-    }
+      default: null,
+    },
   },
   {
-    timestamps: true
-  }
+    timestamps: true,
+  },
 );
 
-// Index để tìm kiếm và validate
+// Query patterns used by the feedback feed, ownership lookup and moderation UI.
 feedbackSchema.index({ classSection: 1, submittedBy: 1, createdAt: -1 });
 feedbackSchema.index({ classSection: 1, status: 1 });
 feedbackSchema.index({ rating: 1 });
 
-// Middleware để lưu IP và user agent
-feedbackSchema.pre('save', function (next) {
-  // IP và User Agent sẽ được set từ controller
+feedbackSchema.pre('save', function saveFeedback(next) {
   next();
 });
 

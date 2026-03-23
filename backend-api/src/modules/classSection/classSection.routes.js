@@ -15,6 +15,15 @@ router.get("/search", authMiddleware, ctrl.searchClasses);
 // UC39 - View Class List with Capacity
 router.get("/list", authMiddleware, ctrl.getClassList);
 
+// Student-only literal route. It must stay before `/:classId`, otherwise the
+// string "my-classes" is treated as a class id and hits the wrong handler.
+router.get(
+  "/my-classes",
+  authMiddleware,
+  rbacMiddleware(["student"]),
+  ctrl.getMyClasses
+);
+
 // ─── Admin Routes ────────────────────
 
 // Bulk update status - PHẢI ĐẶT TRƯỚC /:classId

@@ -332,6 +332,17 @@ function buildFilterSummary({ majorCodes, studentCodes, limit, onlyStudentsWitho
   };
 }
 
+// Thứ tự ưu tiên khi chọn lớp cho 1 môn trong auto-enrollment:
+// 1. Chỉ xét các class section thuộc đúng subject đang cần xếp
+// 2. Bỏ qua lớp mà sinh viên đã chiếm chỗ rồi
+// 3. Bỏ qua lớp đã đầy
+// 4. Trong các lớp còn lại, ưu tiên lớp có currentEnrollment nhỏ hơn để cân tải
+// 5. Nếu bằng nhau thì ưu tiên classCode nhỏ hơn để kết quả ổn định, dễ demo/debug
+//
+// Đây là kiểu "greedy selection":
+// - hệ thống chọn ngay lớp tốt nhất tại thời điểm hiện tại
+// - không quay lui
+// - không tối ưu toàn cục cho cả batch
 // Chọn lớp phù hợp nhất cho một môn theo rule hiện tại:
 // - sinh viên chưa chiếm lớp đó
 // - lớp chưa đầy
@@ -1062,6 +1073,21 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   const pendingWaitlistDocs = [];
   const classSectionIncrementMap = new Map();
 
+  // Thứ tự ưu tiên tổng thể của thuật toán batch:
+  // 1. Ưu tiên danh sách student đã được repository sort theo studentCode tăng dần
+  // 2. Với từng student, ưu tiên curriculum match trước, rồi mới tính semester order
+  // 3. Với từng subject của student:
+  //    - ưu tiên skip duplicate trước
+  //    - sau đó mới tìm class available
+  //    - nếu không có class thì mới đẩy sang waitlist
+  // 4. Với class available thì dùng rule ưu tiên ở pickAvailableClassSection(...)
+  //
+  // Nghĩa là khi bị hỏi "mức độ ưu tiên của auto-enrollment là gì", có thể trả lời:
+  // - ưu tiên đúng curriculum
+  // - ưu tiên đúng curriculum semester
+  // - ưu tiên tránh duplicate
+  // - ưu tiên lớp còn chỗ và ít sinh viên hơn
+  // - hết chỗ mới sang waitlist
   // Xử lý từng sinh viên một để log kết quả chi tiết theo từng người.
   // Chặng 5: vòng lặp chính của batch.
   for (const student of students) {
@@ -1142,6 +1168,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
         const subjectId = String(subject._id);
         if (studentState.activeSubjectIds.has(subjectId)) {
+          // Duplicate luôn được ưu tiên xử lý trước:
+          // nếu student đã có môn này rồi thì không xét chọn lớp nữa.
           duplicates += 1;
           studentLog.skipped.push(`${subject.subjectCode}: already enrolled`);
           continue;
@@ -1156,6 +1184,10 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
         // Nếu không còn lớp mở cho môn này, sinh viên được đưa sang waitlist thay vì bỏ qua im lặng.
         if (!classSection) {
+          // Waitlist là bước fallback cuối cùng, chỉ xảy ra sau khi:
+          // - đã xác định đúng curriculum
+          // - đã xác định đúng subject của kỳ
+          // - đã thử chọn lớp nhưng không còn lớp nào hợp lệ
           const waitlistResult = queueWaitlistIfNeeded(
             student._id,
             subject._id,

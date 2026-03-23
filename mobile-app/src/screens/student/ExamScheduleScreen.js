@@ -29,11 +29,11 @@ function ExamCard({ exam }) {
       <View style={styles.examHeader}>
         <View style={styles.examHeaderLeft}>
           <Text style={styles.subjectCode}>{exam.subject?.subjectCode || 'N/A'}</Text>
-          <Text style={styles.subjectName}>{exam.subject?.subjectName || 'Mon hoc'}</Text>
-          <Text style={styles.classCode}>Lop: {exam.classSection?.classCode || 'N/A'}</Text>
+          <Text style={styles.subjectName}>{exam.subject?.subjectName || 'Môn học'}</Text>
+          <Text style={styles.classCode}>Lớp: {exam.classSection?.classCode || 'N/A'}</Text>
         </View>
         <View style={styles.seatWrap}>
-          <Text style={styles.seatLabel}>Seat</Text>
+          <Text style={styles.seatLabel}>Chỗ ngồi</Text>
           <Text style={styles.seatValue}>{exam.seatNumber || '---'}</Text>
         </View>
       </View>
@@ -82,7 +82,7 @@ export default function ExamScheduleScreen() {
       setExams(rows);
     } catch (err) {
       setExams([]);
-      setError(err?.response?.data?.message || 'Khong tai duoc lich thi.');
+      setError(err?.response?.data?.message || 'Không tải được lịch thi.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -105,7 +105,7 @@ export default function ExamScheduleScreen() {
     return (
       <View style={styles.centeredBox}>
         <ActivityIndicator size="large" color="#f59e0b" />
-        <Text style={styles.helperText}>Dang tai lich thi...</Text>
+        <Text style={styles.helperText}>Đang tải lịch thi...</Text>
       </View>
     );
   }
@@ -113,16 +113,16 @@ export default function ExamScheduleScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerCard}>
-        <Text style={styles.title}>Exam Schedule</Text>
-        <Text style={styles.subTitle}>Ngay, gio, phong thi, SBD va seat number</Text>
+        <Text style={styles.title}>Lịch thi</Text>
+        <Text style={styles.subTitle}>Ngày thi, giờ thi, phòng thi, số báo danh và chỗ ngồi</Text>
 
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Tong lich thi</Text>
+            <Text style={styles.statLabel}>Tổng lịch thi</Text>
             <Text style={styles.statValue}>{stats.total}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Sap toi</Text>
+            <Text style={styles.statLabel}>Sắp tới</Text>
             <Text style={styles.statValue}>{stats.upcoming}</Text>
           </View>
         </View>
@@ -132,7 +132,7 @@ export default function ExamScheduleScreen() {
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.retryBtn} onPress={() => loadExams(false)}>
-            <Text style={styles.retryText}>Thu lai</Text>
+            <Text style={styles.retryText}>Thử lại</Text>
           </Pressable>
         </View>
       ) : null}
@@ -146,7 +146,7 @@ export default function ExamScheduleScreen() {
         ListEmptyComponent={
           <View style={styles.emptyCard}>
             <MaterialCommunityIcons name="calendar-remove" size={44} color="#94a3b8" />
-            <Text style={styles.emptyText}>Chua co lich thi duoc xep.</Text>
+            <Text style={styles.emptyText}>Chưa có lịch thi được xếp.</Text>
           </View>
         }
       />
@@ -259,13 +259,13 @@ const styles = StyleSheet.create({
   seatValue: {
     color: '#0f172a',
     fontWeight: '800',
-    fontSize: 18,
+    fontSize: 16,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 6,
+    marginTop: 8,
   },
   detailText: {
     color: '#334155',
@@ -276,48 +276,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f8fafc',
+    padding: 20,
   },
   helperText: {
-    marginTop: 8,
-    color: '#475569',
+    marginTop: 10,
+    color: '#64748b',
   },
   errorCard: {
     marginHorizontal: 14,
     marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    padding: 14,
+    gap: 10,
   },
   errorText: {
     color: '#b91c1c',
   },
   retryBtn: {
-    marginTop: 8,
     alignSelf: 'flex-start',
-    borderRadius: 8,
-    backgroundColor: '#b91c1c',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   retryText: {
-    color: '#ffffff',
-    fontWeight: '600',
+    color: '#b91c1c',
+    fontWeight: '700',
   },
   emptyCard: {
-    marginTop: 24,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 24,
+    marginTop: 20,
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    padding: 24,
   },
   emptyText: {
-    marginTop: 8,
+    marginTop: 10,
     color: '#64748b',
-    fontSize: 13,
   },
 });
