@@ -1,18 +1,15 @@
 import axiosClient from './axiosClient';
 
 const feedbackService = {
-  /*
-   * Student flow starts from the enrolled-class list, because feedback is only
-   * valid for classes the current student has actually joined.
-   */
+  // Sinh viên chỉ được đánh giá các lớp mình đã học hoặc đang học.
   getMyClasses() {
     return axiosClient.get('/classes/my-classes');
   },
 
   /*
-   * Admin/staff feedback view must see the full class catalog, not just the
-   * narrower `/classes/list` subset used elsewhere. We page through `/classes`
-   * and flatten all rows so the feedback UI can browse every class section.
+   * Admin/staff cần xem theo toàn bộ lớp chứ không chỉ nhóm lớp published/scheduled
+   * của `/classes/list`. Vì route `/classes` có phân trang, ta gom toàn bộ các trang
+   * lại thành một mảng thống nhất để màn hình feedback không bị mất lớp.
    */
   async getClassList() {
     const limit = 100;
@@ -42,46 +39,32 @@ const feedbackService = {
     };
   },
 
-  submitFeedback(data) {
-    return axiosClient.post('/feedbacks', data);
-  },
-
+  // Feed đánh giá giảng viên theo lớp.
   getClassFeedback(classSectionId) {
     return axiosClient.get(`/feedbacks/class/${classSectionId}`);
   },
 
+  // Thống kê nhanh để hiển thị phía trên danh sách nhận xét.
   getClassFeedbackStats(classSectionId) {
     return axiosClient.get(`/feedbacks/class/${classSectionId}/stats`);
   },
 
+  // Danh sách đánh giá do chính sinh viên hiện tại đã gửi.
   getMyFeedback() {
     return axiosClient.get('/feedbacks/my-feedbacks');
   },
 
-  updateFeedback(feedbackId, data) {
-    return axiosClient.put(`/feedbacks/${feedbackId}`, data);
-  },
-
+  // Metadata editability cho feedback hiện có.
   getFeedbackWindowInfo(feedbackId) {
     return axiosClient.get(`/feedbacks/${feedbackId}/window`);
   },
 
-  approveFeedback(feedbackId) {
-    return axiosClient.patch(`/feedbacks/${feedbackId}/approve`);
+  submitFeedback(data) {
+    return axiosClient.post('/feedbacks', data);
   },
 
-  rejectFeedback(feedbackId, reason) {
-    return axiosClient.patch(`/feedbacks/${feedbackId}/reject`, { reason });
-  },
-
-  deleteFeedback(feedbackId) {
-    return axiosClient.delete(`/feedbacks/${feedbackId}`);
-  },
-
-  getPendingFeedback(limit = 20, skip = 0) {
-    return axiosClient.get('/feedbacks/pending', {
-      params: { limit, skip },
-    });
+  updateFeedback(feedbackId, data) {
+    return axiosClient.put(`/feedbacks/${feedbackId}`, data);
   },
 };
 
