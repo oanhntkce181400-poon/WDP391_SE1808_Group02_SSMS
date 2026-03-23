@@ -4,6 +4,8 @@ import scheduleService from "../../services/scheduleService";
 import roomService from "../../services/roomService";
 import timeslotService from "../../services/timeslotService";
 import classService from "../../services/classService";
+import curriculumService from "../../services/curriculumService";
+import semesterService from "../../services/semesterService";
 
 const DAYS_OF_WEEK = [
   { value: 1, label: "Thứ 2" },
@@ -15,10 +17,153 @@ const DAYS_OF_WEEK = [
   { value: 7, label: "Chủ nhật" },
 ];
 
-const PERIODS = Array.from({ length: 10 }, (_, i) => ({
-  value: i + 1,
-  label: `Tiết ${i + 1}`,
-}));
+/** Hiển thị tiết từ khung giờ (một ca = thường chỉ một tiết) */
+function formatTimeslotPeriodLabel(ts) {
+  if (!ts) return "";
+  const start = ts.startPeriod;
+  const end = ts.endPeriod ?? ts.startPeriod;
+  if (start == null) return "";
+  if (end == null || Number(start) === Number(end)) return `Tiết ${start}`;
+  return `Tiết ${start}–${end}`;
+}
+
+function toInputDate(value) {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") {
+    const s = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return "";
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return "";
+}
+
+function subjectIdFromClassSection(cs) {
+  const sub = cs?.subject;
+  if (!sub) return "";
+  if (typeof sub === "object" && sub._id) return String(sub._id);
+  return String(sub);
+}
+
+function normalizeAcademicYearKey(ay) {
+  return String(ay ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/\//g, "-");
+}
+
+function academicYearMatches(a, b) {
+  if (a == null || b == null) return false;
+  const na = normalizeAcademicYearKey(a);
+  const nb = normalizeAcademicYearKey(b);
+  if (!na || !nb) return false;
+  return na === nb;
+}
+
+/** Học kỳ trong khung CT: đúng thứ tự HK + môn thuộc CT đó + có start/end */
+async function fetchCurriculumSemesterDates(subjectId, semesterOrder) {
+  const order = Number(semesterOrder);
+  if (!subjectId || !order) return null;
+  try {
+    const curRes = await curriculumService.getCurriculums({ limit: 100 });
+    const curriculums = curRes.data?.data || [];
+    for (const cur of curriculums) {
+      const semRes = await curriculumService.getSemesters(cur._id);
+      const semesters = semRes.data?.data || [];
+      const sem = semesters.find(
+        (s) => Number(s.semesterOrder ?? s.id ?? s.semester) === order,
+      );
+      if (!sem) continue;
+      const sd = toInputDate(sem.startDate);
+      const ed = toInputDate(sem.endDate);
+      if (!sd || !ed) continue;
+      const subRes = await curriculumService.getSubjectsBySemester(cur._id, order);
+      const rows = subRes.data?.data || [];
+      const ok = rows.some((row) => {
+        const sub = row.subject;
+        const id = sub && typeof sub === "object" ? sub._id : sub;
+        return id && String(id) === String(subjectId);
+      });
+      if (ok) return { start_date: sd, end_date: ed };
+    }
+  } catch (e) {
+    console.error("fetchCurriculumSemesterDates", e);
+  }
+  return null;
+}
+
+async function fetchInstitutionalSemesterDates(academicYear, semesterNum) {
+  const sn = Number(semesterNum);
+  if (academicYear == null || String(academicYear).trim() === "" || !sn) return null;
+  try {
+    const res = await semesterService.getAll({ limit: 400 });
+    const list = res.data?.data || [];
+    const match = list.find(
+      (s) =>
+        academicYearMatches(s.academicYear, academicYear) &&
+        Number(s.semesterNum) === sn,
+    );
+    if (match) {
+      const sd = toInputDate(match.startDate);
+      const ed = toInputDate(match.endDate);
+      if (sd && ed) return { start_date: sd, end_date: ed };
+    }
+  } catch (e) {
+    console.error("fetchInstitutionalSemesterDates", e);
+  }
+  return null;
+}
+
+async function resolveDefaultScheduleDates(classSection) {
+  const fromClassStart = toInputDate(classSection.startDate);
+  const fromClassEnd = toInputDate(classSection.endDate);
+  if (fromClassStart && fromClassEnd) {
+    return {
+      start_date: fromClassStart,
+      end_date: fromClassEnd,
+      hint: "Từ ngày học phần đã lưu trên lớp",
+    };
+  }
+
+  const subjectId = subjectIdFromClassSection(classSection);
+  const semNum = Number(classSection.semester);
+  if (subjectId && semNum) {
+    const fromCur = await fetchCurriculumSemesterDates(subjectId, semNum);
+    if (fromCur?.start_date && fromCur?.end_date) {
+      return {
+        ...fromCur,
+        hint: "Tự điền theo học kỳ trong khung chương trình (môn thuộc CT)",
+      };
+    }
+  }
+
+  if (classSection.academicYear != null && semNum) {
+    const fromInst = await fetchInstitutionalSemesterDates(
+      classSection.academicYear,
+      semNum,
+    );
+    if (fromInst?.start_date && fromInst?.end_date) {
+      return {
+        ...fromInst,
+        hint: "Tự điền theo kỳ học trên hệ thống (Quản lý học kỳ)",
+      };
+    }
+  }
+
+  if (fromClassStart || fromClassEnd) {
+    return {
+      start_date: fromClassStart,
+      end_date: fromClassEnd,
+      hint: "Chỉ có một phần ngày trên lớp — vui lòng bổ sung",
+    };
+  }
+
+  return { start_date: "", end_date: "", hint: null };
+}
 
 const EMPTY_SCHEDULE_FORM = {
   room_id: "",
@@ -53,6 +198,31 @@ export default function AssignScheduleModal({
   const [capacityWarning, setCapacityWarning] = useState(null); // Cảnh báo sức chứa
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [defaultDateHint, setDefaultDateHint] = useState(null);
+  const [resolvingDates, setResolvingDates] = useState(false);
+
+  // Ngày bắt đầu / kết thúc: từ lớp → khung CT → kỳ học vụ
+  useEffect(() => {
+    let cancelled = false;
+    setResolvingDates(true);
+    setDefaultDateHint(null);
+    resolveDefaultScheduleDates(classSection)
+      .then((resolved) => {
+        if (cancelled) return;
+        setFormData((prev) => ({
+          ...prev,
+          start_date: prev.start_date || resolved.start_date || "",
+          end_date: prev.end_date || resolved.end_date || "",
+        }));
+        setDefaultDateHint(resolved.hint);
+      })
+      .finally(() => {
+        if (!cancelled) setResolvingDates(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [classSection._id]);
 
   // Lấy danh sách phòng và ca học
   useEffect(() => {
@@ -171,25 +341,30 @@ export default function AssignScheduleModal({
     }
   };
 
-  // Xử lý khi chọn Timeslot - auto-fill startPeriod và endPeriod
+  // Chọn ca học → tự điền tiết (một ca = một tiết; endPeriod luôn khớp startPeriod nếu thiếu)
   const handleTimeslotChange = (e) => {
     const timeslotId = e.target.value;
     if (timeslotId) {
-      const selectedTimeslot = timeslots.find(ts => ts._id === timeslotId);
+      const selectedTimeslot = timeslots.find((ts) => ts._id === timeslotId);
       if (selectedTimeslot) {
-        setFormData((prev) => ({ 
-          ...prev, 
+        const sp = selectedTimeslot.startPeriod;
+        const ep =
+          selectedTimeslot.endPeriod != null
+            ? selectedTimeslot.endPeriod
+            : selectedTimeslot.startPeriod;
+        setFormData((prev) => ({
+          ...prev,
           timeslot_id: timeslotId,
-          start_period: selectedTimeslot.startPeriod?.toString() || "",
-          end_period: selectedTimeslot.endPeriod?.toString() || ""
+          start_period: sp != null ? String(sp) : "",
+          end_period: ep != null ? String(ep) : "",
         }));
       }
     } else {
-      setFormData((prev) => ({ 
-        ...prev, 
+      setFormData((prev) => ({
+        ...prev,
         timeslot_id: "",
         start_period: "",
-        end_period: ""
+        end_period: "",
       }));
     }
   };
@@ -208,6 +383,11 @@ export default function AssignScheduleModal({
       return;
     }
 
+    if (!formData.timeslot_id || !formData.start_period || !formData.end_period) {
+      setError("Vui lòng chọn ca học (khung giờ) để xác định tiết.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     setSuccess(null);
@@ -223,7 +403,13 @@ export default function AssignScheduleModal({
       });
       
       setSuccess("Gán lịch học thành công!");
-      setFormData(EMPTY_SCHEDULE_FORM);
+      const resolved = await resolveDefaultScheduleDates(classSection);
+      setFormData({
+        ...EMPTY_SCHEDULE_FORM,
+        start_date: resolved.start_date || "",
+        end_date: resolved.end_date || "",
+      });
+      setDefaultDateHint(resolved.hint);
       fetchSchedules();
       
       if (onSuccess) {
@@ -442,24 +628,38 @@ export default function AssignScheduleModal({
               )}
             </div>
 
-            {/* Ca học (Timeslot) */}
+            {/* Ca học (Timeslot) — một ca = một tiết, không chọn tiết riêng */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Ca học
+                Ca học <span className="text-red-500">*</span>
               </label>
               <select
                 name="timeslot_id"
                 value={formData.timeslot_id || ""}
                 onChange={handleTimeslotChange}
+                required
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
               >
                 <option value="">-- Chọn ca học --</option>
                 {timeslots.map((ts) => (
                   <option key={ts._id} value={ts._id}>
-                    {ts.groupName} (Tiết {ts.startPeriod}-{ts.endPeriod})
+                    {ts.groupName} ({formatTimeslotPeriodLabel(ts)})
+                    {ts.startTime && ts.endTime
+                      ? ` · ${ts.startTime}–${ts.endTime}`
+                      : ""}
                   </option>
                 ))}
               </select>
+              {formData.timeslot_id && formData.start_period && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Theo khung giờ:{" "}
+                  <span className="font-medium text-slate-700">
+                    {formatTimeslotPeriodLabel(
+                      timeslots.find((t) => String(t._id) === String(formData.timeslot_id)),
+                    )}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Thứ */}
@@ -481,54 +681,6 @@ export default function AssignScheduleModal({
                   <option key={d.value} value={d.value}>
                     {d.label}
                     {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.day_of_week === d.value ? ' ⚠️' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tiết bắt đầu */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Tiết bắt đầu <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="start_period"
-                value={formData.start_period}
-                onChange={handleChange}
-                required
-                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
-                  conflictWarning ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
-                }`}
-              >
-                <option value="">-- Chọn tiết --</option>
-                {PERIODS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                    {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.start_period === p.value ? ' ⚠️' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tiết kết thúc */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Tiết kết thúc <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="end_period"
-                value={formData.end_period}
-                onChange={handleChange}
-                required
-                className={`w-full px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none ${
-                  conflictWarning ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
-                }`}
-              >
-                <option value="">-- Chọn tiết --</option>
-                {PERIODS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                    {(conflictInfo.room.length > 0 || conflictInfo.teacher.length > 0) && formData.end_period === p.value ? ' ⚠️' : ''}
                   </option>
                 ))}
               </select>
@@ -563,6 +715,17 @@ export default function AssignScheduleModal({
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none"
               />
             </div>
+
+            {(resolvingDates || defaultDateHint) && (
+              <div className="col-span-2 sm:col-span-3 text-xs text-slate-500">
+                {resolvingDates && (
+                  <span className="text-indigo-600">Đang lấy khoảng ngày theo học kỳ…</span>
+                )}
+                {!resolvingDates && defaultDateHint && (
+                  <span>{defaultDateHint}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Conflict Warning */}
@@ -629,7 +792,9 @@ export default function AssignScheduleModal({
                         </span>
                         <span className="text-slate-400">|</span>
                         <span className="text-slate-600">
-                          Tiết {schedule.startPeriod} - {schedule.endPeriod}
+                          {Number(schedule.startPeriod) === Number(schedule.endPeriod)
+                            ? `Tiết ${schedule.startPeriod}`
+                            : `Tiết ${schedule.startPeriod}–${schedule.endPeriod}`}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">

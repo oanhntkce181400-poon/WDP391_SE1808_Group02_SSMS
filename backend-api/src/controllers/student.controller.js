@@ -5,6 +5,7 @@
 const studentService = require('../services/student.service');
 const curriculumService = require('../services/curriculum.service');
 const gpaService = require('../services/gpa.service');
+const paymentValidation = require('../services/paymentValidation.service');
 
 /*
  * List and export endpoints intentionally share one query-normalization helper.
@@ -314,22 +315,16 @@ const getStudentCurriculum = async (req, res) => {
       });
     }
 
-    const intakeYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
+    const intakeYear =
+      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
 
-    let curriculum = null;
-    if (student.curriculumId) {
-      const Curriculum = require('../models/curriculum.model');
-      curriculum = await Curriculum.findById(student.curriculumId).lean();
-    }
-    if (!curriculum) {
-      curriculum = await curriculumService.getCurriculumForStudent({
-        majorCode: student.majorCode,
-        enrollmentYear: student.enrollmentYear,
-        cohort: student.cohort,
-      });
-    }
+    const { curriculum } = await curriculumService.resolveCurriculumForStudentRecord(student);
 
-    const currentSemester = student.currentCurriculumSemester ?? 1;
+    const Semester = require('../models/semester.model');
+    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
+    const currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
+      currentSystemSemester: activeSystemSemester,
+    });
 
     let currentCurriculumSemester = null;
     if (intakeYear) {
@@ -345,9 +340,6 @@ const getStudentCurriculum = async (req, res) => {
         progress: `${currentSemester}/9`,
       };
     }
-
-    const Semester = require('../models/semester.model');
-    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
 
     return res.status(200).json({
       success: true,
@@ -401,26 +393,17 @@ const getMyCurriculum = async (req, res) => {
       });
     }
 
-    const intakeYear = student.enrollmentYear || (student.cohort ? 2000 + student.cohort : null);
+    const intakeYear =
+      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
 
-    // Lấy curriculum: ưu tiên curriculumId, fallback getCurriculumForStudent
-    let curriculum = null;
-    if (student.curriculumId) {
-      const Curriculum = require('../models/curriculum.model');
-      curriculum = await Curriculum.findById(student.curriculumId).lean();
-    }
-    if (!curriculum) {
-      curriculum = await curriculumService.getCurriculumForStudent({
-        majorCode: student.majorCode,
-        enrollmentYear: student.enrollmentYear,
-        cohort: student.cohort,
-      });
-    }
+    const { curriculum } = await curriculumService.resolveCurriculumForStudentRecord(student);
 
-    // Kỳ hiện tại trong khung chương trình - lấy từ student.currentCurriculumSemester
-    const currentSemester = student.currentCurriculumSemester ?? 1;
+    const Semester = require('../models/semester.model');
+    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
+    const currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
+      currentSystemSemester: activeSystemSemester,
+    });
 
-    // Tính hiển thị đúng: semesterLabel, academicYear từ intakeYear + currentSemester
     let currentCurriculumSemester = null;
     if (intakeYear) {
       const semesterInYear = currentSemester % 2 === 0 ? 2 : 1;
@@ -435,10 +418,6 @@ const getMyCurriculum = async (req, res) => {
         progress: `${currentSemester}/9`,
       };
     }
-
-    // Kỳ hệ thống đang mở đăng ký (tách biệt)
-    const Semester = require('../models/semester.model');
-    const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
 
     return res.status(200).json({
       success: true,

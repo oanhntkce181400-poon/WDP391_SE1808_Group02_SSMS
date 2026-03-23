@@ -1,5 +1,6 @@
 const Timeslot = require('../models/timeslot.model');
 const ClassSection = require('../models/classSection.model');
+const Schedule = require('../models/schedule.model');
 
 class TimeslotService {
   async getTimeslots({ page = 1, limit = 10, keyword = '' }) {
@@ -73,14 +74,20 @@ class TimeslotService {
       status: data.status ?? current.status,
     };
 
+    if (merged.startPeriod != null && merged.endPeriod != null) {
+      const sp = Number(merged.startPeriod);
+      const ep = Number(merged.endPeriod);
+      if (Number.isInteger(sp) && Number.isInteger(ep) && sp !== ep) {
+        throw new Error('Mỗi ca chỉ gắn một tiết: startPeriod phải bằng endPeriod');
+      }
+    }
+
     const normalized = this.normalizePayload(merged);
 
     await this.ensureUniqueTimeRange(normalized.startTime, normalized.endTime, id);
     await this.ensureNoTimeOverlap(normalized.startTime, normalized.endTime, id);
 
-    const periodChanged =
-      Number(current.startPeriod) !== Number(normalized.startPeriod) ||
-      Number(current.endPeriod) !== Number(normalized.endPeriod);
+    const periodChanged = Number(current.startPeriod) !== Number(normalized.startPeriod);
 
     if (periodChanged) {
       const usedCount = await this.countTimeslotDependencies(id);
@@ -123,10 +130,17 @@ class TimeslotService {
   }
 
   async countTimeslotDependencies(timeslotId) {
-    return ClassSection.countDocuments({
-      timeslot: timeslotId,
-      status: { $in: ['draft', 'scheduled', 'published', 'locked'] },
-    });
+    const [classSections, schedules] = await Promise.all([
+      ClassSection.countDocuments({
+        timeslot: timeslotId,
+        status: { $in: ['draft', 'scheduled', 'published', 'locked'] },
+      }),
+      Schedule.countDocuments({
+        timeslot: timeslotId,
+        status: 'active',
+      }),
+    ]);
+    return classSections + schedules;
   }
 
   validateTimeslotInput(data, isPartial = false) {
@@ -161,20 +175,22 @@ class TimeslotService {
       if (startPeriod < 1 || endPeriod < 1 || startPeriod > 10 || endPeriod > 10) {
         throw new Error('startPeriod and endPeriod must be between 1 and 10');
       }
-      if (endPeriod < startPeriod) {
-        throw new Error('endPeriod must be greater than or equal to startPeriod');
+      if (startPeriod !== endPeriod) {
+        throw new Error('Mỗi ca chỉ gắn một tiết: startPeriod phải bằng endPeriod');
       }
     }
   }
 
   normalizePayload(data) {
+    const period = Number(data.startPeriod);
+    const p = Number.isInteger(period) && period >= 1 && period <= 10 ? period : Number(data.endPeriod);
     return {
       groupName: String(data.groupName || '').trim(),
       description: String(data.description || '').trim(),
       startTime: String(data.startTime || '').trim(),
       endTime: String(data.endTime || '').trim(),
-      startPeriod: Number(data.startPeriod),
-      endPeriod: Number(data.endPeriod),
+      startPeriod: p,
+      endPeriod: p,
       status: data.status || 'active',
     };
   }

@@ -42,6 +42,94 @@ function formatDateYmd(date) {
   return `${y}-${m}-${d}`;
 }
 
+/** Lớp đã công bố lịch cho SV (đồng bộ ClassManagement: Đã công bố / Đã khóa) */
+const PUBLISHED_CLASS_STATUSES = ['published', 'locked'];
+
+function normalizeAcademicYearKey(ay) {
+  return String(ay ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/\//g, '-');
+}
+
+function academicYearsMatch(a, b) {
+  const na = normalizeAcademicYearKey(a);
+  const nb = normalizeAcademicYearKey(b);
+  if (!na || !nb) return false;
+  return na === nb;
+}
+
+function yearBoundsFromAcademicYearString(ay) {
+  const parts = String(ay || '')
+    .split(/[-/]/)
+    .map((p) => parseInt(p.trim(), 10))
+    .filter((n) => !Number.isNaN(n));
+  if (parts.length < 2) return null;
+  const lo = Math.min(parts[0], parts[1]);
+  const hi = Math.max(parts[0], parts[1]);
+  return { lo, hi };
+}
+
+/**
+ * Lớp có thể dùng năm học dạng khung CT (vd 2026-2030), kỳ hệ thống dạng 2026-2027 / 2025-2026.
+ * Hai khoảng năm giao nhau → coi là cùng kỳ đào tạo.
+ */
+function academicYearCompatibleClassAndTeaching(classAy, teachingAy) {
+  if (!classAy || !teachingAy) return false;
+  if (academicYearsMatch(classAy, teachingAy)) return true;
+  const cr = yearBoundsFromAcademicYearString(classAy);
+  const tr = yearBoundsFromAcademicYearString(teachingAy);
+  if (!cr || !tr) return false;
+  if (tr.hi < cr.lo || tr.lo > cr.hi) return false;
+  return true;
+}
+
+/**
+ * Lớp đã đăng ký + đã công bố, ưu tiên khớp kỳ học vụ (HK + năm học).
+ * Nới lỏng dần nếu dữ liệu năm học lệch format.
+ */
+function filterPublishedEnrollmentsForStudentTerm(classes, semCtx) {
+  const pub = (c) => c && PUBLISHED_CLASS_STATUSES.includes(c.status);
+  if (!Array.isArray(classes) || classes.length === 0) return [];
+
+  const sn = semCtx?.semesterNum;
+  const ay = semCtx?.academicYear;
+  const yearOk = (c) =>
+    ay != null &&
+    String(ay).trim() !== '' &&
+    academicYearCompatibleClassAndTeaching(c.academicYear, ay);
+
+  const full = classes.filter(
+    (c) =>
+      pub(c) &&
+      sn != null &&
+      Number(c.semester) === Number(sn) &&
+      yearOk(c),
+  );
+  if (full.length) return full;
+
+  const byYear = classes.filter((c) => pub(c) && yearOk(c));
+  if (byYear.length) return byYear;
+
+  const bySem = classes.filter(
+    (c) => pub(c) && sn != null && Number(c.semester) === Number(sn),
+  );
+  if (bySem.length) return bySem;
+
+  return classes.filter(pub);
+}
+
+function resolveTimeslotForSchedule(sch, activeSlots) {
+  if (!sch || !Array.isArray(activeSlots)) return null;
+  const sp = Number(sch.startPeriod);
+  const ep = Number(sch.endPeriod);
+  const exact = activeSlots.find(
+    (t) => Number(t.startPeriod) === sp && Number(t.endPeriod) === ep,
+  );
+  if (exact) return exact;
+  return activeSlots.find((t) => Number(t.startPeriod) === sp);
+}
+
 async function findStudentByUser(userId) {
   const user = await User.findById(userId).lean();
   if (!user) {
@@ -137,14 +225,15 @@ function buildItemFromLegacyClass(cls) {
   };
 }
 
-function buildItemFromSchedule(scheduleDoc, cls) {
+function buildItemFromSchedule(scheduleDoc, cls, timeslotHint = null) {
+  const ts = timeslotHint || cls.timeslot;
   return {
     classId: cls._id,
     classCode: cls.classCode,
     className: cls.className,
     dayOfWeek: scheduleDoc.dayOfWeek,
-    startTime: cls.timeslot?.startTime || `P${scheduleDoc.startPeriod}`,
-    endTime: cls.timeslot?.endTime || `P${scheduleDoc.endPeriod}`,
+    startTime: ts?.startTime || `P${scheduleDoc.startPeriod}`,
+    endTime: ts?.endTime || `P${scheduleDoc.endPeriod}`,
     subject: {
       subjectCode: cls.subject?.subjectCode || 'N/A',
       subjectName: cls.subject?.subjectName || 'Chưa có tên',
@@ -347,7 +436,6 @@ async function ensureAutoProvisionedEnrollmentForStudent(student) {
       path: 'classSection',
       match: {
         semester: semCtx.semesterNum,
-        academicYear: semCtx.academicYear,
         status: { $in: ['scheduled', 'published', 'locked'] },
       },
       populate: {
@@ -432,17 +520,22 @@ async function ensureAutoProvisionedEnrollmentForStudent(student) {
   const rawCandidateClasses = await ClassSection.find({
     subject: { $in: subjectIds },
     semester: semCtx.semesterNum,
-    academicYear: semCtx.academicYear,
     status: { $in: ['scheduled', 'published', 'locked'] },
   })
     .populate('timeslot', 'startTime endTime')
     .sort({ currentEnrollment: 1, classCode: 1 })
     .lean();
 
-  const candidateClasses = rawCandidateClasses.filter((cls) => {
+  const termMatched = rawCandidateClasses.filter((cls) =>
+    academicYearCompatibleClassAndTeaching(cls.academicYear, semCtx.academicYear),
+  );
+
+  const candidateClasses = termMatched.filter((cls) => {
     const st = cls.timeslot?.startTime;
     const et = cls.timeslot?.endTime;
-    if (!st || !et) return false;
+    if (!st || !et) {
+      return PUBLISHED_CLASS_STATUSES.includes(cls.status);
+    }
     return isReasonableStudyTime(st) && isReasonableStudyTime(et);
   });
 
@@ -603,6 +696,17 @@ async function getMyWeekSchedule(userId, weekStart) {
 
   const { student } = await findStudentByUser(userId);
 
+  try {
+    await ensureAutoProvisionedEnrollmentForStudent(student);
+  } catch (e) {
+    console.warn('[getMyWeekSchedule] ensureAutoProvisionedEnrollmentForStudent:', e?.message || e);
+  }
+
+  const semCtx = await resolveTeachingSemesterContext(
+    student,
+    Number(student.currentCurriculumSemester) || 1,
+  );
+
   const enrollments = await ClassEnrollment.find({
     student: student._id,
     status: 'enrolled',
@@ -618,29 +722,31 @@ async function getMyWeekSchedule(userId, weekStart) {
     })
     .lean();
 
-  const classes = enrollments
-    .map((e) => e.classSection)
-    .filter(Boolean);
-
-  const curriculumItems = await buildCurriculumFallbackSchedule(student);
+  const rawClasses = enrollments.map((e) => e.classSection).filter(Boolean);
+  const classes = filterPublishedEnrollmentsForStudentTerm(rawClasses, semCtx);
 
   if (classes.length === 0) {
     return {
       weekStart: formatDateYmd(weekStartDate),
       weekEnd: formatDateYmd(weekEndDate),
-      schedules: curriculumItems,
+      schedules: [],
     };
   }
 
   const classIds = classes.map((cls) => cls._id);
-  const schedules = await Schedule.find({
-    classSection: { $in: classIds },
-    status: 'active',
-    startDate: { $lte: weekEndDate },
-    endDate: { $gte: weekStartDate },
-  })
-    .populate('room', 'roomCode roomName')
-    .lean();
+  const [schedules, activeSlots] = await Promise.all([
+    Schedule.find({
+      classSection: { $in: classIds },
+      status: 'active',
+      startDate: { $lte: weekEndDate },
+      endDate: { $gte: weekStartDate },
+    })
+      .populate('room', 'roomCode roomName')
+      .lean(),
+    Timeslot.find({ status: 'active' })
+      .select('startPeriod endPeriod startTime endTime groupName')
+      .lean(),
+  ]);
 
   const schedulesByClass = new Map();
   for (const sch of schedules) {
@@ -653,16 +759,9 @@ async function getMyWeekSchedule(userId, weekStart) {
   for (const cls of classes) {
     const key = String(cls._id);
     const classSchedules = schedulesByClass.get(key) || [];
-
-    if (classSchedules.length > 0) {
-      classSchedules.forEach((sch) => items.push(buildItemFromSchedule(sch, cls)));
-      continue;
-    }
-
-    // Backward compatibility cho lớp cũ chưa migrate sang Schedule model
-    if (cls.dayOfWeek && cls.timeslot) {
-      const inWeek = isDateRangeOverlapped(cls.startDate, cls.endDate, weekStartDate, weekEndDate);
-      if (inWeek) items.push(buildItemFromLegacyClass(cls));
+    for (const sch of classSchedules) {
+      const slotHint = resolveTimeslotForSchedule(sch, activeSlots);
+      items.push(buildItemFromSchedule(sch, cls, slotHint));
     }
   }
 
@@ -671,14 +770,8 @@ async function getMyWeekSchedule(userId, weekStart) {
     return String(a.startTime || '').localeCompare(String(b.startTime || ''));
   });
 
-  const mergedItems = mergeCurriculumItemsIntoSchedule(items, curriculumItems);
-  mergedItems.sort((a, b) => {
-    if ((a.dayOfWeek || 0) !== (b.dayOfWeek || 0)) return (a.dayOfWeek || 0) - (b.dayOfWeek || 0);
-    return String(a.startTime || '').localeCompare(String(b.startTime || ''));
-  });
-
   const itemsWithAttendance = await attachAttendanceStatus(
-    mergedItems,
+    items,
     student._id,
     weekStartDate,
     weekEndDate,
@@ -691,4 +784,7 @@ async function getMyWeekSchedule(userId, weekStart) {
   };
 }
 
-module.exports = { getMyWeekSchedule };
+module.exports = {
+  getMyWeekSchedule,
+  ensureAutoProvisionedEnrollmentForStudent,
+};

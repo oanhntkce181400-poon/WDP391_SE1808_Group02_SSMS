@@ -30,6 +30,16 @@ const curriculumSemesterSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // Khoảng thời gian dự kiến của học kỳ (admin UI — Lưu thay đổi)
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    endDate: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

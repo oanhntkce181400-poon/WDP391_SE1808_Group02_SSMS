@@ -73,8 +73,7 @@ async function getSemesterEnrollments(studentId, semester) {
 // - môn đúng chương trình học
 // - môn ngoài chương trình -> overload
 //
-// currentCurriculumSemester được ưu tiên nếu student đã có sẵn, vì đây là dữ liệu
-// nghiệp vụ rõ ràng hơn việc tự tính từ enrollmentYear.
+// Kỳ trong khung: resolveDisplayedCurriculumSemester (tính + điều chỉnh K26 / DB cũ).
 async function getCurriculumSubjectIdSet(student, semester) {
   const curriculum = await curriculumService.getCurriculumForStudent({
     majorCode: student.majorCode,
@@ -90,16 +89,10 @@ async function getCurriculumSubjectIdSet(student, semester) {
     };
   }
 
-  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
-  let curriculumSemesterOrder;
-  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
-    curriculumSemesterOrder = student.currentCurriculumSemester;
-  } else {
-    curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
-      student,
-      semester,
-    );
-  }
+  const curriculumSemesterOrder = await paymentValidationService.resolveDisplayedCurriculumSemester(
+    student,
+    { currentSystemSemester: semester },
+  );
 
   const subjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,
