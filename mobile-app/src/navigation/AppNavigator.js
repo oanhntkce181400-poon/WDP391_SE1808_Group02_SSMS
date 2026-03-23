@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from '../screens/auth/LoginScreen';
 import HomeScreen from '../screens/student/HomeScreen';
+import FeedbackLecturerScreen from '../screens/student/FeedbackLecturerScreen';
 import ApplicationStatusScreen from '../screens/student/ApplicationStatusScreen';
 import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
@@ -11,16 +12,27 @@ import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
 
+function normalizeRole(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 export default function AppNavigator() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const accessToken = useAuthStore((state) => state.accessToken);
+  const currentUser = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
+  const currentRole = normalizeRole(currentUser?.role);
+  const isAdminViewer = currentRole === 'admin' || currentRole === 'staff';
 
   useEffect(() => {
     let mounted = true;
 
     async function bootstrapAuth() {
+      /*
+       * Khôi phục phiên đăng nhập từ local storage khi mở app lại để người dùng
+       * không phải đăng nhập lại ở mỗi lần khởi động.
+       */
       const persisted = await getItem(AUTH_STORAGE_KEY);
       if (mounted && persisted?.accessToken) {
         setAuth({
@@ -29,6 +41,7 @@ export default function AppNavigator() {
           refreshToken: persisted.refreshToken || null,
         });
       }
+
       if (mounted) {
         setBootstrapping(false);
       }
@@ -40,6 +53,37 @@ export default function AppNavigator() {
       mounted = false;
     };
   }, [setAuth]);
+
+  const tabs = useMemo(() => {
+    if (isAdminViewer) {
+      return [
+        { key: 'feedback', icon: 'star', label: 'Đánh giá' },
+        { key: 'profile', icon: 'person', label: 'Tài khoản' },
+      ];
+    }
+
+    return [
+      { key: 'home', icon: 'home', label: 'Trang chủ' },
+      { key: 'feedback', icon: 'star', label: 'Đánh giá' },
+      { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
+      { key: 'calendar', icon: 'calendar', label: 'Lịch học vụ' },
+      { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
+      { key: 'profile', icon: 'person', label: 'Tài khoản' },
+    ];
+  }, [isAdminViewer]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    const availableTabs = new Set(tabs.map((item) => item.key));
+    const defaultTab = isAdminViewer ? 'feedback' : 'home';
+
+    if (!availableTabs.has(activeTab)) {
+      setActiveTab(defaultTab);
+    }
+  }, [accessToken, activeTab, isAdminViewer, tabs]);
 
   if (bootstrapping) {
     return (
@@ -54,15 +98,10 @@ export default function AppNavigator() {
     return <LoginScreen />;
   }
 
-  const tabs = [
-    { key: 'home', icon: 'home', label: 'Home' },
-    { key: 'exam', icon: 'document-text', label: 'Exam' },
-    { key: 'calendar', icon: 'calendar', label: 'Calendar' },
-    { key: 'application', icon: 'chatbubble', label: 'Application' },
-    { key: 'profile', icon: 'person', label: 'Profile' },
-  ];
-
-  let screen = <HomeScreen onNavigate={setActiveTab} />;
+  let screen = isAdminViewer ? <FeedbackLecturerScreen onNavigate={setActiveTab} /> : <HomeScreen onNavigate={setActiveTab} />;
+  if (activeTab === 'feedback') {
+    screen = <FeedbackLecturerScreen onNavigate={setActiveTab} />;
+  }
   if (activeTab === 'exam') {
     screen = <ExamScheduleScreen />;
   }

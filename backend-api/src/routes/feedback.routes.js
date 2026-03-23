@@ -28,21 +28,26 @@ router.get(
   feedbackController.getMyFeedback.bind(feedbackController)
 );
 
-// Get feedbacks for a specific class (public)
+// Authenticated approved-feedback feed for student/admin/staff viewers.
 router.get(
   '/class/:classSectionId',
+  authMiddleware,
+  rbacMiddleware(['student', 'admin', 'staff']),
   feedbackController.getClassFeedback.bind(feedbackController)
 );
 
-// Get feedback statistics for a class (public)
+// Aggregated stats for the same authenticated viewers as the class feed.
 router.get(
   '/class/:classSectionId/stats',
+  authMiddleware,
+  rbacMiddleware(['student', 'admin', 'staff']),
   feedbackController.getClassFeedbackStats.bind(feedbackController)
 );
 
 // Get feedback window info (remaining time to edit)
 router.get(
   '/:id/window',
+  authMiddleware,
   feedbackController.getFeedbackWindowInfo.bind(feedbackController)
 );
 
