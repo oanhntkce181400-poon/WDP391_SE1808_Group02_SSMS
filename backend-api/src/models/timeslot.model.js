@@ -22,14 +22,13 @@ const timeslotSchema = new mongoose.Schema(
       required: true,
       match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
     },
-    // Tiết bắt đầu (1, 2, 3, ...) - dùng để xác định ca học khi gán lịch
+    // Một ca = đúng một tiết (luôn có startPeriod === endPeriod; giữ cả hai field để tương thích schema cũ)
     startPeriod: {
       type: Number,
       required: true,
       min: 1,
       max: 10,
     },
-    // Tiết kết thúc
     endPeriod: {
       type: Number,
       required: true,

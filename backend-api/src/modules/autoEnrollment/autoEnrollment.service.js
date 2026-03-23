@@ -250,17 +250,15 @@ async function getCurriculumMatchCached(cache, student, options) {
  * Bước này cực quan trọng vì nó quyết định sẽ lấy môn của kỳ nào trong curriculum.
  */
 async function getCurriculumSemesterOrderCached(cache, student, semester, options) {
-  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
-  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
-    return student.currentCurriculumSemester;
-  }
-
   const enrollmentYear = curriculumService.resolveStudentEnrollmentYear(student);
-  const cacheKey = `${enrollmentYear ?? 'N/A'}:${semester.semesterNum}:${semester.academicYear}:${options.termsPerYear}`;
+  const cacheKey = `${student._id}:${enrollmentYear ?? 'N/A'}:${semester?.semesterNum}:${semester?.academicYear}:${options?.termsPerYear}`;
   if (!cache.has(cacheKey)) {
     cache.set(
       cacheKey,
-      paymentValidationService.calculateStudentCurriculumSemester(student, semester, options),
+      paymentValidationService.resolveDisplayedCurriculumSemester(student, {
+        currentSystemSemester: semester,
+        ...options,
+      }),
     );
   }
 
@@ -715,13 +713,6 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
     throw error;
   }
 
-  const currentSemester = await repo.findCurrentSemester();
-  if (!currentSemester) {
-    const error = new Error('Current semester not found');
-    error.statusCode = 404;
-    throw error;
-  }
-
   const curriculumMatch = await curriculumService.getCurriculumMatchForStudent(student);
   if (!curriculumMatch.curriculum) {
     return {
@@ -757,14 +748,20 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
   const enrolledSubjects = [];
   const failedSubjects = [];
 
+  // Năm học + HK hệ thống suy từ năm nhập học + kỳ khung — không dùng mỗi học kỳ "đang mở" toàn trường (vd 2025-2026)
+  const teachingCtx = await paymentValidationService.resolveTeachingContextForClassSections(
+    student,
+    curriculumSemesterOrder,
+  );
+
   for (const subjectData of semesterSubjects) {
     const subject = subjectData.subject;
     if (!subject?._id) continue;
 
     const classSection = await findAvailableClassSection(
       subject._id,
-      currentSemester.semesterNum,
-      currentSemester.academicYear,
+      teachingCtx.semesterNum,
+      teachingCtx.academicYear,
     );
 
     if (!classSection) {
@@ -784,7 +781,7 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
 
     const result = await enrollStudentInSection(studentId, classSection._id, semesterPaymentCode, {
       isOverload: false,
-      note: `Auto enrolled after payment for ${currentSemester.code}`,
+      note: `Auto enrolled after payment (${teachingCtx.academicYear}, HK${teachingCtx.semesterNum})`,
     });
 
     if (result.success) {
@@ -817,8 +814,14 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
     curriculumSemesterOrder,
     curriculumCode: curriculum.code,
     curriculumName: curriculum.name,
-    semesterName: currentSemester.name,
-    academicYear: currentSemester.academicYear,
+    semesterName:
+      teachingCtx.matchedSemesterCode || `HK${teachingCtx.semesterNum} — ${teachingCtx.academicYear}`,
+    academicYear: teachingCtx.academicYear,
+    teachingContext: {
+      semesterNum: teachingCtx.semesterNum,
+      academicYear: teachingCtx.academicYear,
+      source: teachingCtx.source,
+    },
   };
 }
 
@@ -850,16 +853,10 @@ async function previewAutoEnrollment(studentId) {
 
   const curriculum = curriculumMatch.curriculum;
 
-  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
-  let curriculumSemesterOrder;
-  if (student.currentCurriculumSemester != null && student.currentCurriculumSemester >= 1 && student.currentCurriculumSemester <= 9) {
-    curriculumSemesterOrder = student.currentCurriculumSemester;
-  } else {
-    curriculumSemesterOrder = await paymentValidationService.calculateStudentCurriculumSemester(
-      student,
-      currentSemester,
-    );
-  }
+  const curriculumSemesterOrder = await paymentValidationService.resolveDisplayedCurriculumSemester(
+    student,
+    { currentSystemSemester: currentSemester },
+  );
 
   const semesterSubjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,

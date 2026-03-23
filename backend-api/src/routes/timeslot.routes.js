@@ -6,10 +6,12 @@ const rbacMiddleware = require('../middlewares/rbac.middleware');
 
 // All routes require authentication
 router.use(authMiddleware);
-router.use(rbacMiddleware(['admin', 'staff']));
 
-// GET /api/timeslots - Get all timeslots with pagination and filters
+// GET /timeslots - Available to all authenticated users (students, staff)
 router.get('/', timeslotController.getTimeslots);
+
+// Protected routes (require Admin/Staff role)
+router.use(rbacMiddleware(['admin', 'staff']));
 
 // GET /api/timeslots/:id - Get single timeslot by ID
 router.get('/:id', timeslotController.getTimeslot);

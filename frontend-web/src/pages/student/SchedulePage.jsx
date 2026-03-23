@@ -14,45 +14,35 @@ const TIME_SLOTS = [
 ];
 
 const DAYS = [
-  { label: 'Thứ 2', dayOfWeek: 1 },
-  { label: 'Thứ 3', dayOfWeek: 2 },
-  { label: 'Thứ 4', dayOfWeek: 3 },
-  { label: 'Thứ 5', dayOfWeek: 4 },
-  { label: 'Thứ 6', dayOfWeek: 5 },
-  { label: 'Thứ 7', dayOfWeek: 6 },
-  { label: 'Chủ nhật', dayOfWeek: 7 },
+  { dayOfWeek: 1, label: 'Thứ 2' },
+  { dayOfWeek: 2, label: 'Thứ 3' },
+  { dayOfWeek: 3, label: 'Thứ 4' },
+  { dayOfWeek: 4, label: 'Thứ 5' },
+  { dayOfWeek: 5, label: 'Thứ 6' },
+  { dayOfWeek: 6, label: 'Thứ 7' },
+  { dayOfWeek: 7, label: 'CN' },
 ];
 
-// Màu cố định theo mã môn FPT
-const SUBJECT_COLORS = {
-  WDP301: { bg: 'bg-blue-600',    text: 'text-blue-100' },
-  SDN302: { bg: 'bg-emerald-600', text: 'text-emerald-100' },
-  MLN122: { bg: 'bg-purple-600',  text: 'text-purple-100' },
-  PRJ301: { bg: 'bg-orange-500',  text: 'text-orange-100' },
-  EXE201: { bg: 'bg-rose-500',    text: 'text-rose-100' },
-  PRM393: { bg: 'bg-cyan-600',    text: 'text-cyan-100' },
-  SWP391: { bg: 'bg-amber-500',   text: 'text-amber-100' },
-  OSG202: { bg: 'bg-lime-600',    text: 'text-lime-100' },
-  DBI202: { bg: 'bg-teal-600',    text: 'text-teal-100' },
-  SWT301: { bg: 'bg-indigo-600',  text: 'text-indigo-100' },
-  NWC203: { bg: 'bg-pink-600',    text: 'text-pink-100' },
-  EXE101: { bg: 'bg-violet-600',  text: 'text-violet-100' },
-};
 const FALLBACK_COLORS = [
-  { bg: 'bg-blue-600',    text: 'text-blue-100' },
-  { bg: 'bg-emerald-600', text: 'text-emerald-100' },
-  { bg: 'bg-purple-600',  text: 'text-purple-100' },
-  { bg: 'bg-orange-500',  text: 'text-orange-100' },
-  { bg: 'bg-rose-500',    text: 'text-rose-100' },
-  { bg: 'bg-cyan-600',    text: 'text-cyan-100' },
-  { bg: 'bg-amber-500',   text: 'text-amber-100' },
-  { bg: 'bg-teal-600',    text: 'text-teal-100' },
+  { bg: 'bg-indigo-600 border border-indigo-700' },
+  { bg: 'bg-emerald-600 border border-emerald-700' },
+  { bg: 'bg-violet-600 border border-violet-700' },
+  { bg: 'bg-amber-600 border border-amber-700' },
+  { bg: 'bg-rose-600 border border-rose-700' },
+  { bg: 'bg-cyan-600 border border-cyan-700' },
+  { bg: 'bg-fuchsia-600 border border-fuchsia-700' },
+  { bg: 'bg-sky-600 border border-sky-700' },
 ];
+
+/** Mã môn → màu cố định (tuỳ chọn) */
+const SUBJECT_COLORS = {};
 
 const ATTENDANCE_LABEL = {
-  Present: { text: 'Có mặt', cls: 'bg-green-500/90 text-white' },
-  Late: { text: 'Đi trễ', cls: 'bg-amber-500/90 text-white' },
-  Absent: { text: 'Vắng', cls: 'bg-rose-600/90 text-white' },
+  present: { text: 'Có mặt', cls: 'bg-green-600/90 text-white' },
+  absent: { text: 'Vắng', cls: 'bg-red-600/90 text-white' },
+  late: { text: 'Muộn', cls: 'bg-amber-600/90 text-white' },
+  excused: { text: 'Có phép', cls: 'bg-blue-600/90 text-white' },
+  excused_absence: { text: 'Có phép', cls: 'bg-blue-600/90 text-white' },
 };
 
 function getMondayOfWeek(date) {
@@ -199,13 +189,15 @@ export default function SchedulePage() {
   // Gán màu: ưu tiên map cố định, fallback theo thứ tự
   const dynamicColorMap = {};
   schedules.forEach((s) => {
-    const code = s.subject.subjectCode;
+    const code = s?.subject?.subjectCode;
+    if (!code) return;
     if (!dynamicColorMap[code]) {
       const idx = Object.keys(dynamicColorMap).length % FALLBACK_COLORS.length;
       dynamicColorMap[code] = SUBJECT_COLORS[code] || FALLBACK_COLORS[idx];
     }
   });
-  const getColor = (code) => dynamicColorMap[code] || FALLBACK_COLORS[0];
+  const getColor = (code) =>
+    (code && dynamicColorMap[code]) || FALLBACK_COLORS[0];
 
  
   function timeToMinutes(t) {
@@ -352,7 +344,8 @@ export default function SchedulePage() {
                   {/* Từng ô trong hàng */}
                   {DAYS.map((day) => {
                     const schedule = getScheduleForCell(day.dayOfWeek, slot);
-                    const clr = schedule ? getColor(schedule.subject.subjectCode) : null;
+                    const subCode = schedule?.subject?.subjectCode;
+                    const clr = schedule && subCode ? getColor(subCode) : FALLBACK_COLORS[0];
 
                     return (
                       <td
@@ -365,12 +358,12 @@ export default function SchedulePage() {
                             className={`${clr.bg} rounded-lg p-2 h-full flex flex-col gap-0.5 ${schedule.classId ? 'cursor-pointer hover:opacity-90' : 'cursor-default'} transition-opacity`}>
                             {/* Mã môn (badge) */}
                             <span className="text-[11px] font-bold bg-black/20 text-white rounded px-1.5 py-0.5 self-start leading-tight">
-                              {schedule.subject.subjectCode}
+                              {schedule.subject?.subjectCode ?? '—'}
                             </span>
 
                             {/* Tên môn */}
                             <div className="text-[11px] font-semibold text-white leading-tight mt-0.5 line-clamp-2">
-                              {schedule.subject.subjectName}
+                              {schedule.subject?.subjectName ?? ''}
                             </div>
 
                             {schedule.classCode && (
@@ -385,7 +378,7 @@ export default function SchedulePage() {
                             {/* Phòng */}
                             <div className="text-[10px] text-white/90 flex items-center gap-0.5">
                               <svg className="w-2.5 h-2.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/></svg>
-                              <span className="truncate">{schedule.room.roomCode}</span>
+                              <span className="truncate">{schedule.room?.roomCode ?? '—'}</span>
                             </div>
 
                             {/* Giáo viên */}

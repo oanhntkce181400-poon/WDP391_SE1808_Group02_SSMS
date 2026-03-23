@@ -322,7 +322,7 @@ export default function TimeslotManagement() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      Tiết {timeslot.startPeriod} - {timeslot.endPeriod}
+                      Tiết {timeslot.startPeriod ?? timeslot.endPeriod}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

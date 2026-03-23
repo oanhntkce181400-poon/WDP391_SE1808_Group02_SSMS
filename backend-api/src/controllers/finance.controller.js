@@ -237,7 +237,16 @@ async function confirmPaymentWithEnrollment(req, res) {
       });
     }
 
-    // Xác nhận thanh toán trước
+    const paymentValidation = require('../services/paymentValidation.service');
+    const autoEnrollment = require('../services/autoEnrollment.service');
+    const scheduleService = require('../services/schedule.service');
+
+    const student = await financeService.findStudentByUserId(userId);
+    // Phải lấy trạng thái TRƯỚC khi ghi Payment — sau confirmPayment thì hasPaid = true và auto-enroll sẽ không bao giờ chạy
+    const paymentStatusBefore = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+    const shouldAutoEnrollAfterPay =
+      paymentStatusBefore.mustPay && !paymentStatusBefore.hasPaid;
+
     const payment = await financeService.confirmPayment({
       userId,
       orderCode,
@@ -245,21 +254,18 @@ async function confirmPaymentWithEnrollment(req, res) {
       status,
     });
 
-    // Sau khi thanh toán thành công → Auto-enrollment
-    const paymentValidation = require('../services/paymentValidation.service');
-    const autoEnrollment = require('../services/autoEnrollment.service');
-    
-    const student = await financeService.findStudentByUserId(userId);
-    const paymentStatus = await paymentValidation.checkSemesterPaymentRequirement(student._id);
-
     let enrollmentResult = null;
-    
-    // Nếu là sinh viên mới chưa đăng ký môn nào hoặc chưa thanh toán
-    if (paymentStatus.mustPay && !paymentStatus.hasPaid) {
+
+    if (shouldAutoEnrollAfterPay) {
       enrollmentResult = await autoEnrollment.autoEnrollAfterPayment(
         student._id,
-        paymentStatus.currentCurriculumSemester
+        paymentStatusBefore.currentCurriculumSemester
       );
+      try {
+        await scheduleService.ensureAutoProvisionedEnrollmentForStudent(student);
+      } catch (scheduleErr) {
+        console.warn('[finance] ensureAutoProvisionedEnrollmentForStudent:', scheduleErr.message);
+      }
     }
 
     return res.status(200).json({

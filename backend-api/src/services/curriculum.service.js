@@ -10,6 +10,13 @@ function toPlainObject(doc) {
   return doc?.toObject ? doc.toObject() : { ...doc };
 }
 
+/** Chuẩn hóa ngày từ API (YYYY-MM-DD hoặc ISO) — rỗng → null */
+function normalizeSemesterDate(val) {
+  if (val === undefined || val === null || val === '') return null;
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function getPopulatedSubject(course) {
   const subject = course?.subject;
   return subject && typeof subject === 'object' && subject._id ? subject : null;
@@ -107,6 +114,20 @@ function mapRelationalCourseForClient(course) {
   };
 }
 
+/** Cấu trúc embedded (curriculum.semesters[].courses) → cùng shape với mapRelationalCourseForClient */
+function mapEmbeddedCourseForClient(c) {
+  if (!c) return null;
+  return {
+    _id: null,
+    code: c.code,
+    name: c.name,
+    credits: Number(c.credits) || 0,
+    hasPrerequisite: !!c.hasPrerequisite,
+    subjectId: null,
+    subject: null,
+  };
+}
+
 /**
  * Parse academicYear string to { startYear, endYear }.
  * Supports: "2026-2034", "2026/2034", "2024/2025"
@@ -125,6 +146,15 @@ function parseAcademicYearRange(academicYear) {
 function resolveStudentEnrollmentYear(student = {}) {
   const enrollmentYear = Number.parseInt(student.enrollmentYear, 10);
   return Number.isNaN(enrollmentYear) ? null : enrollmentYear;
+}
+
+/** Kiểm tra năm nhập học có nằm trong khoảng academicYear của khung (vd "2026-2034") */
+function curriculumCoversEnrollmentYear(curriculum, enrollmentYear) {
+  if (!curriculum || enrollmentYear == null || Number.isNaN(Number(enrollmentYear))) return false;
+  const range = parseAcademicYearRange(curriculum.academicYear);
+  if (!range) return false;
+  const y = Number(enrollmentYear);
+  return y >= range.startYear && y <= range.endYear;
 }
 
 async function resolveMajorAliases(majorCode) {
@@ -278,8 +308,15 @@ async function getCurriculumMatchForStudent(student, options = {}) {
     };
   }
 
+  // Ưu tiên khung có năm bắt đầu = năm nhập học (vd: nhập 2026 → AEX-SE-2026, không lấy khung 2025-2035 nếu đã có khung 2026)
+  const exactIntakeMatch = matchedCurriculums.find((c) => {
+    const range = parseAcademicYearRange(c.academicYear);
+    return range && range.startYear === enrollmentYear;
+  });
+  const chosen = exactIntakeMatch || matchedCurriculums[0];
+
   return {
-    curriculum: matchedCurriculums[0],
+    curriculum: chosen,
     reason: 'matched',
     majorCode,
     enrollmentYear,
@@ -473,11 +510,20 @@ const curriculumService = {
             semesterOrder: semId
           });
           
+          const startDate = normalizeSemesterDate(sem.startDate);
+          const endDate = normalizeSemesterDate(sem.endDate);
+
           if (existingSemester) {
             // Update existing semester
             semesterDoc = await CurriculumSemester.findByIdAndUpdate(
               existingSemester._id,
-              { name: sem.name, credits: sem.credits || 0, semesterOrder: semId },
+              {
+                name: sem.name,
+                credits: sem.credits || 0,
+                semesterOrder: semId,
+                startDate,
+                endDate,
+              },
               { new: true }
             );
           } else {
@@ -486,7 +532,9 @@ const curriculumService = {
               curriculum: id,
               name: sem.name,
               semesterOrder: semId,
-              credits: sem.credits || 0
+              credits: sem.credits || 0,
+              startDate,
+              endDate,
             });
             await semesterDoc.save();
           }
@@ -587,7 +635,6 @@ const curriculumService = {
       if (!curriculum) {
         throw new Error('Curriculum not found');
       }
-      
       // Check if using relational structure (or if relational data exists)
       const CurriculumSemester = require('../models/curriculumSemester.model');
       const CurriculumCourse = require('../models/curriculumCourse.model');
@@ -595,21 +642,38 @@ const curriculumService = {
       const hasRelationalData = semestersDocs.length > 0;
 
       if (curriculum.useRelationalStructure || hasRelationalData) {
-        const semesters = semestersDocs;
+        const embeddedSemesters = curriculum.semesters || [];
+        const result = [];
 
         // Attach courses for each semester so legacy consumers still receive full data
-        for (const sem of semesters) {
+        for (const sem of semestersDocs) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
             .populate('subject', 'subjectCode subjectName credits');
           const resolvedCourses = await resolveRelationalCourseSubjects(courses);
 
-          sem.courses = resolvedCourses.map(mapRelationalCourseForClient);
+          let mapped = resolvedCourses.map(mapRelationalCourseForClient);
 
-          // Normalize id field for frontend compatibility
-          sem.id = sem.semesterOrder;
+          // Nhiều CT vừa có CurriculumSemester (relational) vừa còn môn nằm trong embedded semesters[]
+          // nhưng chưa migrate hết sang CurriculumCourse → fallback theo đúng semesterOrder / id
+          if (!mapped.length) {
+            const order = Number(sem.semesterOrder);
+            const emb =
+              embeddedSemesters.find((s) => Number(s.id) === order) ||
+              embeddedSemesters.find((s) => Number(s.semesterOrder) === order);
+            if (emb?.courses?.length) {
+              mapped = emb.courses.map(mapEmbeddedCourseForClient).filter(Boolean);
+            }
+          }
+
+          // Mongoose strict schema: CurriculumSemester không khai báo field `courses` → toJSON bỏ qua
+          // nếu gán trực tiếp lên document. Trả về plain object để API luôn có `courses`.
+          const plain = typeof sem.toObject === 'function' ? sem.toObject() : { ...sem };
+          plain.courses = mapped;
+          plain.id = plain.semesterOrder;
+          result.push(plain);
         }
 
-        return semesters;
+        return result;
       }
       
       // Fallback to embedded structure
@@ -700,10 +764,38 @@ const curriculumService = {
   parseAcademicYearRange,
   buildCurriculumLookup,
   resolveStudentEnrollmentYear,
+  curriculumCoversEnrollmentYear,
   getCurriculumMatchForStudent,
 
   // Tìm khung chương trình cho sinh viên theo majorCode + năm nhập học (trong khoảng academicYear)
   getCurriculumForStudent,
+
+  /**
+   * Chọn khung hiển thị/nghiệp vụ: curriculumId chỉ dùng nếu còn khớp năm nhập học;
+   * nếu không — resolve lại theo major + enrollmentYear (tránh SV 2026 bị kẹt khung 2025 cũ).
+   */
+  async resolveCurriculumForStudentRecord(student, options = {}) {
+    const enrollmentYear = resolveStudentEnrollmentYear(student);
+    let fromId = null;
+    if (student?.curriculumId) {
+      fromId = await Curriculum.findById(student.curriculumId).lean();
+    }
+    if (
+      fromId &&
+      enrollmentYear != null &&
+      curriculumCoversEnrollmentYear(fromId, enrollmentYear)
+    ) {
+      return { curriculum: fromId, source: 'curriculumId' };
+    }
+    const resolved = await getCurriculumForStudent(student, options);
+    if (resolved) {
+      return { curriculum: resolved, source: 'resolved' };
+    }
+    if (fromId) {
+      return { curriculum: fromId, source: 'curriculumId_stale' };
+    }
+    return { curriculum: null, source: 'none' };
+  },
 
   /**
    * Lấy kỳ hiện tại của sinh viên trong khung chương trình
@@ -723,18 +815,7 @@ const curriculumService = {
       };
     }
 
-    // Ưu tiên sử dụng curriculumId nếu có, hoặc tìm theo majorCode + enrollmentYear
-    let curriculum = null;
-    
-    if (student.curriculumId) {
-      const Curriculum = require('../models/curriculum.model');
-      curriculum = await Curriculum.findById(student.curriculumId).lean();
-    }
-
-    // Nếu không có curriculumId hoặc không tìm thấy, tìm theo majorCode + enrollmentYear
-    if (!curriculum) {
-      curriculum = await getCurriculumForStudent(student);
-    }
+    const { curriculum } = await this.resolveCurriculumForStudentRecord(student);
 
     if (!curriculum) {
       return {

@@ -6,13 +6,13 @@ const Student = require("../models/student.model");
 const Semester = require("../models/semester.model");
 const Payment = require("../models/payment.model");
 const TuitionFee = require("../models/tuitionFee.model");
+const ClassEnrollment = require("../models/classEnrollment.model");
 const curriculumService = require("./curriculum.service");
 
 /**
- * Tính toán kỳ hiện tại của sinh viên trong khung chương trình
- * Công thức: currentYear - enrollmentYear + 1
- * Ví dụ: Sinh viên nhập học 2024, năm học hiện tại 2025-2026 (năm kết thúc = 2026)
- * → currentSemester = 2026 - 2024 + 1 = 3 (Học kỳ 3)
+ * Tính kỳ trong khung theo năm học hệ thống + năm nhập học:
+ * academicYearsElapsed * termsPerYear + semesterIndex (HK1/HK2).
+ * Nếu năm bắt đầu của kỳ hệ thống < enrollmentYear (SV chưa vào năm học khóa) → trả về 1.
  *
  * @param {Object} student - student document
  * @param {Object} currentSemester - semester đang diễn ra
@@ -69,6 +69,13 @@ async function calculateStudentCurriculumSemester(
 
   if (Number.isNaN(enrollmentYear) || academicYearStart == null) return 1;
 
+  // Kỳ hệ thống (vd 2025-2026) mà năm bắt đầu < năm nhập học (vd K26 = 2026):
+  // SV chưa thuộc năm học chính thức của khóa → vẫn coi là kỳ 1 trong khung,
+  // không được cộng HK2 của năm trước thành "kỳ 2" (bug K26 bị kỳ 2 dù chưa học HK1).
+  if (academicYearStart < enrollmentYear) {
+    return 1;
+  }
+
   const termsPerYear =
     Number.isInteger(options.termsPerYear) && options.termsPerYear > 0
       ? options.termsPerYear
@@ -76,6 +83,30 @@ async function calculateStudentCurriculumSemester(
   const academicYearsElapsed = Math.max(0, academicYearStart - enrollmentYear);
 
   return academicYearsElapsed * termsPerYear + semesterIndex;
+}
+
+/**
+ * Kỳ trong khung để hiển thị / học phí:
+ * - Tính từ kỳ hệ thống hiện tại + năm nhập học (calculateStudentCurriculumSemester).
+ * - Nếu DB (currentCurriculumSemester) lớn hơn giá trị tính được → dùng giá trị tính (tránh nhảy HK2 khi mới HK1).
+ * - Ngược lại giữ DB (admin / tiến độ thực tế).
+ */
+async function resolveDisplayedCurriculumSemester(student, options = {}) {
+  if (!student) return 1;
+  const currentSystemSemester =
+    options.currentSystemSemester ??
+    (await Semester.findOne({ isCurrent: true, isActive: true }).lean());
+  const computed = currentSystemSemester
+    ? await calculateStudentCurriculumSemester(student, currentSystemSemester, options)
+    : 1;
+  const stored = student.currentCurriculumSemester;
+  if (stored == null || stored < 1 || stored > 9) return computed;
+
+  // DB lưu kỳ trong khung cao hơn kỳ suy ra từ kỳ hệ thống (vd nhầm 2 khi đang HK1 năm đầu)
+  // → đồng bộ với học phí / thực tế: tin theo lịch (calculateStudentCurriculumSemester).
+  if (computed < stored) return computed;
+
+  return stored;
 }
 
 async function calculateStudentCurriculumSemesterLegacy(
@@ -175,6 +206,52 @@ async function findTuitionByCurriculumSemester(
 }
 
 /**
+ * Tổng tín chỉ đã đăng ký trong năm học + học kỳ hệ thống (theo lớp học phần),
+ * gom theo môn (một môn nhiều ca chỉ tính một lần) — khớp logic cần thu học phí thực tế.
+ */
+async function sumEnrolledCreditsForTeachingPeriod(studentId, semesterNum, academicYear) {
+  if (!academicYear || semesterNum == null || semesterNum === "") {
+    return { totalCredits: 0, subjects: [] };
+  }
+
+  const enrollments = await ClassEnrollment.find({
+    student: studentId,
+    status: { $in: ["enrolled", "completed"] },
+  })
+    .populate({
+      path: "classSection",
+      match: {
+        semester: Number(semesterNum),
+        academicYear: String(academicYear),
+      },
+      populate: {
+        path: "subject",
+        select: "subjectCode subjectName credits",
+      },
+    })
+    .lean();
+
+  const bySubjectId = new Map();
+  for (const e of enrollments) {
+    const sec = e.classSection;
+    if (!sec || !sec.subject) continue;
+    const sub = sec.subject;
+    const id = sub._id.toString();
+    if (!bySubjectId.has(id)) {
+      bySubjectId.set(id, {
+        subjectCode: sub.subjectCode,
+        subjectName: sub.subjectName,
+        credits: sub.credits || 0,
+      });
+    }
+  }
+
+  const subjects = Array.from(bySubjectId.values());
+  const totalCredits = subjects.reduce((s, x) => s + (x.credits || 0), 0);
+  return { totalCredits, subjects };
+}
+
+/**
  * Kiểm tra sinh viên có phải thanh toán học kỳ hiện tại không
  * @param {String} studentId - ObjectId của sinh viên
  * @returns {Object} - { mustPay, currentCurriculumSemester, hasPaid, ... }
@@ -195,28 +272,14 @@ async function checkSemesterPaymentRequirement(studentId) {
     throw err;
   }
 
-  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
-  // Fallback về tính toán nếu chưa có
-  let curriculumSemesterOrder;
-  if (
-    student.currentCurriculumSemester != null &&
-    student.currentCurriculumSemester >= 1 &&
-    student.currentCurriculumSemester <= 9
-  ) {
-    curriculumSemesterOrder = student.currentCurriculumSemester;
-  } else {
-    curriculumSemesterOrder = await calculateStudentCurriculumSemester(
-      student,
-      currentSemester,
-    );
-  }
-
-  // Lấy thông tin khung chương trình của sinh viên
-  const curriculum = await curriculumService.getCurriculumForStudent({
-    majorCode: student.majorCode,
-    enrollmentYear: student.enrollmentYear,
-    cohort: student.cohort,
+  const curriculumSemesterOrder = await resolveDisplayedCurriculumSemester(student, {
+    currentSystemSemester: currentSemester,
   });
+
+  // Khung chương trình: ưu tiên khớp curriculumId + năm nhập học (cùng logic lịch học / xếp lớp)
+  const { curriculum } = await curriculumService.resolveCurriculumForStudentRecord(
+    student.toObject ? student.toObject() : student,
+  );
 
   const curriculumCode =
     curriculum?.code || `${student.majorCode}K${student.cohort}`;
@@ -234,7 +297,7 @@ async function checkSemesterPaymentRequirement(studentId) {
 
   const hasPaid = !!payment;
 
-  // Lấy đúng số tín chỉ từ khung chương trình cho kỳ này
+  // Lấy đúng số tín chỉ từ khung chương trình cho kỳ này (dự kiến)
   let totalCreditsFromCurriculum = 0;
   let curriculumSubjects = [];
   if (curriculum && curriculum._id) {
@@ -245,6 +308,28 @@ async function checkSemesterPaymentRequirement(studentId) {
     totalCreditsFromCurriculum = creditsInfo.totalCredits;
     curriculumSubjects = creditsInfo.subjects || [];
   }
+
+  // Năm học / học kỳ hệ thống gắn với khóa (để khớp lớp học phần đã đăng ký)
+  const teachingCtx = await resolveTeachingContextForClassSections(
+    student.toObject ? student.toObject() : student,
+    curriculumSemesterOrder,
+  );
+
+  const enrolledInfo = await sumEnrolledCreditsForTeachingPeriod(
+    studentId,
+    teachingCtx.semesterNum,
+    teachingCtx.academicYear,
+  );
+
+  // Ưu tiên học phí theo tín chỉ đã đăng ký thực tế; nếu chưa có lớp thì dùng khung CT (trước kỳ đăng ký)
+  const billingCredits =
+    enrolledInfo.totalCredits > 0
+      ? enrolledInfo.totalCredits
+      : totalCreditsFromCurriculum;
+  const billingSubjects =
+    enrolledInfo.totalCredits > 0 ? enrolledInfo.subjects : curriculumSubjects;
+  const tuitionCreditSource =
+    enrolledInfo.totalCredits > 0 ? "enrollment" : "curriculum";
 
   // Lấy quy định học phí (để có giá/tín chỉ) - TuitionFee.semester là String
   const tuitionFeeRule = await findTuitionByCurriculumSemester(
@@ -257,18 +342,19 @@ async function checkSemesterPaymentRequirement(studentId) {
   const PRICE_PER_CREDIT = 100;
   const pricePerCredit = PRICE_PER_CREDIT;
 
-  // Học phí tính theo số tín chỉ của khung chương trình
-  const baseTuitionFee = totalCreditsFromCurriculum * pricePerCredit;
+  const baseTuitionFee = billingCredits * pricePerCredit;
   const finalTuitionFee = baseTuitionFee;
 
   const tuitionFeePayload =
-    totalCreditsFromCurriculum > 0 || tuitionFeeRule
+    billingCredits > 0 || tuitionFeeRule
       ? {
-          totalCredits: totalCreditsFromCurriculum,
+          totalCredits: billingCredits,
           pricePerCredit,
           baseTuitionFee,
           finalTuitionFee,
-          curriculumSubjects,
+          curriculumSubjects: billingSubjects,
+          plannedCurriculumCredits: totalCreditsFromCurriculum,
+          tuitionCreditSource,
         }
       : null;
 
@@ -276,9 +362,18 @@ async function checkSemesterPaymentRequirement(studentId) {
   const isNewStudent = curriculumSemesterOrder === 1;
   const mustPay = !hasPaid;
 
+  const cohortSemester = teachingCtx.matchedSemester;
+  const paymentAcademicYear = teachingCtx.academicYear;
+  const paymentSemesterDisplayName =
+    cohortSemester?.name ||
+    `Học kỳ ${teachingCtx.semesterNum} năm học ${teachingCtx.academicYear}`;
+  const deadline =
+    cohortSemester?.startDate ||
+    teachingCtx.startDate ||
+    currentSemester.startDate;
+
   // Kiểm tra deadline đã qua chưa
   const now = new Date();
-  const deadline = currentSemester.startDate;
   const isOverdue = deadline && now > new Date(deadline);
 
   return {
@@ -287,15 +382,22 @@ async function checkSemesterPaymentRequirement(studentId) {
     currentCurriculumSemester: curriculumSemesterOrder,
     curriculumSemesterName: `Học kỳ ${curriculumSemesterOrder}`,
     semesterCode: semesterPaymentCode,
-    semesterCodeSchool: currentSemester.code,
+    semesterCodeSchool: cohortSemester?.code || currentSemester.code,
     hasPaid: hasPaid,
     payment: payment || null,
     curriculumCode: curriculumCode,
     curriculumName: curriculum?.name || "Chưa xác định",
     deadline: deadline,
     isOverdue: isOverdue,
-    currentSemesterName: currentSemester.name,
-    currentAcademicYear: currentSemester.academicYear,
+    currentSemesterName: paymentSemesterDisplayName,
+    currentAcademicYear: paymentAcademicYear,
+    // Kỳ toàn trường (isCurrent) — tham chiếu khi cần
+    schoolWideSemester: {
+      code: currentSemester.code,
+      name: currentSemester.name,
+      academicYear: currentSemester.academicYear,
+    },
+    teachingContextSource: teachingCtx.source,
     tuitionFee: tuitionFeePayload,
     studentInfo: {
       studentCode: student.studentCode,
@@ -332,20 +434,9 @@ async function getAllUnpaidSemesters(studentId) {
   const curriculumCode =
     curriculum?.code || `${student.majorCode}K${student.cohort}`;
 
-  // Ưu tiên dùng currentCurriculumSemester từ student (nếu đã được set)
-  let currentCurriculumSemester;
-  if (
-    student.currentCurriculumSemester != null &&
-    student.currentCurriculumSemester >= 1 &&
-    student.currentCurriculumSemester <= 9
-  ) {
-    currentCurriculumSemester = student.currentCurriculumSemester;
-  } else {
-    currentCurriculumSemester = await calculateStudentCurriculumSemester(
-      student,
-      currentSemester,
-    );
-  }
+  const currentCurriculumSemester = await resolveDisplayedCurriculumSemester(student, {
+    currentSystemSemester: currentSemester,
+  });
 
   // Lấy tất cả các kỳ đã thanh toán
   const payments = await Payment.find({
@@ -489,10 +580,73 @@ async function checkPendingTuition(studentId, currentSemesterId) {
   };
 }
 
+/**
+ * Xác định học kỳ hệ thống (semesterNum) + năm học (academicYear) để tìm ClassSection / xếp lịch,
+ * dựa trên năm nhập học và thứ tự kỳ trong khung chương trình — tránh gán SV nhập 2026 vào lớp 2025-2026.
+ *
+ * @param {Object} student - có enrollmentYear
+ * @param {Number} curriculumSemesterOrder - kỳ trong khung (1..9)
+ */
+async function resolveTeachingContextForClassSections(student, curriculumSemesterOrder) {
+  const currentSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
+  const termsPerYear = await resolveTermsPerYear(currentSemester);
+  const order = Math.max(1, parseInt(String(curriculumSemesterOrder), 10) || 1);
+  const enrollmentYear = parseInt(student?.enrollmentYear, 10);
+
+  if (Number.isNaN(enrollmentYear)) {
+    if (currentSemester) {
+      return {
+        semesterNum: currentSemester.semesterNum,
+        academicYear: currentSemester.academicYear,
+        startDate: currentSemester.startDate || null,
+        endDate: currentSemester.endDate || null,
+        source: "system_current_semester",
+        matchedSemesterCode: currentSemester.code || null,
+        matchedSemester: currentSemester,
+      };
+    }
+    const y = new Date().getFullYear();
+    return {
+      semesterNum: 1,
+      academicYear: `${y}-${y + 1}`,
+      startDate: null,
+      endDate: null,
+      source: "fallback_date",
+      matchedSemesterCode: null,
+      matchedSemester: null,
+    };
+  }
+
+  const yearInProgram = Math.floor((order - 1) / termsPerYear);
+  const startYear = enrollmentYear + yearInProgram;
+  const academicYear = `${startYear}-${startYear + 1}`;
+  const semesterNum = ((order - 1) % termsPerYear) + 1;
+
+  const matchedSemester = await Semester.findOne({
+    academicYear,
+    semesterNum,
+    isActive: { $ne: false },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    semesterNum,
+    academicYear,
+    startDate: matchedSemester?.startDate || null,
+    endDate: matchedSemester?.endDate || null,
+    source: "from_enrollment_year",
+    matchedSemesterCode: matchedSemester?.code || null,
+    matchedSemester: matchedSemester || null,
+  };
+}
+
 module.exports = {
   parseAcademicYearStart,
   resolveTermsPerYear,
   calculateStudentCurriculumSemester,
+  resolveDisplayedCurriculumSemester,
+  resolveTeachingContextForClassSections,
   generateSemesterPaymentCode,
   getCreditsFromCurriculum,
   findTuitionByCurriculumSemester,

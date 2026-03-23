@@ -65,14 +65,13 @@ export default function TimeslotDetailModal({ isOpen, onClose, timeslot }) {
               </div>
             </div>
 
-            {/* Period Range */}
             <div>
               <h4 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                 Tiết học
               </h4>
               <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
                 <p className="text-base font-semibold text-slate-900 dark:text-white">
-                  Tiết {timeslot.startPeriod} - {timeslot.endPeriod}
+                  Tiết {timeslot.startPeriod ?? timeslot.endPeriod ?? '—'}
                 </p>
               </div>
             </div>

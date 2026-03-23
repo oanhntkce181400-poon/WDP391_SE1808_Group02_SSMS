@@ -74,7 +74,6 @@ export default function Header({ mode = 'admin' }) {
         { label: 'Lớp học', href: '/admin/classes' },
         { label: 'Môn học', href: '/admin/subjects' },
         { label: 'Phòng học', href: '/admin/rooms' },
-      { label: 'Thông báo', href: '/admin/announcements' },
         { label: 'Khung chương trình', href: '/admin/curriculum-list' },
         { label: 'Người dùng', href: '/admin/users' },
         { label: 'Sinh viên', href: '/admin/students' },
@@ -85,6 +84,7 @@ export default function Header({ mode = 'admin' }) {
   const moreNav = isTeacherMode
     ? []
     : [
+        { label: 'Thông báo', href: '/admin/announcements' },
         { label: 'Lịch thi', href: '/admin/exam-scheduling' },
         { label: 'Khoa', href: '/admin/faculties' },
         { label: 'Học kỳ', href: '/admin/semesters' },

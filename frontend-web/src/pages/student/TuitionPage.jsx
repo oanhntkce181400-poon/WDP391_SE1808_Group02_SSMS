@@ -284,6 +284,11 @@ export default function TuitionPage() {
               {curriculumStatus.curriculumSemesterName} – {curriculumStatus.curriculumName}
             </p>
             <p className="text-xs text-blue-600">Năm học: {curriculumStatus.currentAcademicYear || '—'}</p>
+            {tf.tuitionCreditSource === 'enrollment' && (
+              <p className="mt-1 text-xs text-blue-700">
+                Học phí kỳ này tính theo số tín chỉ đã đăng ký lớp (khớp niên khóa học phần), không chỉ theo môn trong khung chương trình.
+              </p>
+            )}
           </div>
           <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">{credits} tín chỉ đăng ký</span>
         </div>

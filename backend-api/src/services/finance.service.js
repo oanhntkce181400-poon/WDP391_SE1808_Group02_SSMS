@@ -83,21 +83,28 @@ async function sumRegisteredCredits(studentId, semester) {
     })
     .lean();
 
-  let totalCredits = 0;
-  const subjects = [];
-
+  const bySubjectId = new Map();
   for (const enrollment of enrollments) {
     const section = enrollment.classSection;
     if (section && section.subject) {
       const sub = section.subject;
-      totalCredits += sub.credits || 0;
-      subjects.push({
-        subjectCode: sub.subjectCode,
-        subjectName: sub.subjectName,
-        credits:     sub.credits,
-        tuitionFee:  0,
-      });
+      const id = sub._id.toString();
+      if (!bySubjectId.has(id)) {
+        bySubjectId.set(id, sub);
+      }
     }
+  }
+
+  let totalCredits = 0;
+  const subjects = [];
+  for (const sub of bySubjectId.values()) {
+    totalCredits += sub.credits || 0;
+    subjects.push({
+      subjectCode: sub.subjectCode,
+      subjectName: sub.subjectName,
+      credits:     sub.credits,
+      tuitionFee:  0,
+    });
   }
 
   return { total: totalCredits, subjects };
@@ -672,11 +679,33 @@ async function payTuitionByWallet(userId) {
     status: 'completed',
   });
 
+  // Đồng bộ với PayOS: sau khi trừ ví phải xếp lớp / đăng ký môn trong kỳ vừa đóng học phí
+  const autoEnrollment = require('./autoEnrollment.service');
+  const scheduleService = require('./schedule.service');
+  let enrollmentResult = null;
+  try {
+    enrollmentResult = await autoEnrollment.autoEnrollAfterPayment(
+      student._id,
+      paymentStatus.currentCurriculumSemester,
+    );
+  } catch (enrollErr) {
+    console.warn('[payTuitionByWallet] autoEnrollAfterPayment:', enrollErr?.message || enrollErr);
+  }
+  try {
+    const studentFresh = await Student.findById(student._id).lean();
+    if (studentFresh) {
+      await scheduleService.ensureAutoProvisionedEnrollmentForStudent(studentFresh);
+    }
+  } catch (schedErr) {
+    console.warn('[payTuitionByWallet] ensureAutoProvisionedEnrollmentForStudent:', schedErr?.message || schedErr);
+  }
+
   return {
     success: true,
     payment,
     balance: withdrawResult.balance,
     message: 'Thanh toán học phí bằng ví thành công',
+    enrollment: enrollmentResult,
   };
 }
 
