@@ -1,9 +1,10 @@
-const ClassSection = require('../../models/classSection.model');
-const ClassEnrollment = require('../../models/classEnrollment.model');
-const Waitlist = require('../../models/waitlist.model');
-const curriculumService = require('../../services/curriculum.service');
-const paymentValidationService = require('../../services/paymentValidation.service');
-const repo = require('./autoEnrollment.repository');
+const ClassSection = require("../../models/classSection.model");
+const ClassEnrollment = require("../../models/classEnrollment.model");
+const Waitlist = require("../../models/waitlist.model");
+const mongoose = require("mongoose");
+const curriculumService = require("../../services/curriculum.service");
+const paymentValidationService = require("../../services/paymentValidation.service");
+const repo = require("./autoEnrollment.repository");
 
 // Service này là "bộ não" của chức năng auto-enrollment.
 // Nhiệm vụ chính:
@@ -17,9 +18,9 @@ const repo = require('./autoEnrollment.repository');
 // - Nhóm helper đầu file: chuẩn hóa dữ liệu, cache, tạo key, gom state trong RAM
 // - Các hàm giữa file: thao tác enrollment/waitlist cho từng trường hợp nhỏ
 // - triggerAutoEnrollment: luồng batch chính cho admin chạy cả đợt
-const OPEN_CLASS_STATUSES = ['published', 'scheduled'];
+const OPEN_CLASS_STATUSES = ["published", "scheduled"];
 const ACTIVE_ENROLLMENT_STATUSES = new Set(repo.ACTIVE_ENROLLMENT_STATUSES);
-const LEGACY_WAITLIST_INDEX_NAME = 'student_1_subject_1_status_1';
+const LEGACY_WAITLIST_INDEX_NAME = "student_1_subject_1_status_1";
 
 // Khóa tổng hợp student + subject để kiểm tra nhanh:
 // - sinh viên đã có waitlist cho môn này chưa
@@ -41,13 +42,17 @@ function buildMajorAliasesByCode(majorCodes = [], majors = []) {
   const aliasesByCode = new Map();
 
   for (const majorCode of majorCodes) {
-    const normalizedMajorCode = String(majorCode || '').trim().toUpperCase();
+    const normalizedMajorCode = String(majorCode || "")
+      .trim()
+      .toUpperCase();
     if (!normalizedMajorCode) continue;
     aliasesByCode.set(normalizedMajorCode, [normalizedMajorCode]);
   }
 
   for (const major of majors) {
-    const majorCode = String(major.majorCode || '').trim().toUpperCase();
+    const majorCode = String(major.majorCode || "")
+      .trim()
+      .toUpperCase();
     if (!majorCode) continue;
 
     const aliases = new Set(aliasesByCode.get(majorCode) || [majorCode]);
@@ -152,6 +157,8 @@ function getOrCreateStudentState(stateByStudent, studentId) {
 function buildClassSectionPools(classSections) {
   const classSectionsById = new Map();
   const classSectionsBySubject = new Map();
+  // Thêm: Gom theo classGroup để auto-enrollment ưu tiên đúng nhóm
+  const classSectionsByGroup = new Map();
 
   for (const classSection of classSections) {
     const normalized = {
@@ -162,6 +169,7 @@ function buildClassSectionPools(classSections) {
 
     const classSectionId = String(normalized._id);
     const subjectId = String(normalized.subject);
+    const classGroup = normalized.classGroup || null;
 
     // Lưu theo classSectionId để khi đã biết id lớp thì lấy object ra ngay.
     classSectionsById.set(classSectionId, normalized);
@@ -170,15 +178,24 @@ function buildClassSectionPools(classSections) {
     if (!classSectionsBySubject.has(subjectId)) {
       classSectionsBySubject.set(subjectId, []);
     }
-
-    // Nhét lớp hiện tại vào đúng nhóm subject tương ứng.
-    // Về sau chỉ cần biết subjectId là lấy được toàn bộ lớp mở của môn đó.
     classSectionsBySubject.get(subjectId).push(normalized);
+
+    // Gom theo classGroup (VD: "SE1808-01")
+    if (classGroup) {
+      if (!classSectionsByGroup.has(classGroup)) {
+        classSectionsByGroup.set(classGroup, new Map());
+      }
+      if (!classSectionsByGroup.get(classGroup).has(subjectId)) {
+        classSectionsByGroup.get(classGroup).set(subjectId, []);
+      }
+      classSectionsByGroup.get(classGroup).get(subjectId).push(normalized);
+    }
   }
 
   return {
     classSectionsById,
     classSectionsBySubject,
+    classSectionsByGroup,
   };
 }
 
@@ -192,7 +209,11 @@ function normalizeCodeList(values = []) {
   return Array.from(
     new Set(
       values
-        .map((value) => String(value || '').trim().toUpperCase())
+        .map((value) =>
+          String(value || "")
+            .trim()
+            .toUpperCase(),
+        )
         .filter(Boolean),
     ),
   );
@@ -203,6 +224,19 @@ function normalizeCodeList(values = []) {
 function parsePositiveInteger(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+// Lấy classGroup từ student.
+// student.classSection có thể là:
+// - "SE1808-01" → classGroup = "SE1808-01"
+// - "SE1808" → cần thêm suffix, sẽ fallback sang không filter
+function getStudentClassGroup(student) {
+  if (!student?.classSection) return null;
+  const classSection = String(student.classSection).trim();
+  // Nếu đã có định dạng "SE1808-01" thì dùng trực tiếp
+  if (classSection.includes("-")) return classSection;
+  // Nếu chỉ có prefix như "SE1808", trả về null để fallback
+  return null;
 }
 
 // Utility cộng dồn trong Map.
@@ -216,9 +250,11 @@ function incrementMapCounter(map, key, amount = 1) {
 // Nhiều sinh viên cùng khóa/ngành thường dùng chung curriculum, nên cache này giúp giảm tính toán lặp.
 function buildCurriculumMatchCacheKey(student) {
   return [
-    String(student?.majorCode || '').trim().toUpperCase() || 'N/A',
-    curriculumService.resolveStudentEnrollmentYear(student) ?? 'N/A',
-  ].join(':');
+    String(student?.majorCode || "")
+      .trim()
+      .toUpperCase() || "N/A",
+    curriculumService.resolveStudentEnrollmentYear(student) ?? "N/A",
+  ].join(":");
 }
 
 // Tìm curriculum phù hợp cho sinh viên, có cache để nhiều sinh viên cùng profile không phải resolve lại.
@@ -231,7 +267,10 @@ function buildCurriculumMatchCacheKey(student) {
 async function getCurriculumMatchCached(cache, student, options) {
   const cacheKey = buildCurriculumMatchCacheKey(student);
   if (!cache.has(cacheKey)) {
-    cache.set(cacheKey, curriculumService.getCurriculumMatchForStudent(student, options));
+    cache.set(
+      cacheKey,
+      curriculumService.getCurriculumMatchForStudent(student, options),
+    );
   }
 
   return cache.get(cacheKey);
@@ -249,9 +288,15 @@ async function getCurriculumMatchCached(cache, student, options) {
  *
  * Bước này cực quan trọng vì nó quyết định sẽ lấy môn của kỳ nào trong curriculum.
  */
-async function getCurriculumSemesterOrderCached(cache, student, semester, options) {
-  const enrollmentYear = curriculumService.resolveStudentEnrollmentYear(student);
-  const cacheKey = `${student._id}:${enrollmentYear ?? 'N/A'}:${semester?.semesterNum}:${semester?.academicYear}:${options?.termsPerYear}`;
+async function getCurriculumSemesterOrderCached(
+  cache,
+  student,
+  semester,
+  options,
+) {
+  const enrollmentYear =
+    curriculumService.resolveStudentEnrollmentYear(student);
+  const cacheKey = `${student._id}:${enrollmentYear ?? "N/A"}:${semester?.semesterNum}:${semester?.academicYear}:${options?.termsPerYear}`;
   if (!cache.has(cacheKey)) {
     cache.set(
       cacheKey,
@@ -263,6 +308,55 @@ async function getCurriculumSemesterOrderCached(cache, student, semester, option
   }
 
   return cache.get(cacheKey);
+}
+
+// Kiểm tra xem sinh viên đã hoàn thành TẤT CẢ môn của curriculum semester hiện tại chưa.
+// Nếu đã có enrollment cho MỌI môn trong kỳ thì coi như "không còn gì để xếp".
+async function checkStudentHasUnenrolledSubjects(
+  student,
+  studentStateMap,
+  curriculumLookup,
+  semester,
+  termsPerYear,
+  curriculumSemesterSubjectsCache,
+) {
+  const enrollmentYear =
+    curriculumService.resolveStudentEnrollmentYear(student);
+  if (!enrollmentYear)
+    return { hasUnenrolled: true, reason: "missingEnrollmentYear" };
+
+  const curriculumKey = String(student.curriculumId || "");
+  if (!mongoose.Types.ObjectId.isValid(curriculumKey))
+    return { hasUnenrolled: true, reason: "missingCurriculumId" };
+
+  const curriculum = curriculumLookup.get(curriculumKey);
+  if (!curriculum) return { hasUnenrolled: true, reason: "noCurriculumMatch" };
+
+  const curriculumSemesterOrder =
+    await paymentValidationService.resolveDisplayedCurriculumSemester(student, {
+      currentSystemSemester: semester,
+      termsPerYear,
+    });
+  if (curriculumSemesterOrder == null)
+    return { hasUnenrolled: true, reason: "noSemesterOrder" };
+
+  const semesterSubjects = await getCurriculumSemesterSubjectsCached(
+    curriculumSemesterSubjectsCache,
+    curriculum._id,
+    curriculumSemesterOrder,
+  );
+  if (!semesterSubjects?.length)
+    return { hasUnenrolled: false, reason: "noSubjectsInSemester" };
+
+  const studentState = studentStateMap.get(String(student._id));
+  const activeIds = studentState?.activeSubjectIds ?? new Set();
+  const allEnrolled = semesterSubjects.every((s) =>
+    activeIds.has(String(s.subject?._id ?? s._id)),
+  );
+  return {
+    hasUnenrolled: !allEnrolled,
+    reason: allEnrolled ? "allSubjectsEnrolled" : "someSubjectsPending",
+  };
 }
 
 // Gom waitlist vào bộ nhớ đệm của batch, chưa ghi DB ngay.
@@ -292,8 +386,8 @@ function queueWaitlistIfNeeded(
     return {
       success: true,
       created: false,
-      reason: 'already_waiting',
-      message: 'Student is already in waitlist for this subject',
+      reason: "already_waiting",
+      message: "Student is already in waitlist for this subject",
     };
   }
 
@@ -305,7 +399,7 @@ function queueWaitlistIfNeeded(
       subject: subjectId,
       targetSemester: semesterNum,
       targetAcademicYear: academicYear,
-      status: 'WAITING',
+      status: "WAITING",
       cancelReason: reason || undefined,
     });
   }
@@ -315,18 +409,27 @@ function queueWaitlistIfNeeded(
     created: true,
     message:
       options.dryRun === true
-        ? 'Dry run: waitlist would be created'
-        : 'Queued waitlist for persistence',
+        ? "Dry run: waitlist would be created"
+        : "Queued waitlist for persistence",
   };
 }
 
 // Tạo object mô tả phạm vi batch để trả về cho FE/log.
-function buildFilterSummary({ majorCodes, studentCodes, limit, onlyStudentsWithoutEnrollments }) {
+function buildFilterSummary({
+  majorCodes,
+  studentCodes,
+  limit,
+  onlyStudentsWithoutEnrollments,
+  enrollmentMode,
+  curriculumId,
+}) {
   return {
     majorCodes,
     studentCodes,
     limit,
     onlyStudentsWithoutEnrollments,
+    enrollmentMode,
+    curriculumId: curriculumId || null,
   };
 }
 
@@ -348,55 +451,80 @@ function buildFilterSummary({ majorCodes, studentCodes, limit, onlyStudentsWitho
 // - nếu bằng nhau thì lấy classCode nhỏ hơn để kết quả ổn định, dễ debug
 /**
  * Chọn lớp phù hợp nhất cho một subject theo rule hiện tại.
+ * Priority:
+ * 1. Ưu tiên lớp cùng semester (curriculum) + classGroup với sinh viên
+ * 2. Ưu tiên lớp ít người nhất (cân bằng tải)
+ * 3. Nếu bằng nhau thì so classCode để giữ kết quả ổn định
  *
- * Rule:
- * - bỏ qua lớp mà sinh viên đã chiếm chỗ rồi
- * - bỏ qua lớp đã đầy
- * - ưu tiên lớp có currentEnrollment nhỏ hơn để phân tải đều
- * - nếu bằng nhau thì so classCode để giữ kết quả ổn định, dễ debug
- *
- * Đây là helper "ra quyết định chọn lớp".
+ * @param {string} subjectId - ID của môn học
+ * @param {Map} classSectionsBySubject - Pool lớp theo subject
+ * @param {Set} occupiedClassSectionIds - Các lớp SV đã chiếm
+ * @param {string} studentClassGroup - classGroup của SV (VD: "SE1808-01")
+ * @param {number} curriculumSemesterOrder - Kỳ trong khung CT (1, 2, 3...)
  */
-function pickAvailableClassSection(subjectId, classSectionsBySubject, occupiedClassSectionIds) {
+function pickAvailableClassSection(
+  subjectId,
+  classSectionsBySubject,
+  occupiedClassSectionIds,
+  studentClassGroup,
+  curriculumSemesterOrder,
+) {
   const subjectKey = String(subjectId);
   const pool = classSectionsBySubject.get(subjectKey) || [];
   let selected = null;
+  let selectedFromMatchingGroup = null;
 
   for (const classSection of pool) {
-    // Không chọn lớp mà sinh viên đã chiếm.
+    // Filter: chỉ xét lớp cùng curriculum semester
+    // classSection.semester là kỳ hệ thống, curriculumSemesterOrder là kỳ trong khung
+    // Ta dùng classGroup để match: nếu classGroup format là "PREFIX-XX" thì XX = semester order
+    // Hoặc nếu không có classGroup, vẫn cho phép match
+    if (curriculumSemesterOrder && classSection.groupIndex !== undefined) {
+      // Nếu classSection có groupIndex, kiểm tra nó thuộc kỳ nào
+      // groupIndex 0-5 = kỳ 1, 6-11 = kỳ 2, etc.
+      // Hoặc đơn giản hơn: so sánh semester field với curriculumSemesterOrder
+      // Vì ClassSection.semester lưu kỳ hệ thống, ta cần mapping
+      // Tạm thời bỏ qua filter này - sẽ dùng classGroup như primary filter
+    }
+
     if (occupiedClassSectionIds?.has(String(classSection._id))) {
       continue;
     }
-
-    // Không chọn lớp đã đầy.
     if (classSection.currentEnrollment >= classSection.maxCapacity) {
       continue;
     }
 
-    // Rule chọn lớp:
-    // - ưu tiên lớp ít người hơn để phân tải
-    // - nếu bằng nhau thì chọn classCode nhỏ hơn để kết quả ổn định
+    const matchesGroup =
+      !studentClassGroup || classSection.classGroup === studentClassGroup;
+    if (matchesGroup && !selectedFromMatchingGroup) {
+      selectedFromMatchingGroup = classSection;
+    }
+
     if (
       !selected ||
       classSection.currentEnrollment < selected.currentEnrollment ||
       (classSection.currentEnrollment === selected.currentEnrollment &&
-        String(classSection.classCode || '').localeCompare(String(selected.classCode || '')) < 0)
+        String(classSection.classCode || "").localeCompare(
+          String(selected.classCode || ""),
+        ) < 0)
     ) {
       selected = classSection;
     }
   }
 
-  return selected;
+  return selectedFromMatchingGroup || selected;
 }
 
 // Chuẩn hóa cách đọc số bản ghi upserted vì shape kết quả bulkWrite thay đổi theo driver/version.
 function getBulkWriteUpsertedCount(result) {
   if (!result) return 0;
-  if (typeof result.upsertedCount === 'number') return result.upsertedCount;
-  if (typeof result.nUpserted === 'number') return result.nUpserted;
-  if (typeof result.result?.nUpserted === 'number') return result.result.nUpserted;
-  if (Array.isArray(result.result?.upserted)) return result.result.upserted.length;
-  if (result.upsertedIds && typeof result.upsertedIds === 'object') {
+  if (typeof result.upsertedCount === "number") return result.upsertedCount;
+  if (typeof result.nUpserted === "number") return result.nUpserted;
+  if (typeof result.result?.nUpserted === "number")
+    return result.result.nUpserted;
+  if (Array.isArray(result.result?.upserted))
+    return result.result.upserted.length;
+  if (result.upsertedIds && typeof result.upsertedIds === "object") {
     return Object.keys(result.upsertedIds).length;
   }
   return 0;
@@ -406,12 +534,12 @@ function getBulkWriteUpsertedCount(result) {
 function formatAutoEnrollmentPersistenceError(error) {
   if (
     error?.code === 11000 &&
-    /waitlists/i.test(String(error?.message || '')) &&
-    String(error?.message || '').includes(LEGACY_WAITLIST_INDEX_NAME)
+    /waitlists/i.test(String(error?.message || "")) &&
+    String(error?.message || "").includes(LEGACY_WAITLIST_INDEX_NAME)
   ) {
     return new Error(
       `Failed to persist auto enrollment batch: outdated waitlist index ${LEGACY_WAITLIST_INDEX_NAME}. ` +
-        'Run npm run fix:waitlist-indexes to allow one WAITING waitlist per student, subject, and semester.',
+        "Run npm run fix:waitlist-indexes to allow one WAITING waitlist per student, subject, and semester.",
     );
   }
 
@@ -420,21 +548,22 @@ function formatAutoEnrollmentPersistenceError(error) {
 
 // Sinh câu lỗi chi tiết để biết sinh viên fail do thiếu dữ liệu hay do chưa cấu hình curriculum.
 function formatCurriculumError(match, student) {
-  const majorCode = match?.majorCode || student?.majorCode || 'N/A';
-  const cohort = student?.cohort ?? 'N/A';
-  const enrollmentYear = match?.enrollmentYear ?? student?.enrollmentYear ?? 'N/A';
+  const majorCode = match?.majorCode || student?.majorCode || "N/A";
+  const cohort = student?.cohort ?? "N/A";
+  const enrollmentYear =
+    match?.enrollmentYear ?? student?.enrollmentYear ?? "N/A";
   const availableCurriculums = match?.availableCurriculumCodes?.length
-    ? match.availableCurriculumCodes.join(', ')
-    : 'none';
+    ? match.availableCurriculumCodes.join(", ")
+    : "none";
 
   switch (match?.reason) {
-    case 'missing_major_code':
-      return `Missing majorCode; cannot resolve curriculum (studentCode=${student?.studentCode || 'N/A'})`;
-    case 'missing_enrollment_year':
+    case "missing_major_code":
+      return `Missing majorCode; cannot resolve curriculum (studentCode=${student?.studentCode || "N/A"})`;
+    case "missing_enrollment_year":
       return `Missing enrollmentYear; cannot select curriculum (majorCode=${majorCode}, cohort=${cohort}, availableCurriculums=${availableCurriculums})`;
-    case 'no_active_curriculum_for_major':
+    case "no_active_curriculum_for_major":
       return `No active curriculum configured for major ${majorCode} (cohort=${cohort}, enrollmentYear=${enrollmentYear})`;
-    case 'no_curriculum_for_enrollment_year':
+    case "no_curriculum_for_enrollment_year":
       return `No curriculum matches enrollmentYear ${enrollmentYear} for major ${majorCode} (availableCurriculums=${availableCurriculums})`;
     default:
       return `Curriculum not found (majorCode=${majorCode}, enrollmentYear=${enrollmentYear}, cohort=${cohort})`;
@@ -470,19 +599,27 @@ function buildPreflightSummary({
   const warnings = [];
 
   if (activeCurriculums.length === 0) {
-    warnings.push('No active curriculum exists in the database.');
+    warnings.push("No active curriculum exists in the database.");
   }
   if (studentsMissingEnrollmentYear > 0) {
-    warnings.push(`${studentsMissingEnrollmentYear} active students are missing enrollmentYear.`);
+    warnings.push(
+      `${studentsMissingEnrollmentYear} active students are missing enrollmentYear.`,
+    );
   }
   if (Object.keys(studentsWithoutCurriculumByMajor).length > 0) {
-    warnings.push('Some student majors do not have a matching active curriculum.');
+    warnings.push(
+      "Some student majors do not have a matching active curriculum.",
+    );
   }
   if (curriculumSubjectMappingIssues > 0) {
-    warnings.push(`${curriculumSubjectMappingIssues} curriculum-course records are missing linked subject data.`);
+    warnings.push(
+      `${curriculumSubjectMappingIssues} curriculum-course records are missing linked subject data.`,
+    );
   }
   if (classSections.length === 0) {
-    warnings.push(`No open class sections found for semester ${semester.code}.`);
+    warnings.push(
+      `No open class sections found for semester ${semester.code}.`,
+    );
   }
 
   return {
@@ -499,7 +636,9 @@ function buildPreflightSummary({
     })),
     activeStudentCount: students.length,
     openClassSectionCount: classSections.length,
-    openClassSubjectCount: new Set(classSections.map((classSection) => String(classSection.subject))).size,
+    openClassSubjectCount: new Set(
+      classSections.map((classSection) => String(classSection.subject)),
+    ).size,
     studentsMissingEnrollmentYear,
     studentsWithoutCurriculumByMajor,
     studentsWithoutCurriculumByReason,
@@ -516,12 +655,22 @@ function buildPreflightSummary({
  * Nhiều sinh viên có thể cùng học chung một curriculum và cùng curriculum semester,
  * nên nếu không cache thì sẽ query cùng một dữ liệu rất nhiều lần.
  */
-async function getCurriculumSemesterSubjectsCached(cache, curriculumId, curriculumSemesterOrder) {
-  const cacheKey = buildCurriculumSemesterKey(curriculumId, curriculumSemesterOrder);
+async function getCurriculumSemesterSubjectsCached(
+  cache,
+  curriculumId,
+  curriculumSemesterOrder,
+) {
+  const cacheKey = buildCurriculumSemesterKey(
+    curriculumId,
+    curriculumSemesterOrder,
+  );
   if (!cache.has(cacheKey)) {
     cache.set(
       cacheKey,
-      curriculumService.getSubjectsBySemester(curriculumId, curriculumSemesterOrder),
+      curriculumService.getSubjectsBySemester(
+        curriculumId,
+        curriculumSemesterOrder,
+      ),
     );
   }
 
@@ -536,7 +685,7 @@ async function findAvailableClassSection(subjectId, semesterNum, academicYear) {
     semester: semesterNum,
     academicYear,
     status: { $in: OPEN_CLASS_STATUSES },
-    $expr: { $lt: ['$currentEnrollment', '$maxCapacity'] },
+    $expr: { $lt: ["$currentEnrollment", "$maxCapacity"] },
   })
     .sort({ currentEnrollment: 1, classCode: 1 })
     .limit(1)
@@ -560,8 +709,8 @@ async function addToWaitlistIfNeeded(
     return {
       success: true,
       created: false,
-      reason: 'already_waiting',
-      message: 'Student is already in waitlist for this subject',
+      reason: "already_waiting",
+      message: "Student is already in waitlist for this subject",
     };
   }
 
@@ -570,8 +719,8 @@ async function addToWaitlistIfNeeded(
     return {
       success: true,
       created: true,
-      reason: 'dry_run',
-      message: 'Dry run: waitlist would be created',
+      reason: "dry_run",
+      message: "Dry run: waitlist would be created",
     };
   }
 
@@ -581,7 +730,7 @@ async function addToWaitlistIfNeeded(
       subject: subjectId,
       targetSemester: semesterNum,
       targetAcademicYear: academicYear,
-      status: 'WAITING',
+      status: "WAITING",
       cancelReason: reason || undefined,
     });
 
@@ -590,7 +739,7 @@ async function addToWaitlistIfNeeded(
       success: true,
       created: true,
       waitlistId: waitlist._id,
-      message: 'Student moved to waitlist',
+      message: "Student moved to waitlist",
     };
   } catch (error) {
     if (error?.code === 11000) {
@@ -598,14 +747,14 @@ async function addToWaitlistIfNeeded(
       return {
         success: true,
         created: false,
-        reason: 'already_waiting',
-        message: 'Student is already in waitlist for this subject',
+        reason: "already_waiting",
+        message: "Student is already in waitlist for this subject",
       };
     }
 
     return {
       success: false,
-      reason: 'error',
+      reason: "error",
       message: error.message,
     };
   }
@@ -616,7 +765,12 @@ async function addToWaitlistIfNeeded(
 // 1. Tăng currentEnrollment có điều kiện để giữ chỗ
 // 2. Tạo ClassEnrollment
 // 3. Nếu tạo enrollment fail thì rollback lại currentEnrollment
-async function enrollStudentInSection(studentId, classSectionId, semesterCode, options = {}) {
+async function enrollStudentInSection(
+  studentId,
+  classSectionId,
+  semesterCode,
+  options = {},
+) {
   try {
     if (options.dryRun === true) {
       return {
@@ -629,7 +783,7 @@ async function enrollStudentInSection(studentId, classSectionId, semesterCode, o
       {
         _id: classSectionId,
         status: { $in: OPEN_CLASS_STATUSES },
-        $expr: { $lt: ['$currentEnrollment', '$maxCapacity'] },
+        $expr: { $lt: ["$currentEnrollment", "$maxCapacity"] },
       },
       {
         $inc: { currentEnrollment: 1 },
@@ -638,27 +792,28 @@ async function enrollStudentInSection(studentId, classSectionId, semesterCode, o
     ).lean();
 
     if (!classSection) {
-      const existingClassSection = await repo.findClassSectionById(classSectionId);
+      const existingClassSection =
+        await repo.findClassSectionById(classSectionId);
       if (!existingClassSection) {
         return {
           success: false,
-          reason: 'class_not_found',
-          message: 'Class section not found',
+          reason: "class_not_found",
+          message: "Class section not found",
         };
       }
 
       if (!OPEN_CLASS_STATUSES.includes(existingClassSection.status)) {
         return {
           success: false,
-          reason: 'class_not_open',
-          message: 'Class section is not open for enrollment',
+          reason: "class_not_open",
+          message: "Class section is not open for enrollment",
         };
       }
 
       return {
         success: false,
-        reason: 'class_full',
-        message: 'Class is full',
+        reason: "class_full",
+        message: "Class is full",
       };
     }
 
@@ -667,9 +822,10 @@ async function enrollStudentInSection(studentId, classSectionId, semesterCode, o
         student: studentId,
         classSection: classSectionId,
         enrollmentDate: new Date(),
-        status: 'enrolled',
+        status: "enrolled",
         isOverload: options.isOverload === true,
-        note: options.note || `Auto-enrolled for payment period ${semesterCode}`,
+        note:
+          options.note || `Auto-enrolled for payment period ${semesterCode}`,
       });
 
       return {
@@ -678,26 +834,29 @@ async function enrollStudentInSection(studentId, classSectionId, semesterCode, o
         classSection,
       };
     } catch (error) {
-      await ClassSection.updateOne({ _id: classSectionId }, { $inc: { currentEnrollment: -1 } });
+      await ClassSection.updateOne(
+        { _id: classSectionId },
+        { $inc: { currentEnrollment: -1 } },
+      );
 
       if (error?.code === 11000) {
         return {
           success: false,
-          reason: 'duplicate',
-          message: 'Duplicate enrollment detected',
+          reason: "duplicate",
+          message: "Duplicate enrollment detected",
         };
       }
 
       return {
         success: false,
-        reason: 'error',
+        reason: "error",
         message: error.message,
       };
     }
   } catch (error) {
     return {
       success: false,
-      reason: 'error',
+      reason: "error",
       message: error.message,
     };
   }
@@ -708,12 +867,13 @@ async function enrollStudentInSection(studentId, classSectionId, semesterCode, o
 async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
   const student = await repo.findStudentById(studentId);
   if (!student) {
-    const error = new Error('Student not found');
+    const error = new Error("Student not found");
     error.statusCode = 404;
     throw error;
   }
 
-  const curriculumMatch = await curriculumService.getCurriculumMatchForStudent(student);
+  const curriculumMatch =
+    await curriculumService.getCurriculumMatchForStudent(student);
   if (!curriculumMatch.curriculum) {
     return {
       success: false,
@@ -738,7 +898,7 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
   if (!semesterSubjects || semesterSubjects.length === 0) {
     return {
       success: true,
-      message: 'No subjects configured in this curriculum semester',
+      message: "No subjects configured in this curriculum semester",
       totalSubjects: 0,
       enrolledSubjects: [],
       failedSubjects: [],
@@ -749,10 +909,11 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
   const failedSubjects = [];
 
   // Năm học + HK hệ thống suy từ năm nhập học + kỳ khung — không dùng mỗi học kỳ "đang mở" toàn trường (vd 2025-2026)
-  const teachingCtx = await paymentValidationService.resolveTeachingContextForClassSections(
-    student,
-    curriculumSemesterOrder,
-  );
+  const teachingCtx =
+    await paymentValidationService.resolveTeachingContextForClassSections(
+      student,
+      curriculumSemesterOrder,
+    );
 
   for (const subjectData of semesterSubjects) {
     const subject = subjectData.subject;
@@ -768,21 +929,27 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
       failedSubjects.push({
         subjectCode: subject.subjectCode,
         subjectName: subject.subjectName,
-        reason: 'no_class_section',
-        message: 'No available class section found',
+        reason: "no_class_section",
+        message: "No available class section found",
       });
       continue;
     }
 
-    const semesterPaymentCode = paymentValidationService.generateSemesterPaymentCode(
-      curriculumSemesterOrder,
-      curriculum.code,
-    );
+    const semesterPaymentCode =
+      paymentValidationService.generateSemesterPaymentCode(
+        curriculumSemesterOrder,
+        curriculum.code,
+      );
 
-    const result = await enrollStudentInSection(studentId, classSection._id, semesterPaymentCode, {
-      isOverload: false,
-      note: `Auto enrolled after payment (${teachingCtx.academicYear}, HK${teachingCtx.semesterNum})`,
-    });
+    const result = await enrollStudentInSection(
+      studentId,
+      classSection._id,
+      semesterPaymentCode,
+      {
+        isOverload: false,
+        note: `Auto enrolled after payment (${teachingCtx.academicYear}, HK${teachingCtx.semesterNum})`,
+      },
+    );
 
     if (result.success) {
       enrolledSubjects.push({
@@ -815,7 +982,8 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
     curriculumCode: curriculum.code,
     curriculumName: curriculum.name,
     semesterName:
-      teachingCtx.matchedSemesterCode || `HK${teachingCtx.semesterNum} — ${teachingCtx.academicYear}`,
+      teachingCtx.matchedSemesterCode ||
+      `HK${teachingCtx.semesterNum} — ${teachingCtx.academicYear}`,
     academicYear: teachingCtx.academicYear,
     teachingContext: {
       semesterNum: teachingCtx.semesterNum,
@@ -830,19 +998,20 @@ async function autoEnrollAfterPayment(studentId, curriculumSemesterOrder) {
 async function previewAutoEnrollment(studentId) {
   const student = await repo.findStudentById(studentId);
   if (!student) {
-    const error = new Error('Student not found');
+    const error = new Error("Student not found");
     error.statusCode = 404;
     throw error;
   }
 
   const currentSemester = await repo.findCurrentSemester();
   if (!currentSemester) {
-    const error = new Error('Current semester not found');
+    const error = new Error("Current semester not found");
     error.statusCode = 404;
     throw error;
   }
 
-  const curriculumMatch = await curriculumService.getCurriculumMatchForStudent(student);
+  const curriculumMatch =
+    await curriculumService.getCurriculumMatchForStudent(student);
   if (!curriculumMatch.curriculum) {
     return {
       hasCurriculum: false,
@@ -853,10 +1022,10 @@ async function previewAutoEnrollment(studentId) {
 
   const curriculum = curriculumMatch.curriculum;
 
-  const curriculumSemesterOrder = await paymentValidationService.resolveDisplayedCurriculumSemester(
-    student,
-    { currentSystemSemester: currentSemester },
-  );
+  const curriculumSemesterOrder =
+    await paymentValidationService.resolveDisplayedCurriculumSemester(student, {
+      currentSystemSemester: currentSemester,
+    });
 
   const semesterSubjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,
@@ -868,7 +1037,8 @@ async function previewAutoEnrollment(studentId) {
     academicYear: currentSemester.academicYear,
     statuses: OPEN_CLASS_STATUSES,
   });
-  const { classSectionsBySubject, classSectionsById } = buildClassSectionPools(openClassSections);
+  const { classSectionsBySubject, classSectionsById, classSectionsByGroup } =
+    buildClassSectionPools(openClassSections);
 
   const existingEnrollments = await repo.findSemesterEnrollments(
     [studentId],
@@ -878,9 +1048,15 @@ async function previewAutoEnrollment(studentId) {
 
   const studentStateMap = buildStudentStateMap(
     existingEnrollments,
-    new Map(Array.from(classSectionsById.entries()).map(([key, value]) => [key, value])),
+    new Map(
+      Array.from(classSectionsById.entries()).map(([key, value]) => [
+        key,
+        value,
+      ]),
+    ),
   );
   const studentState = getOrCreateStudentState(studentStateMap, studentId);
+  const studentClassGroup = getStudentClassGroup(student);
 
   const availableSubjects = [];
   for (const subjectData of semesterSubjects) {
@@ -896,6 +1072,7 @@ async function previewAutoEnrollment(studentId) {
       subjectId,
       classSectionsBySubject,
       studentState.occupiedClassSectionIds,
+      studentClassGroup,
     );
 
     availableSubjects.push({
@@ -956,20 +1133,29 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   const dryRun = options.dryRun === true;
   const requestedMajorCodes = normalizeCodeList(options.majorCodes);
   const requestedStudentCodes = normalizeCodeList(options.studentCodes);
-  const onlyStudentsWithoutEnrollments = options.onlyStudentsWithoutEnrollments === true;
+  const onlyStudentsWithoutEnrollments =
+    options.onlyStudentsWithoutEnrollments === true;
   const studentLimit = parsePositiveInteger(options.limit);
+  // Mode: 'normal' = dựa vào curriculum semester của SV, 'retake' = dùng system semester dropdown
+  const enrollmentMode = options.mode === "retake" ? "retake" : "normal";
+  const curriculumIdFilter =
+    options.curriculumId != null && String(options.curriculumId).trim() !== ""
+      ? String(options.curriculumId).trim()
+      : undefined;
   const filters = buildFilterSummary({
     majorCodes: requestedMajorCodes,
     studentCodes: requestedStudentCodes,
     limit: studentLimit,
     onlyStudentsWithoutEnrollments,
+    enrollmentMode,
+    curriculumId: curriculumIdFilter,
   });
 
   // Chặng 1: xác định học kỳ chạy batch.
   // Nếu semesterId sai thì toàn bộ luồng phải dừng ngay vì mọi bước phía sau đều phụ thuộc học kỳ này.
   const semester = await repo.findSemesterById(semesterId);
   if (!semester) {
-    const error = new Error('Semester not found');
+    const error = new Error("Semester not found");
     error.statusCode = 404;
     throw error;
   }
@@ -977,33 +1163,52 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // Nạp dữ liệu nền song song để giảm thời gian chờ:
   // - candidateStudents: các sinh viên active có thể được xét
   // - activeCurriculums: toàn bộ curriculum đang active
-  // - classSections: các lớp mở trong học kỳ cần chạy
   // - termsPerYear: số học kỳ trong năm để tính curriculum semester
   // Chặng 2: nạp dữ liệu nền song song.
   // Đây là toàn bộ đầu vào chính trước khi bắt đầu duyệt từng sinh viên.
-  const [candidateStudents, activeCurriculums, classSections, termsPerYear] = await Promise.all([
-    repo.findEligibleStudents({
-      majorCodes: requestedMajorCodes,
-      studentCodes: requestedStudentCodes,
-    }),
-    repo.findActiveCurriculums(),
-    repo.findOpenClassSections({
+  const [candidateStudents, activeCurriculums, termsPerYear] =
+    await Promise.all([
+      repo.findEligibleStudents({
+        majorCodes: requestedMajorCodes,
+        studentCodes: requestedStudentCodes,
+        curriculumId: curriculumIdFilter,
+      }),
+      repo.findActiveCurriculums(),
+      paymentValidationService.resolveTermsPerYear(semester),
+    ]);
+
+  // Chặng 2b: Load classSections.
+  // - Normal mode: load ALL open class sections (sẽ match bằng classGroup)
+  // - Retake mode: load class sections của system semester được chọn
+  let classSections;
+  if (enrollmentMode === "normal") {
+    // Load tất cả class sections đang mở, không filter theo system semester
+    classSections = await repo.findOpenClassSectionsAllSemesters({
+      statuses: OPEN_CLASS_STATUSES,
+    });
+  } else {
+    // Retake mode: chỉ load class sections của system semester được chọn
+    classSections = await repo.findOpenClassSections({
       semesterNum: semester.semesterNum,
       academicYear: semester.academicYear,
       statuses: OPEN_CLASS_STATUSES,
-    }),
-    paymentValidationService.resolveTermsPerYear(semester),
-  ]);
+    });
+  }
 
   // Chuẩn bị các lookup/cache trong RAM để giảm việc lặp query trong vòng for lớn.
   // Chặng 3: dựng lookup/cache trong RAM để tránh query lặp trong vòng for lớn.
-  const { classSectionsById, classSectionsBySubject } = buildClassSectionPools(classSections);
+  const { classSectionsById, classSectionsBySubject, classSectionsByGroup } =
+    buildClassSectionPools(classSections);
   const classSectionIds = Array.from(classSectionsById.keys());
   const studentIds = candidateStudents.map((student) => student._id);
   const majorCodes = Array.from(
     new Set(
       candidateStudents
-        .map((student) => String(student.majorCode || '').trim().toUpperCase())
+        .map((student) =>
+          String(student.majorCode || "")
+            .trim()
+            .toUpperCase(),
+        )
         .filter(Boolean),
     ),
   );
@@ -1011,7 +1216,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     majorCodes,
     await repo.findMajorsByCodes(majorCodes),
   );
-  const curriculumLookup = curriculumService.buildCurriculumLookup(activeCurriculums);
+  const curriculumLookup =
+    curriculumService.buildCurriculumLookup(activeCurriculums);
 
   // Lấy enrollment/waitlist đang tồn tại để:
   // - tránh tạo enrollment trùng
@@ -1027,27 +1233,47 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
                 includeAllStatuses: true,
               })
             : Promise.resolve([]),
-          repo.findSemesterWaitlists(studentIds, semester.semesterNum, semester.academicYear),
+          repo.findSemesterWaitlists(
+            studentIds,
+            semester.semesterNum,
+            semester.academicYear,
+          ),
         ])
       : [[], []];
 
-  const studentStateMap = buildStudentStateMap(existingEnrollments, classSectionsById);
+  const studentStateMap = buildStudentStateMap(
+    existingEnrollments,
+    classSectionsById,
+  );
   const waitlistSet = new Set(
-    existingWaitlists.map((waitlist) => buildStudentSubjectKey(waitlist.student, waitlist.subject)),
+    existingWaitlists.map((waitlist) =>
+      buildStudentSubjectKey(waitlist.student, waitlist.subject),
+    ),
   );
   const curriculumSemesterSubjectsCache = new Map();
   const curriculumMatchCache = new Map();
   const curriculumSemesterOrderCache = new Map();
 
   // Filter cuối cùng áp vào danh sách candidate.
-  // onlyStudentsWithoutEnrollments thường dùng khi admin chỉ muốn xử lý các sinh viên chưa có enrollment active nào.
-  // Chặng 4: áp filter cuối cùng vào danh sách candidateStudents.
+  // onlyStudentsWithoutEnrollments: loại bỏ sinh viên đã hoàn thành TẤT CẢ môn của kỳ.
   let students = candidateStudents;
   if (onlyStudentsWithoutEnrollments) {
-    students = students.filter((student) => {
-      const studentState = studentStateMap.get(String(student._id));
-      return !studentState || studentState.activeSubjectIds.size === 0;
-    });
+    const results = await Promise.all(
+      candidateStudents.map(async (student) => ({
+        student,
+        check: await checkStudentHasUnenrolledSubjects(
+          student,
+          studentStateMap,
+          curriculumLookup,
+          semester,
+          termsPerYear,
+          curriculumSemesterSubjectsCache,
+        ),
+      })),
+    );
+    students = results
+      .filter(({ check }) => check.hasUnenrolled)
+      .map(({ student }) => student);
   }
   if (studentLimit) {
     students = students.slice(0, studentLimit);
@@ -1061,7 +1287,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   let studentsWithErrors = 0;
   let studentsWithEnrollments = 0;
   let studentsMissingEnrollmentYear = students.filter(
-    (student) => curriculumService.resolveStudentEnrollmentYear(student) == null,
+    (student) =>
+      curriculumService.resolveStudentEnrollmentYear(student) == null,
   ).length;
   let curriculumSubjectMappingIssues = 0;
   const studentsWithoutCurriculumByMajor = {};
@@ -1092,6 +1319,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       studentId: student._id,
       studentCode: student.studentCode,
       fullName: student.fullName,
+      email: student.email || "",
       enrolled: [],
       waitlisted: [],
       skipped: [],
@@ -1101,18 +1329,25 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     try {
       // Bước 1: tìm curriculum phù hợp với major + enrollmentYear/cohort của sinh viên.
       // Bước 5.1: tìm curriculum phù hợp cho sinh viên.
-      const curriculumMatch = await getCurriculumMatchCached(curriculumMatchCache, student, {
-        curriculums: activeCurriculums,
-        curriculumLookup,
-        majorAliasesByCode,
-      });
+      const curriculumMatch = await getCurriculumMatchCached(
+        curriculumMatchCache,
+        student,
+        {
+          curriculums: activeCurriculums,
+          curriculumLookup,
+          majorAliasesByCode,
+        },
+      );
 
       if (!curriculumMatch.curriculum) {
-        const majorKey = curriculumMatch.majorCode || student.majorCode || 'UNKNOWN';
+        const majorKey =
+          curriculumMatch.majorCode || student.majorCode || "UNKNOWN";
         studentsWithoutCurriculumByMajor[majorKey] =
           (studentsWithoutCurriculumByMajor[majorKey] || 0) + 1;
-        studentsWithoutCurriculumByReason[curriculumMatch.reason || 'unknown'] =
-          (studentsWithoutCurriculumByReason[curriculumMatch.reason || 'unknown'] || 0) + 1;
+        studentsWithoutCurriculumByReason[curriculumMatch.reason || "unknown"] =
+          (studentsWithoutCurriculumByReason[
+            curriculumMatch.reason || "unknown"
+          ] || 0) + 1;
 
         studentLog.errors.push(formatCurriculumError(curriculumMatch, student));
         failed += 1;
@@ -1150,16 +1385,23 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         continue;
       }
 
-      const studentState = getOrCreateStudentState(studentStateMap, student._id);
+      const studentState = getOrCreateStudentState(
+        studentStateMap,
+        student._id,
+      );
 
       // Bước 4: duyệt từng subject trong curriculum semester để gán lớp hoặc waitlist.
       // Bước 5.4: duyệt từng môn để quyết định enroll, waitlist hoặc skip.
+      const studentClassGroup = getStudentClassGroup(student);
+
       for (const subjectData of semesterSubjects) {
         const subject = subjectData?.subject;
         if (!subject?._id) {
           curriculumSubjectMappingIssues += 1;
           failed += 1;
-          studentLog.errors.push('Curriculum course is missing linked subject data');
+          studentLog.errors.push(
+            "Curriculum course is missing linked subject data",
+          );
           continue;
         }
 
@@ -1177,6 +1419,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
           subjectId,
           classSectionsBySubject,
           studentState.occupiedClassSectionIds,
+          studentClassGroup,
+          curriculumSemesterOrder,
         );
 
         // Nếu không còn lớp mở cho môn này, sinh viên được đưa sang waitlist thay vì bỏ qua im lặng.
@@ -1190,7 +1434,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
             subject._id,
             semester.semesterNum,
             semester.academicYear,
-            'Auto enrollment: no available class section',
+            "Auto enrollment: no available class section",
             {
               dryRun,
               waitlistSet,
@@ -1210,15 +1454,18 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
             });
           } else {
             failed += 1;
-            studentLog.errors.push(`${subject.subjectCode}: ${waitlistResult.message}`);
+            studentLog.errors.push(
+              `${subject.subjectCode}: ${waitlistResult.message}`,
+            );
           }
           continue;
         }
 
-        const semesterPaymentCode = paymentValidationService.generateSemesterPaymentCode(
-          curriculumSemesterOrder,
-          curriculum.code,
-        );
+        const semesterPaymentCode =
+          paymentValidationService.generateSemesterPaymentCode(
+            curriculumSemesterOrder,
+            curriculum.code,
+          );
 
         // Chưa ghi DB ngay; chỉ gom document và cập nhật state trong RAM.
         // Lý do phải tăng currentEnrollment trong RAM ở đây:
@@ -1231,7 +1478,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
           student: student._id,
           classSection: classSection._id,
           enrollmentDate: new Date(),
-          status: 'enrolled',
+          status: "enrolled",
           isOverload: false,
           note: `Auto enrolled by semester trigger ${semester.code} (${semesterPaymentCode})`,
         });

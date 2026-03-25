@@ -69,6 +69,19 @@ const classSectionSchema = new mongoose.Schema(
     endDate: {
       type: Date,
     },
+    // Nhóm lớp cố định (VD: "SE1808-01", "SE1808-02")
+    // Dùng để auto-enrollment gán SV đúng nhóm
+    classGroup: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    // Thứ tự nhóm trong classGroup (0, 1, 2, 3...)
+    groupIndex: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
   },
   { timestamps: true },
 );
@@ -78,6 +91,7 @@ classSectionSchema.index({ subject: 1 });
 classSectionSchema.index({ teacher: 1 });
 classSectionSchema.index({ academicYear: 1, semester: 1 });
 classSectionSchema.index({ status: 1 });
+classSectionSchema.index({ classGroup: 1, semester: 1, academicYear: 1 });
 classSectionSchema.index({ semester: 1, academicYear: 1, timeslot: 1, dayOfWeek: 1 });
 classSectionSchema.index({ teacher: 1, timeslot: 1, dayOfWeek: 1 });
 classSectionSchema.index({ room: 1, timeslot: 1, dayOfWeek: 1 });

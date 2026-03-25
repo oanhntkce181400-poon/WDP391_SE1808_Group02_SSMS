@@ -211,6 +211,8 @@ async function autoGenerateTimetables(req, res) {
       availableTimeSlots,
       startDate,
       endDate,
+      classGroupPrefix,
+      numberOfGroups,
     } = req.body || {};
 
     const data = await service.autoGenerateTimetables({
@@ -222,6 +224,8 @@ async function autoGenerateTimetables(req, res) {
       availableTimeSlots,
       startDate,
       endDate,
+      classGroupPrefix,
+      numberOfGroups,
     });
 
     return res.status(201).json({

@@ -42,6 +42,7 @@ async function listClasses(query = {}) {
     const subjectIds = await repo.findSubjectIdsBySearch(search);
     filter.$or = [
       { classCode: { $regex: search, $options: "i" } },
+      { classGroup: { $regex: search, $options: "i" } },
       ...(subjectIds.length > 0 ? [{ subject: { $in: subjectIds } }] : []),
     ];
   }

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Student = require('../../models/student.model');
 const Semester = require('../../models/semester.model');
 const Curriculum = require('../../models/curriculum.model');
@@ -55,9 +56,14 @@ async function findEligibleStudents(filters = {}) {
     query.studentCode = { $in: studentCodes };
   }
 
+  const curriculumId = filters.curriculumId;
+  if (curriculumId && mongoose.Types.ObjectId.isValid(String(curriculumId))) {
+    query.curriculumId = new mongoose.Types.ObjectId(String(curriculumId));
+  }
+
   return Student.find(query)
     .select(
-      'studentCode fullName majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId',
+      'studentCode fullName email majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId',
     )
     .sort({ studentCode: 1, _id: 1 })
     .lean();
@@ -89,7 +95,19 @@ async function findOpenClassSections({ semesterNum, academicYear, statuses }) {
     status: { $in: statuses },
   })
     .select(
-      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot',
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex',
+    )
+    .lean();
+}
+
+// Load tất cả class sections đang mở (không filter theo semester)
+// Dùng cho normal enrollment mode - sẽ match bằng classGroup
+async function findOpenClassSectionsAllSemesters({ statuses }) {
+  return ClassSection.find({
+    status: { $in: statuses },
+  })
+    .select(
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex',
     )
     .lean();
 }
@@ -219,6 +237,7 @@ module.exports = {
   findActiveCurriculums,
   findMajorsByCodes,
   findOpenClassSections,
+  findOpenClassSectionsAllSemesters,
   findSemesterEnrollments,
   findSemesterWaitlists,
   bulkUpsertEnrollments,

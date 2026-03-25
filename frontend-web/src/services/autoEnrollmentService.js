@@ -11,6 +11,8 @@ const autoEnrollmentService = {
             majorCodes: options.majorCodes,
             studentCodes: options.studentCodes,
             onlyStudentsWithoutEnrollments: options.onlyStudentsWithoutEnrollments === true,
+            mode: options.mode === 'retake' ? 'retake' : 'normal',
+            curriculumId: options.curriculumId || undefined,
           };
 
     return axiosClient.post('/auto-enrollment/trigger', {

@@ -53,6 +53,7 @@ import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
+import EnrollmentSnapshotsPage from "./pages/admin/EnrollmentSnapshotsPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
 import AcademicCalendarManagementPage from "./pages/admin/AcademicCalendarManagementPage";
@@ -70,134 +71,153 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Admin routes with layout */}
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "staff"]}>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="subjects" element={<SubjectManagement />} />
+        {/* Admin routes with layout */}
         <Route
-          path="prerequisites/:subjectId"
-          element={<SubjectPrerequisites />}
-        />
-        <Route path="curriculum" element={<CurriculumManagement />} />
-        <Route path="users" element={<UserListPage />} />
-        <Route path="settings" element={<GeneralSettingsPage />} />
-        <Route path="majors" element={<MajorManagement />} />
-        <Route path="faculties" element={<FacultyManagement />} />
-        <Route path="semesters" element={<SemesterManagement />} />
-        <Route path="rooms" element={<RoomManagement />} />
-        <Route path="exam-scheduling" element={<ExamScheduling />} />
-        <Route path="timeslots" element={<TimeslotManagement />} />
-        <Route path="curriculum-list" element={<CurriculumList />} />
+          path="/admin"
+          element={
+            <ProtectedRoute allowedRoles={["admin", "staff"]}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="subjects" element={<SubjectManagement />} />
+          <Route
+            path="prerequisites/:subjectId"
+            element={<SubjectPrerequisites />}
+          />
+          <Route path="curriculum" element={<CurriculumManagement />} />
+          <Route path="users" element={<UserListPage />} />
+          <Route path="settings" element={<GeneralSettingsPage />} />
+          <Route path="majors" element={<MajorManagement />} />
+          <Route path="faculties" element={<FacultyManagement />} />
+          <Route path="semesters" element={<SemesterManagement />} />
+          <Route path="rooms" element={<RoomManagement />} />
+          <Route path="exam-scheduling" element={<ExamScheduling />} />
+          <Route path="timeslots" element={<TimeslotManagement />} />
+          <Route path="curriculum-list" element={<CurriculumList />} />
+          <Route
+            path="curriculum/:curriculumId/setup"
+            element={<CurriculumManagement />}
+          />
+          <Route path="tuition-fees" element={<TuitionFeeManagement />} />
+          <Route path="error-logs" element={<ErrorLogsPage />} />
+          <Route path="actors" element={<ActorsManagementPage />} />
+          <Route
+            path="feedback-management"
+            element={<FeedbackManagementPage />}
+          />
+          <Route
+            path="feedback-statistics"
+            element={<FeedbackStatisticsPage />}
+          />
+          <Route path="requests" element={<AdminRequestsPage />} />
+          <Route path="attendance" element={<AttendancePage />} />
+          <Route path="classes" element={<ClassManagement />} />
+          <Route path="lecturers" element={<LecturerManagement />} />
+          <Route path="students" element={<StudentManagementPage />} />
+          <Route path="announcements" element={<AnnouncementManagement />} />
+          <Route
+            path="registration-periods"
+            element={<RegistrationPeriodManagement />}
+          />
+          <Route path="auto-enrollment" element={<AutoEnrollmentPage />} />
+          <Route
+            path="enrollment-snapshots"
+            element={<EnrollmentSnapshotsPage />}
+          />
+          <Route path="wishlist" element={<AdminWishlistPage />} />
+          <Route
+            path="academic-calendar"
+            element={<AcademicCalendarManagementPage />}
+          />
+          <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
+          <Route path="transactions" element={<AdminTransactionsPage />} />
+          <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
+        </Route>
+
+        {/* Student routes with layout */}
         <Route
-          path="curriculum/:curriculumId/setup"
-          element={<CurriculumManagement />}
-        />
-        <Route path="tuition-fees" element={<TuitionFeeManagement />} />
-        <Route path="error-logs" element={<ErrorLogsPage />} />
-        <Route path="actors" element={<ActorsManagementPage />} />
+          path="/student"
+          element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<StudentHome />} />
+          <Route path="profile" element={<StudentProfilePage />} />
+          <Route path="announcements" element={<AnnouncementPage />} />
+          <Route path="curriculum" element={<StudentCurriculumPage />} />
+          <Route path="registration" element={<ClassRegistrationPage />} />
+          <Route path="exams" element={<ExamSchedulePage />} />
+          <Route path="schedule" element={<SchedulePage />} />
+          <Route path="grades" element={<ViewGradesPage />} />
+          <Route path="attendance-report" element={<AttendanceReportPage />} />
+          <Route path="academic-calendar" element={<AcademicCalendarPage />} />
+          <Route path="feedback" element={<StudentFeedbackPage />} />
+          <Route path="wishlist" element={<CourseWishlistPage />} />
+          <Route path="waitlist" element={<CourseWishlistPage />} />
+          <Route path="applications" element={<StudentRequestsPage />} />
+          <Route path="finance" element={<TuitionPage />} />
+          <Route path="payment" element={<PaymentPage />} />
+          <Route path="payment/result" element={<PaymentResultPage />} />
+          <Route path="wallet" element={<WalletPage />} />
+          <Route path="wallet/result" element={<WalletResultPage />} />
+          <Route path="transactions" element={<MyTransactionsPage />} />
+        </Route>
+
         <Route
-          path="feedback-management"
-          element={<FeedbackManagementPage />}
-        />
+          path="/lecturer"
+          element={
+            <ProtectedRoute allowedRoles={["lecturer", "teacher"]}>
+              <TeacherLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<LecturerHomePage />} />
+          <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
+          <Route path="attendance" element={<AttendancePage />} />
+          <Route path="exams" element={<LecturerExamSchedulePage />} />
+          <Route
+            path="classes/:classSectionId"
+            element={<LecturerClassStudentsPage />}
+          />
+          <Route
+            path="academic-calendar"
+            element={<LecturerAcademicCalendarPage />}
+          />
+          <Route
+            path="grades/:classSectionId"
+            element={<LecturerGradesEntryPage />}
+          />
+          <Route path="profile" element={<DashboardPage />} />
+        </Route>
+
         <Route
-          path="feedback-statistics"
-          element={<FeedbackStatisticsPage />}
+          path="/teacher/*"
+          element={<Navigate to="/lecturer" replace />}
         />
-        <Route path="requests" element={<AdminRequestsPage />} />
-        <Route path="attendance" element={<AttendancePage />} />
-        <Route path="classes" element={<ClassManagement />} />
-        <Route path="lecturers" element={<LecturerManagement />} />
-        <Route path="students" element={<StudentManagementPage />} />
-        <Route path="announcements" element={<AnnouncementManagement />} />
-        <Route path="registration-periods" element={<RegistrationPeriodManagement />} />
-        <Route path="auto-enrollment" element={<AutoEnrollmentPage />} />
-        <Route path="wishlist" element={<AdminWishlistPage />} />
-        <Route path="academic-calendar" element={<AcademicCalendarManagementPage />} />
-        <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
-        <Route path="transactions" element={<AdminTransactionsPage />} />
-        <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
-      </Route>
 
-      {/* Student routes with layout */}
-      <Route
-        path="/student"
-        element={
-          <ProtectedRoute allowedRoles={["student"]}>
-            <StudentLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<StudentHome />} />
-        <Route path="profile" element={<StudentProfilePage />} />
-        <Route path="announcements" element={<AnnouncementPage />} />
-        <Route path="curriculum" element={<StudentCurriculumPage />} />
-        <Route path="registration" element={<ClassRegistrationPage />} />
-        <Route path="exams" element={<ExamSchedulePage />} />
-        <Route path="schedule" element={<SchedulePage />} />
-        <Route path="grades" element={<ViewGradesPage />} />
-        <Route path="attendance-report" element={<AttendanceReportPage />} />
-        <Route path="academic-calendar" element={<AcademicCalendarPage />} />
-        <Route path="feedback" element={<StudentFeedbackPage />} />
-        <Route path="wishlist" element={<CourseWishlistPage />} />
-        <Route path="waitlist" element={<CourseWishlistPage />} />
-        <Route path="applications" element={<StudentRequestsPage />} />
-        <Route path="finance" element={<TuitionPage />} />
-        <Route path="payment" element={<PaymentPage />} />
-        <Route path="payment/result" element={<PaymentResultPage />} />
-        <Route path="wallet" element={<WalletPage />} />
-        <Route path="wallet/result" element={<WalletResultPage />} />
-        <Route path="transactions" element={<MyTransactionsPage />} />
-      </Route>
+        {/* Legacy dashboard route - redirect to admin */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/lecturer"
-        element={
-          <ProtectedRoute allowedRoles={["lecturer", "teacher"]}>
-            <TeacherLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<LecturerHomePage />} />
-        <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
-        <Route path="attendance" element={<AttendancePage />} />
-        <Route path="exams" element={<LecturerExamSchedulePage />} />
-        <Route path="classes/:classSectionId" element={<LecturerClassStudentsPage />} />
-        <Route path="academic-calendar" element={<LecturerAcademicCalendarPage />} />
-        <Route path="grades/:classSectionId" element={<LecturerGradesEntryPage />} />
-        <Route path="profile" element={<DashboardPage />} />
-      </Route>
-
-      <Route
-        path="/teacher/*"
-        element={<Navigate to="/lecturer" replace />}
-      />
-
-      {/* Legacy dashboard route - redirect to admin */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/actors"
-        element={
-          <ProtectedRoute>
-            <ActorsManagementPage />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/actors"
+          element={
+            <ProtectedRoute>
+              <ActorsManagementPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />

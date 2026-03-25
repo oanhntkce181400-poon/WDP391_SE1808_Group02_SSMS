@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const service = require('./autoEnrollment.service');
 
 // Chuẩn hóa danh sách mã ngành / mã sinh viên từ request.
@@ -50,6 +51,8 @@ async function trigger(req, res) {
       majorCodes,
       studentCodes,
       onlyStudentsWithoutEnrollments,
+      mode,
+      curriculumId,
     } = req.body || {};
     if (!semesterId) {
       return res.status(400).json({
@@ -60,6 +63,18 @@ async function trigger(req, res) {
 
     // Mọi tham số lọc / cờ boolean được chuẩn hóa ngay ở biên hệ thống.
     // Làm vậy để service tập trung vào business logic thay vì đoán client gửi kiểu dữ liệu gì.
+    let normalizedCurriculumId;
+    if (curriculumId != null && String(curriculumId).trim() !== '') {
+      const cid = String(curriculumId).trim();
+      if (!mongoose.Types.ObjectId.isValid(cid)) {
+        return res.status(400).json({
+          success: false,
+          message: 'curriculumId không hợp lệ',
+        });
+      }
+      normalizedCurriculumId = cid;
+    }
+
     const result = await service.triggerAutoEnrollment(semesterId, {
       // Chỉ nhận đúng boolean true để tránh các giá trị truthy như "true" hay 1 bật nhầm dryRun.
       dryRun: dryRun === true,
@@ -68,6 +83,8 @@ async function trigger(req, res) {
       majorCodes: normalizeCodeList(majorCodes),
       studentCodes: normalizeCodeList(studentCodes),
       onlyStudentsWithoutEnrollments: onlyStudentsWithoutEnrollments === true,
+      mode: mode === 'retake' ? 'retake' : 'normal',
+      curriculumId: normalizedCurriculumId,
     });
 
     // success=true ở đây nghĩa là request API đã được xử lý xong và service đã trả kết quả.
