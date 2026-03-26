@@ -114,12 +114,17 @@ app.use("/api/schedules", require("./routes/schedule.routes"));
 app.use("/api/requests", require("./routes/request.routes"));
 app.use("/api/attendance", require("./routes/attendance.routes"));
 app.use("/api/finance", require("./routes/finance.routes"));
+app.use("/api/finance", require("./routes/countdown.routes"));
+app.use("/api/payment-reminders", require("./routes/paymentReminder.routes"));
+app.use("/api/revenue-reports", require("./routes/revenueReport.routes"));
+app.use("/api/performance-reports", require("./routes/performanceReport.routes"));
 app.use("/api/wallet", require("./routes/wallet.routes"));
 app.use("/api/payment", require("./routes/payment.routes"));
 app.use("/api/students", require("./routes/student.routes"));
 app.use("/api/grades", require("./routes/grades.routes"));
 app.use("/api/reports", require("./routes/reports.routes"));
 app.use("/api/honors", require("./routes/honors.routes"));
+app.use("/api/grades", require("./routes/transcript.routes"));
 app.use(
   "/api/registration-periods",
   require("./routes/registrationPeriod.routes"),
