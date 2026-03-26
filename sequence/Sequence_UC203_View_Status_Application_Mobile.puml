@@ -1,0 +1,165 @@
+@startuml UC203 View Status Application Mobile
+title UC203 - View Status Application (Mobile)
+
+hide footbox
+
+actor Student as "Student"
+participant AppScreen as "ApplicationStatusScreen"
+participant APIClient as "API Client (Mobile)"
+participant RequestRouter as "RequestRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RequestController as "RequestController"
+participant RequestService as "RequestService"
+participant StudentModel as "StudentModel"
+participant RequestModel as "RequestModel"
+database DB as "Database"
+
+activate Student
+Student -> AppScreen: (1) open Application Status screen
+activate AppScreen
+
+AppScreen -> APIClient: (2) GET /api/requests/me
+activate APIClient
+APIClient -> RequestRouter: (2.1) forward request
+activate RequestRouter
+RequestRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+
+alt invalid token
+  AuthMiddleware --> RequestRouter: (2.2.1) 401 Unauthorized
+  RequestRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> AppScreen: (2.2.1.2) show login required
+  AppScreen --> Student: (2.2.1.3) stop flow
+else valid token
+  AuthMiddleware --> RequestRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+
+  RequestRouter -> RequestController: (2.3) getMyRequests(req)
+  activate RequestController
+  RequestController -> RequestService: (2.3.1) getMyRequests(userId)
+  activate RequestService
+
+  RequestService -> StudentModel: (2.3.2) find student by user/email
+  activate StudentModel
+  StudentModel -> DB: (2.3.2.1) db query student
+  activate DB
+  DB --> StudentModel: (2.3.2.2) student row/null
+  deactivate DB
+  StudentModel --> RequestService: (2.3.2.3) return student/null
+  deactivate StudentModel
+  RequestService --> RequestService: (2.3.2.4) check student exists
+  activate RequestService
+  deactivate RequestService
+  alt student not found
+    RequestService -> StudentModel: (2.3.2.4.1) create fallback student profile
+    activate StudentModel
+    StudentModel -> DB: (2.3.2.4.2) db insert student
+    activate DB
+    DB --> StudentModel: (2.3.2.4.3) new student row
+    deactivate DB
+    StudentModel --> RequestService: (2.3.2.4.4) return created student
+    deactivate StudentModel
+  else student found
+    RequestService --> RequestService: (2.3.2.5) continue
+    activate RequestService
+    deactivate RequestService   
+  end
+
+  RequestService -> RequestModel: (2.3.3) find requests by student
+  activate RequestModel
+  RequestModel -> DB: (2.3.3.1) db query request list
+  activate DB
+  DB --> RequestModel: (2.3.3.2) request rows
+  deactivate DB
+  RequestModel --> RequestService: (2.3.3.3) return list
+  deactivate RequestModel
+
+  RequestService --> RequestController: (2.3.4) return request list
+  deactivate RequestService
+  RequestController --> RequestRouter: (2.3.5) 200 OK list
+  deactivate RequestController
+  RequestRouter --> APIClient: (2.3.6) success response
+  APIClient --> AppScreen: (2.3.7) render list + status chips
+  AppScreen --> Student: (2.3.8) user sees request list
+end
+
+deactivate RequestRouter
+deactivate APIClient
+
+== OPEN REQUEST DETAIL ==
+
+Student -> AppScreen: (20) tap one request item
+AppScreen -> APIClient: (20.1) GET /api/requests/:id
+activate APIClient
+APIClient -> RequestRouter: (20.1.1) forward request
+activate RequestRouter
+RequestRouter -> AuthMiddleware: (20.2) verify JWT token
+activate AuthMiddleware
+
+alt invalid token
+  AuthMiddleware --> RequestRouter: (20.2.1) 401 Unauthorized
+  RequestRouter --> APIClient: (20.2.1.1) return 401
+  APIClient --> AppScreen: (20.2.1.2) show auth error
+  AppScreen --> Student: (20.2.1.3) stop detail flow
+else valid token
+  AuthMiddleware --> RequestRouter: (20.2.2) token valid
+  deactivate AuthMiddleware
+
+  RequestRouter -> RequestController: (20.2.3) getRequestById(req)
+  activate RequestController
+  RequestController -> RequestService: (20.2.4) getRequestById(requestId, userId)
+  activate RequestService
+
+  RequestService -> RequestModel: (20.2.5) findById(requestId)
+  activate RequestModel
+  RequestModel -> DB: (20.2.5.1) db query request
+  activate DB
+  DB --> RequestModel: (20.2.5.2) request row/null
+  deactivate DB
+  RequestModel --> RequestService: (20.2.5.3) return row/null
+  deactivate RequestModel
+  RequestService --> RequestService: (20.2.5.4) check request exists
+  activate RequestService
+  deactivate RequestService
+  alt request not found
+    RequestService --> RequestController: (20.2.5.4.1) throw 404
+    RequestController --> RequestRouter: (20.2.5.4.2) return 404
+    RequestRouter --> APIClient: (20.2.5.4.3) error response
+    APIClient --> AppScreen: (20.2.5.4.4) fallback to summary row
+    AppScreen --> Student: (20.2.5.4.5) show limited detail
+  else request found
+    RequestService -> StudentModel: (20.2.6) resolve current student by user
+    activate StudentModel
+    StudentModel -> DB: (20.2.6.1) db query student
+    activate DB
+    DB --> StudentModel: (20.2.6.2) student row
+    deactivate DB
+    StudentModel --> RequestService: (20.2.6.3) return student
+    deactivate StudentModel
+
+    RequestService --> RequestService: (20.2.6.4) check ownership (ensureOwner)
+    activate RequestService
+    deactivate RequestService
+    alt ownership failed
+      RequestService --> RequestController: (20.2.6.4.1) throw 403 Forbidden
+      RequestController --> RequestRouter: (20.2.6.4.2) return 403
+      RequestRouter --> APIClient: (20.2.6.4.3) error response
+      APIClient --> AppScreen: (20.2.6.4.4) show permission error
+      AppScreen --> Student: (20.2.6.4.5) detail denied
+    else ownership passed
+      RequestService --> RequestController: (20.2.6.5) return request detail
+      deactivate RequestService
+      RequestController --> RequestRouter: (20.2.6.6) 200 OK detail
+      deactivate RequestController
+      RequestRouter --> APIClient: (20.2.6.7) success response
+      APIClient --> AppScreen: (20.2.6.8) render detail panel
+      AppScreen --> Student: (20.2.6.9) user sees detail + status
+    end
+  end
+end
+
+deactivate RequestRouter
+deactivate APIClient
+deactivate AppScreen
+
+@enduml

@@ -1,0 +1,73 @@
+@startuml
+title Create Subject - Add New Subject to System
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen"
+participant API as "API"
+participant Router as "Router"
+participant Validation as "Middleware"
+participant Controller as "Controller"
+participant Service as "Service"
+participant SubjectModel as "SubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open subject list
+activate Screen
+
+Screen -> API: (2) call POST
+activate API
+API -> Router: (3) forward POST
+activate Router
+Router -> Validation: (4) validate data
+activate Validation
+Validation --> Router: (4.1) valid data
+deactivate Validation
+
+Router -> Controller: (5) request data
+activate Controller
+Controller -> Service: (6) createSubject()
+activate Service
+
+Service -> SubjectModel: (6.1.1) findByCode()
+activate SubjectModel
+SubjectModel -> DB: (6.1.2) db query
+activate DB
+DB --> SubjectModel: (6.1.3) return rows
+deactivate DB
+SubjectModel --> Service: (6.1.4) return exists
+deactivate SubjectModel
+
+alt exists
+  Service --> Controller: (6.1.5) conflict error
+  Controller --> Router: (6.1.6) 409 Conflict
+  Router --> API: (6.1.7) 409 Conflict
+  API --> Screen: (6.1.8) show error
+  Screen --> PrimaryActor: (6.1.9) display error
+else not exists
+  Service -> SubjectModel: (6.2.1) create()
+  activate SubjectModel
+  SubjectModel -> DB: (6.2.1.1) db insert
+  activate DB
+  DB --> SubjectModel: (6.2.1.2) return created
+  deactivate DB
+  SubjectModel --> Service: (6.2.1.3) return created
+  deactivate SubjectModel
+
+  Service --> Controller: (6.2.1.4) return created
+  deactivate Service
+  Controller --> Router: (6.2.1.5) 201 Created
+  deactivate Controller
+  Router --> API: (6.2.1.6) 201 Created
+  API --> Screen: (6.2.1.7) show success
+  Screen --> PrimaryActor: (6.2.1.8) display success
+end
+
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

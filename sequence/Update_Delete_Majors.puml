@@ -1,0 +1,101 @@
+@startuml
+title Update/Delete Majors - Modify or Remove Major
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Major Detail)"
+participant APIClient as "API Client (Frontend)"
+participant MajorRouter as "MajorRouter"
+participant Validation as "ValidationMiddleware"
+participant MajorController as "MajorController"
+participant MajorService as "MajorService"
+participant MajorModel as "MajorModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open majors list
+activate Screen
+
+alt update or delete
+  Screen -> APIClient: (2) PUT /api/majors/{id} or DELETE /api/majors/{id}
+end
+
+activate APIClient
+APIClient -> MajorRouter: (3) forward request
+activate MajorRouter
+MajorRouter -> Validation: (4) validate payload/params
+activate Validation
+alt invalid
+  Validation --> MajorRouter: (4.1.1) invalid: missing/invalid id or body
+  deactivate Validation
+
+  MajorRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  MajorRouter -> MajorController: (4.2.1) request action
+  activate MajorController
+
+  alt update
+    MajorController -> MajorService: (4.2.1.1.1) updateMajor()
+    activate MajorService
+    MajorService -> MajorModel: (4.2.1.1.2) update()
+    activate MajorModel
+    MajorModel -> DB: (4.2.1.1.3) db update
+    activate DB
+    DB --> MajorModel: (4.2.1.1.4) return updated
+    deactivate DB
+    MajorModel --> MajorService: (4.2.1.1.5) return updated
+    deactivate MajorModel
+    MajorService --> MajorController: (4.2.1.1.6) return updated
+    deactivate MajorService
+    MajorController --> MajorRouter: (4.2.1.1.7) 200 OK
+  else delete
+    MajorController -> MajorService: (4.2.1.2.1) deleteMajor()
+    activate MajorService
+    MajorService -> MajorModel: (4.2.1.2.2) findById()
+    activate MajorModel
+    MajorModel -> DB: (4.2.1.2.3) db query
+    activate DB
+    DB --> MajorModel: (4.2.1.2.4) return row | null
+    deactivate DB
+    MajorModel --> MajorService: (4.2.1.2.5) return exists
+    deactivate MajorModel
+
+    alt exists
+      MajorService -> MajorModel: (4.2.1.2.5.1.1) deleteById()
+      activate MajorModel
+      MajorModel -> DB: (4.2.1.2.5.1.2) db delete
+      activate DB
+      DB --> MajorModel: (4.2.1.2.5.1.3) return deleted
+      deactivate DB
+      MajorModel --> MajorService:(4.2.1.2.5.1.4) return deleted
+      deactivate MajorModel
+      MajorService --> MajorController: (4.2.1.2.5.1.4.1.1) return deleted
+      MajorController --> MajorRouter: (4.2.1.2.5.1.4.1.2) 200 OK
+      
+    else not found
+      MajorService --> MajorController: (4.2.1.2.5.1.4.2.1) 404 Not Found
+      
+      deactivate MajorService
+      MajorController --> MajorRouter: (4.2.1.2.5.1.4.2.2) 404 Not Found
+     deactivate MajorController
+    end
+  end
+ 
+end
+
+MajorRouter --> APIClient: (5) response
+deactivate MajorRouter
+APIClient --> Screen: (6) display result
+deactivate APIClient
+Screen --> PrimaryActor: (7) show message
+deactivate Screen
+
+
+
+deactivate PrimaryActor
+@enduml

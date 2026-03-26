@@ -1,0 +1,101 @@
+@startuml Update/Delete Subject - Modify or Remove Subject
+title Update/Delete Subject - Modify or Remove Subject
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Subject Detail)"
+participant APIClient as "API Client (Frontend)"
+participant SubjectRouter as "SubjectRouter"
+participant Validation as "ValidationMiddleware"
+participant SubjectController as "SubjectController"
+participant SubjectService as "SubjectService"
+participant SubjectModel as "SubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open subject detail
+activate Screen
+
+' (2) User calls API with PUT or DELETE
+Screen -> APIClient: (2) PUT /api/subjects/{id} or DELETE /api/subjects/{id}
+activate APIClient
+
+APIClient -> SubjectRouter: (3) forward request
+activate SubjectRouter
+
+SubjectRouter -> Validation: (4) validate payload/params
+activate Validation
+alt invalid
+  Validation --> SubjectRouter: (4.1.1) invalid: missing/invalid id or body
+  deactivate Validation
+
+  SubjectRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  SubjectRouter -> SubjectController: (4.2.1) updateSubject() / deleteSubject()
+  activate SubjectController
+
+  alt is update
+    SubjectController -> SubjectService: (4.2.1.1.1) updateSubject()
+    activate SubjectService
+    SubjectService -> SubjectModel: (4.2.1.1.2) findByIdAndUpdate()
+    activate SubjectModel
+    SubjectModel -> DB: (4.2.1.1.3) db update
+    activate DB
+    DB --> SubjectModel: (4.2.1.1.4) return updated
+    deactivate DB
+    SubjectModel --> SubjectService: (4.2.1.1.5) return updated
+    deactivate SubjectModel
+    SubjectService --> SubjectController: (4.2.1.1.6) return success
+    deactivate SubjectService
+    SubjectController --> SubjectRouter: (4.2.1.1.7) 200 OK
+    
+  else is delete
+    SubjectController -> SubjectService: (4.2.1.2.1) deleteSubject()
+    activate SubjectService
+    SubjectService -> SubjectModel: (4.2.1.2.2) findById()
+    activate SubjectModel
+    SubjectModel -> DB: (4.2.1.2.3) db query
+    activate DB
+    DB --> SubjectModel: (4.2.1.2.4) return row | null
+    deactivate DB
+    SubjectModel --> SubjectService: (4.2.1.2.5) return data
+    deactivate SubjectModel
+
+    alt exists
+      SubjectService -> SubjectModel: (4.2.1.2.5.1.1) deleteById()
+      activate SubjectModel
+      SubjectModel -> DB: (4.2.1.2.5.1.2) db delete
+      activate DB
+      DB --> SubjectModel: (4.2.1.2.5.1.3) return result
+      deactivate DB
+      SubjectModel --> SubjectService: (4.2.1.2.5.1.4)return success
+      deactivate SubjectModel
+      SubjectService --> SubjectController: (4.2.1.2.5.1.4.1.1) return success
+      SubjectController --> SubjectRouter: (4.2.1.2.5.1.4.1.2) 200 OK
+    else not found
+      SubjectService --> SubjectController: (4.2.1.2.5.1.4.2.1) throw NotFound
+      deactivate SubjectService
+      SubjectController --> SubjectRouter: (4.2.1.2.5.1.4.2.2) 404 Not Found
+        deactivate SubjectController
+    end
+  end
+end
+
+' Common response flow
+SubjectRouter --> APIClient: (5) response (Data/Error)
+deactivate SubjectRouter
+
+
+APIClient --> Screen: (6) display result
+deactivate APIClient
+
+Screen --> PrimaryActor: (7) show message
+deactivate Screen
+deactivate PrimaryActor
+
+@enduml

@@ -1,0 +1,127 @@
+@startuml
+title Add Subjects to Curriculum - Associate Subjects with Curriculum (refined)
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Curriculum Detail)"
+participant APIClient as "API Client (Frontend)"
+participant CurriculumRouter as "CurriculumRouter"
+participant Validation as "ValidationMiddleware"
+participant CurriculumController as "CurriculumController"
+participant CurriculumService as "CurriculumService"
+participant CurriculumModel as "CurriculumModel"
+participant SubjectModel as "SubjectModel"
+participant CurriculumSubjectModel as "CurriculumSubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open curriculum detail
+activate Screen
+Screen -> Screen: (1.1) press Add Subjects
+Screen -> APIClient: (2) POST /api/curriculums/{curriculumId}/subjects
+activate APIClient
+
+APIClient -> CurriculumRouter: (3) POST /curriculums/{id}/subjects
+activate CurriculumRouter
+
+CurriculumRouter -> Validation: (4) validate payload
+activate Validation
+alt invalid payload
+  Validation --> CurriculumRouter: (4.1.1) invalid: missing subject_ids or empty array
+  deactivate Validation
+
+  CurriculumRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid payload
+
+  deactivate Validation
+
+  CurriculumRouter -> CurriculumController: (4.2.1) addSubjects(curriculumId, payload)
+  activate CurriculumController
+
+  CurriculumController -> CurriculumService: (4.2.2) addSubjects()
+  activate CurriculumService
+
+  CurriculumService -> CurriculumModel: (4.2.3) findById(curriculumId)
+  activate CurriculumModel
+  CurriculumModel -> DB: (4.2.4) db query
+  activate DB
+  DB --> CurriculumModel: (4.2.5) row | null
+  deactivate DB
+  CurriculumModel --> CurriculumService: (4.2.6) curriculum | null
+  deactivate CurriculumModel
+
+  alt curriculum not found
+    CurriculumService --> CurriculumController: (4.2.6.1.1) NotFound
+    
+
+    CurriculumController --> CurriculumRouter: (4.2.6.1.2) 404 Not Found
+   
+
+    CurriculumRouter --> APIClient: (4.2.6.1.3) 404 Not Found
+    APIClient --> Screen: (4.2.6.1.4) show error
+    Screen --> PrimaryActor: (4.2.6.1.5) display error
+  else curriculum exists
+    CurriculumService -> SubjectModel: (4.2.6.2.1) findByIds(subjectIds)
+    activate SubjectModel
+    SubjectModel -> DB: (4.2.6.2.2) db query
+    activate DB
+    DB --> SubjectModel: (4.2.6.2.3) subjects rows
+    deactivate DB
+    SubjectModel --> CurriculumService: (4.2.6.2.4) subjects data
+    deactivate SubjectModel
+
+    CurriculumService -> CurriculumService: (4.2.6.2.4.1) validate subjects exist
+    alt some subjects missing
+      CurriculumService --> CurriculumController: (4.2.6.2.5.1.1) validation error: invalid subject_ids
+     
+      CurriculumController --> CurriculumRouter: (4.2.6.2.5.1.2) 400 Bad Request
+      CurriculumRouter --> APIClient: (4.2.6.2.5.1.3) 400 Bad Request
+      APIClient --> Screen: (4.2.6.2.5.1.4) show validation error
+      Screen --> PrimaryActor: (4.2.6.2.5.1.5) display error
+    else all subjects valid
+      CurriculumService -> CurriculumSubjectModel: (4.2.6.2.5.2.1) insertMany(relations)
+      activate CurriculumSubjectModel
+      loop for each subject
+        CurriculumSubjectModel -> DB: (4.2.6.2.5.2.2) db insert
+        activate DB
+        DB --> CurriculumSubjectModel: (4.2.6.2.5.2.3) insert result
+        deactivate DB
+      end
+      alt some inserts failed
+        CurriculumSubjectModel --> CurriculumService: (4.2.6.2.5.2.3.1.1) insert error
+        
+        CurriculumService --> CurriculumController: (4.2.6.2.5.2.3.1.2) 500 Internal Server Error
+        
+        CurriculumController --> CurriculumRouter: (4.2.6.2.5.2.3.1.3) 500 Internal Server Error
+        CurriculumRouter --> APIClient: (4.2.6.2.5.2.3.1.4) 500 Internal Server Error
+        APIClient --> Screen: (4.2.6.2.5.2.3.1.5) show error
+        Screen --> PrimaryActor: (4.2.6.2.5.2.3.1.6) display error
+      else all inserts success
+        CurriculumSubjectModel --> CurriculumService: (4.2.6.2.5.2.3.2.1) success
+        deactivate CurriculumSubjectModel
+        CurriculumService --> CurriculumController: (4.2.6.2.5.2.3.2.2) subjects added
+        deactivate CurriculumService
+        CurriculumController --> CurriculumRouter: (4.2.6.2.5.2.3.2.3) 201 Created
+        deactivate CurriculumController
+        CurriculumRouter --> APIClient: (4.2.6.2.5.2.3.2.4) 201 Created
+        deactivate CurriculumRouter
+        APIClient --> Screen: (4.2.6.2.5.2.3.2.5) show success
+        deactivate APIClient
+        
+        Screen --> PrimaryActor: (4.2.6.2.5.2.3.2.6) display success
+        deactivate Screen
+      end
+      
+    end
+  end
+  
+end
+
+
+
+
+deactivate PrimaryActor
+@enduml

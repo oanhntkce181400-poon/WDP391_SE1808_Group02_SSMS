@@ -1,0 +1,221 @@
+@startuml UC207 Setup Academic Calendar
+title UC207 - Setup Academic Calendar
+
+hide footbox
+
+actor AdminStaff as "Admin / Staff / Academic-Admin"
+participant Screen as "Screen (AcademicCalendarManagementPage)"
+participant APIClient as "API Client (Frontend)"
+participant CalendarRouter as "AcademicCalendarRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant CalendarController as "AcademicCalendarController"
+participant CalendarService as "AcademicCalendarService"
+participant CalendarModel as "AcademicCalendarModel"
+database DB as "Database"
+
+activate AdminStaff
+AdminStaff -> Screen: (1) open Academic Calendar Management
+activate Screen
+
+Screen -> APIClient: (2) GET /api/academic-calendar?year=YYYY&includeInactive=true
+activate APIClient
+APIClient -> CalendarRouter: (2.1) forward request
+activate CalendarRouter
+CalendarRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> CalendarRouter: (2.2.1) 401 Unauthorized
+  
+  CalendarRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> Screen: (2.2.1.2) show auth error
+  Screen --> AdminStaff: (2.2.1.3) stop flow
+else valid token
+  AuthMiddleware --> CalendarRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+  CalendarRouter -> CalendarController: (2.3) listEvents(req)
+  activate CalendarController
+  CalendarController -> CalendarService: (2.3.1) listEvents({year,isActive})
+  activate CalendarService
+  CalendarService --> CalendarService: (2.3.2) validate year value
+  activate CalendarService
+  deactivate CalendarService
+  alt invalid year
+    CalendarService --> CalendarController: (2.3.2.1) throw 400 invalid year
+    
+    CalendarController --> CalendarRouter: (2.3.2.2) return 400
+    
+    CalendarRouter --> APIClient: (2.3.2.3) error response
+    APIClient --> Screen: (2.3.2.4) show year validation error
+    Screen --> AdminStaff: (2.3.2.5) correct year filter
+  else year valid
+    CalendarService -> CalendarModel: (2.3.3) find(query).sort(startDate)
+    activate CalendarModel
+    CalendarModel -> DB: (2.3.3.1) db query events
+    activate DB
+    DB --> CalendarModel: (2.3.3.2) event rows
+    deactivate DB
+    CalendarModel --> CalendarService: (2.3.3.3) return event rows
+    deactivate CalendarModel
+    CalendarService --> CalendarController: (2.3.4) return events list
+    deactivate CalendarService
+    CalendarController --> CalendarRouter: (2.3.5) 200 OK
+    deactivate CalendarController
+    CalendarRouter --> APIClient: (2.3.6) success response
+    APIClient --> Screen: (2.3.7) render event table/form
+    Screen --> AdminStaff: (2.3.8) view current calendar setup
+  end
+end
+
+deactivate CalendarRouter
+deactivate APIClient
+
+== CREATE EVENT ==
+
+AdminStaff -> Screen: (20) fill form and click create
+Screen -> APIClient: (20.1) POST /api/academic-calendar
+activate APIClient
+APIClient -> CalendarRouter: (20.1.1) forward request
+activate CalendarRouter
+CalendarRouter -> AuthMiddleware: (20.2) verify JWT token
+activate AuthMiddleware
+
+alt invalid token
+  AuthMiddleware --> CalendarRouter: (20.2.1) 401 Unauthorized
+  
+  CalendarRouter --> APIClient: (20.2.1.1) return 401
+  APIClient --> Screen: (20.2.1.2) show auth error
+  Screen --> AdminStaff: (20.2.1.3) stop create flow
+else valid token
+  AuthMiddleware --> CalendarRouter: (20.2.2) token valid
+  deactivate AuthMiddleware
+  CalendarRouter -> RBACMiddleware: (20.2.3) check role (admin/staff/academic-admin)
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> CalendarRouter: (20.2.3.1) 403 Forbidden
+    
+    CalendarRouter --> APIClient: (20.2.3.1.1) return 403
+    APIClient --> Screen: (20.2.3.1.2) show permission error
+    Screen --> AdminStaff: (20.2.3.1.3) stop create flow
+  else authorized
+    RBACMiddleware --> CalendarRouter: (20.2.3.2) role accepted
+    deactivate RBACMiddleware
+    CalendarRouter -> CalendarController: (20.2.4) createEvent(req)
+    activate CalendarController
+    CalendarController -> CalendarService: (20.2.5) createEvent(adminUserId, payload)
+    activate CalendarService
+    CalendarService --> CalendarService: (20.2.6) check conditional: required name/date/year
+    activate CalendarService
+    deactivate CalendarService
+    CalendarService --> CalendarService: (20.2.7) check conditional: year range 2000..2100
+    activate CalendarService
+    deactivate CalendarService
+    CalendarService --> CalendarService: (20.2.8) check conditional: startDate/endDate in selected year
+    activate CalendarService
+    deactivate CalendarService
+    CalendarService --> CalendarService: (20.2.9) check conditional: endDate >= startDate
+    activate CalendarService
+    deactivate CalendarService
+    CalendarService --> CalendarService: (20.2.10) check conditional: color format #RRGGBB
+    activate CalendarService
+    deactivate CalendarService
+    alt any validation failed
+      CalendarService --> CalendarController: (20.2.10.1) throw 400 validation error
+      
+      CalendarController --> CalendarRouter: (20.2.10.2) return 400
+      
+      CalendarRouter --> APIClient: (20.2.10.3) error response
+      APIClient --> Screen: (20.2.10.4) show validation message
+      Screen --> AdminStaff: (20.2.10.5) correct form and retry
+    else validation passed
+      CalendarService -> CalendarModel: (20.2.11) create event document
+      activate CalendarModel
+      CalendarModel -> DB: (20.2.11.1) db insert event
+      activate DB
+      DB --> CalendarModel: (20.2.11.2) created row
+      deactivate DB
+      CalendarModel --> CalendarService: (20.2.11.3) return created event
+      deactivate CalendarModel
+      CalendarService --> CalendarController: (20.2.12) return created event
+      deactivate CalendarService
+      CalendarController --> CalendarRouter: (20.2.13) 201 Created
+      deactivate CalendarController
+      CalendarRouter --> APIClient: (20.2.14) success response
+      APIClient --> Screen: (20.2.14.1) show success + reload list
+      Screen --> AdminStaff: (20.2.14.2) created event visible in table
+    end
+  end
+end
+
+deactivate CalendarRouter
+deactivate APIClient
+
+== UPDATE / DELETE EVENT ==
+
+AdminStaff -> Screen: (24) click edit or delete on one event
+Screen -> APIClient: (24.1) PATCH or DELETE /api/academic-calendar/:id
+activate APIClient
+APIClient -> CalendarRouter: (24.2) forward request
+activate CalendarRouter
+CalendarRouter -> AuthMiddleware: (24.3) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> CalendarRouter: (24.3.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  CalendarRouter --> APIClient: (24.3.1.1) return 401
+  APIClient --> Screen: (24.3.1.2) show auth error
+  Screen --> AdminStaff: (24.3.1.3) stop update/delete flow
+else valid token
+  AuthMiddleware --> CalendarRouter: (24.3.2) token valid
+  deactivate AuthMiddleware
+  CalendarRouter -> RBACMiddleware: (24.4) check role (admin/staff/academic-admin)
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> CalendarRouter: (24.4.1) 403 Forbidden
+    
+    CalendarRouter --> APIClient: (24.4.1.1) return 403
+    APIClient --> Screen: (24.4.1.2) show permission error
+    Screen --> AdminStaff: (24.4.1.3) stop flow
+  else authorized
+    RBACMiddleware --> CalendarRouter: (24.4.2) role accepted
+    deactivate RBACMiddleware
+    CalendarRouter -> CalendarController: (24.5) updateEvent(req) or deleteEvent(req)
+    activate CalendarController
+    CalendarController -> CalendarService: (24.6) updateEvent(...) or deleteEvent(...)
+    activate CalendarService
+    CalendarService -> CalendarModel: (24.6.1) findById(eventId)
+    activate CalendarModel
+    CalendarModel -> DB: (24.6.1.1) db query event by id
+    activate DB
+    DB --> CalendarModel: (24.6.1.2) event row/null
+    deactivate DB
+    CalendarModel --> CalendarService: (24.6.1.3) return event/null
+    deactivate CalendarModel
+    CalendarService --> CalendarService: (24.6.2) check event exists
+    activate CalendarService
+    deactivate CalendarService  
+    alt event not found
+      CalendarService --> CalendarController: (24.6.2.1) throw 404 not found
+      
+      CalendarController --> CalendarRouter: (24.6.2.2) return 404
+      
+      CalendarRouter --> APIClient: (24.6.2.3) error response
+      APIClient --> Screen: (24.6.2.4) show not-found message
+      Screen --> AdminStaff: (24.6.2.5) refresh list
+    else event exists
+      CalendarService --> CalendarController: (24.6.3) return update/delete success
+      deactivate CalendarService
+      CalendarController --> CalendarRouter: (24.6.4) 200 OK
+      deactivate CalendarController
+      CalendarRouter --> APIClient: (24.6.5) success response
+      APIClient --> Screen: (24.6.6) show success + reload list
+      Screen --> AdminStaff: (24.6.7) updated table state
+    end
+  end
+end
+
+deactivate CalendarRouter
+deactivate APIClient
+deactivate Screen
+
+@enduml

@@ -1,0 +1,70 @@
+@startuml
+title Configure Subject Prerequisites - Add Prerequisite Relationships
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Prerequisites UI)"
+participant API as "API"
+participant Router as "Router"
+participant Validation as "Validation"
+participant Controller as "Controller"
+participant Service as "Service"
+participant ModelSubj as "SubjectModel"
+participant ModelRel as "SubjectPrerequisiteModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Open prerequisites UI
+activate Screen
+Screen -> API: (2) call POST
+activate API
+API -> Router: (3) forward POST
+activate Router
+Router -> Validation: (4) validate data
+activate Validation
+Validation --> Router: (4.1) valid data
+deactivate Validation
+Router -> Controller: (5) request data
+activate Controller
+Controller -> Service: (6) addPrerequisites(subject_id, prereq_ids, userId)
+activate Service
+Service -> ModelSubj: (7) load graph (existing prereqs for cycle check)
+activate ModelSubj
+ModelSubj --> Service: (8) current graph data
+deactivate ModelSubj
+Service -> Service: (9) run cycleDetection(subject_id, prereq_ids) -- DFS
+ModelSubj --> Service: (10) detectionResult
+alt (10.1) cycle detected
+  Service --> Controller: (10.1.1) validation error
+  deactivate Service
+  Controller --> Router: (10.1.2) 400 Bad Request { message: "Cycle detected" }
+  deactivate Controller
+  Router --> API: (10.1.3) 400 Bad Request { message: "Cycle detected" }
+  API --> Screen: (10.1.4) show error "Cycle detected"
+  Screen --> PrimaryActor: (10.1.5) display error
+else (10.2) no cycle
+  Service -> ModelRel: (10.2.1) insertMany(prereq rows)
+  activate ModelRel
+  loop (10.2.1.1) for each prereq_id in prereq_ids
+    ModelRel -> DB: (10.2.1.1.1) db insert
+    activate DB
+    DB --> ModelRel: (10.2.1.1.2) insert result
+    deactivate DB
+  end
+  ModelRel --> Service: (10.2.1.3) success
+  deactivate ModelRel
+  Service --> Controller: (10.2.1.4) prerequisites added
+  deactivate Service
+  Controller --> Router: (10.2.1.5) 201 Created { added: [...], subject_id }
+  deactivate Controller
+  Router --> API: (10.2.1.6) 201 Created { added: [...], subject_id }
+  API --> Screen: (10.2.1.7) success -> update UI
+  Screen --> PrimaryActor: (10.2.1.8) show success
+end
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

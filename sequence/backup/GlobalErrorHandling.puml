@@ -1,0 +1,39 @@
+@startuml
+hide footbox
+title Global Error Handling (Tech) - AllExceptionsFilter flow
+
+actor PrimaryActor as "System"
+participant API as "API"
+participant Router as "Router"
+participant Controller as "Controller"
+participant Service as "Service"
+participant ExceptionFilter as "ExceptionFilter"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> API: (1) Incoming request (any route)
+activate API
+API -> Router: (2) Route dispatch to controller
+activate Router
+Router -> Controller: (3) Controller action executes (may throw)
+activate Controller
+alt (3.1) controller throws HttpError or DatabaseError
+  Controller --> ExceptionFilter: (3.1.1) thrown error (HttpError | DatabaseError | Error)
+  deactivate Controller
+  ExceptionFilter -> DB: (3.1.2) write to error.log (error details, stack, path, timestamp)
+  activate DB
+  DB --> ExceptionFilter: (3.1.3) write result
+  deactivate DB
+  ExceptionFilter -> API: (3.1.4) formattedResponse { statusCode, message, timestamp, path }
+  deactivate ExceptionFilter
+  API --> PrimaryActor: (3.1.5) HTTP Response { statusCode, body }
+else (3.2) success
+  Controller --> Router: (3.2.1) return data
+  deactivate Controller
+  Router --> API: (3.2.2) success response
+  API --> PrimaryActor: (3.2.3) response
+end
+deactivate Router
+deactivate API
+@enduml
+

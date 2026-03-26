@@ -1,0 +1,66 @@
+@startuml
+title Search Task - Search tasks on Home page
+
+hide footbox
+
+actor PrimaryActor as "Student / Parent User"
+participant Screen as "Screen (Home)"
+participant APIClient as "API Client (Frontend)"
+participant SearchRouter as "SearchRouter"
+participant Validation as "ValidationMiddleware"
+participant Controller as "SearchController"
+participant Service as "SearchService"
+participant TaskModel as "TaskModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) enter search query and press search
+activate Screen
+
+Screen -> APIClient: (2) GET /api/tasks/search?q={q}
+activate APIClient
+APIClient -> SearchRouter: (3) forward GET
+activate SearchRouter
+
+SearchRouter -> Validation: (4) validate query params (q required)
+activate Validation
+alt invalid
+  Validation --> SearchRouter: (4.1.1) invalid: missing q
+  deactivate Validation
+  SearchRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  SearchRouter -> Controller: (4.2.1) searchTasks()
+  activate Controller
+  Controller -> Service: (4.2.2) searchTasks()
+  activate Service
+
+  Service -> TaskModel: (4.2.3) textSearch(q)
+  activate TaskModel
+  TaskModel -> DB: (4.2.4) db query
+  activate DB
+  DB --> TaskModel: (4.2.5) return rows, totalCount
+  deactivate DB
+  TaskModel --> Service: (4.2.6) search results
+  deactivate TaskModel
+
+  Service -> Service: (4.2.6.1) apply ranking/sort
+  Service --> Controller: (4.2.7) paginated results
+  deactivate Service
+
+  Controller --> SearchRouter: (4.2.8) 200 OK
+  deactivate Controller
+  SearchRouter --> APIClient: (4.2.9) 200 OK
+  APIClient --> Screen: (4.2.10) render search results
+  Screen --> PrimaryActor: (4.2.11) display search results
+end
+
+deactivate SearchRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+
