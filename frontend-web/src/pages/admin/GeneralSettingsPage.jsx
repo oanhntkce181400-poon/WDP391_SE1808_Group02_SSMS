@@ -18,6 +18,7 @@ const GeneralSettingsPage = () => {
     description: '',
     primaryColor: '',
     secondaryColor: '',
+    emailNotificationsEnabled: true,
   });
 
   useEffect(() => {
@@ -40,6 +41,7 @@ const GeneralSettingsPage = () => {
           address: data.data.address || '',
           website: data.data.website || '',
           description: data.data.description || '',
+          emailNotificationsEnabled: data.data.emailNotificationsEnabled !== false,
         });
         if (data.data.logoUrl) {
           setLogoPreview(data.data.logoUrl);
@@ -54,8 +56,11 @@ const GeneralSettingsPage = () => {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
   };
 
   const handleLogoChange = (e) => {
@@ -211,6 +216,22 @@ const GeneralSettingsPage = () => {
               />
             </div>
           </div>
+        </div>
+
+        <div className="border-t pt-6">
+          <h2 className="text-xl font-semibold mb-4">Email Notifications</h2>
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              name="emailNotificationsEnabled"
+              checked={Boolean(formData.emailNotificationsEnabled)}
+              onChange={handleInputChange}
+              className="h-4 w-4"
+            />
+            <span className="text-sm text-gray-700">
+              Bật gửi email tự động cho các thông báo hệ thống
+            </span>
+          </label>
         </div>
 
         {/* Colors Section

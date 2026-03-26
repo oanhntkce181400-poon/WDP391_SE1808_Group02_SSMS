@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middlewares/auth.middleware');
+const rbacMiddleware = require('../middlewares/rbac.middleware');
 const financeController = require('../controllers/finance.controller');
 
 router.get(
@@ -49,6 +50,21 @@ router.post(
   '/payments/pay-by-wallet',
   authMiddleware,
   financeController.payTuitionByWallet,
+);
+
+// Gửi email nhắc thanh toán theo bill (admin/staff)
+router.post(
+  '/payments/remind/:billId',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  financeController.sendTuitionReminder,
+);
+
+router.post(
+  '/payments/remind-student',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  financeController.sendTuitionReminderByStudent,
 );
 
 // Xác nhận thanh toán và tự động đăng ký môn học

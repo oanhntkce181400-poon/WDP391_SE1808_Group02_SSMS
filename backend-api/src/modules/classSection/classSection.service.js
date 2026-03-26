@@ -8,6 +8,7 @@ const User = require("../../models/user.model");
 const Teacher = require("../../models/teacher.model");
 const Semester = require("../../models/semester.model");
 const registrationService = require("../../services/registration.service");
+const notificationEmailService = require("../../services/notificationEmail.service");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -340,6 +341,21 @@ async function enrollStudent(classId, studentId, options = {}) {
     isOverload: options.isOverload === true,
   });
   await repo.incrementEnrollmentCount(classId);
+
+  if (student?.email) {
+    try {
+      await notificationEmailService.sendRegistrationSuccessEmail({
+        studentEmail: student.email,
+        studentName: student.fullName,
+        classCode: cls.classCode,
+        subjectName: cls.subject?.subjectName,
+        semesterName: `HK ${cls.semester} - ${cls.academicYear}`,
+      });
+    } catch (error) {
+      console.warn("[classSection] Failed to send registration email:", error?.message || error);
+    }
+  }
+
   return enrollment;
 }
 

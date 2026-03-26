@@ -5,10 +5,12 @@ const ClassEnrollment = require('../models/classEnrollment.model');
 const ClassSection    = require('../models/classSection.model');
 const Subject         = require('../models/subject.model');
 const TuitionFee      = require('../models/tuitionFee.model');
+const TuitionBill     = require('../models/tuitionBill.model');
 const Payment         = require('../models/payment.model');
 const OtherFee        = require('../models/otherFee.model');
 const Wallet          = require('../models/wallet.model');
 const WalletTransaction = require('../models/walletTransaction.model');
+const notificationEmailService = require('./notificationEmail.service');
 
 async function findStudentByUserId(userId) {
   const user = await User.findById(userId).lean();
@@ -709,6 +711,87 @@ async function payTuitionByWallet(userId) {
   };
 }
 
+async function sendTuitionReminderByBillId(billId) {
+  if (!billId) {
+    const err = new Error('Thiếu billId');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const bill = await TuitionBill.findById(billId).lean();
+  if (!bill) {
+    const err = new Error('Không tìm thấy bill học phí');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const student = await Student.findById(bill.student).lean();
+  if (!student) {
+    const err = new Error('Không tìm thấy sinh viên của bill');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const emailResult = await notificationEmailService.sendTuitionReminderEmail({
+    studentEmail: student.email,
+    studentName: student.fullName,
+    bill,
+  });
+
+  return {
+    billId: bill._id,
+    studentId: student._id,
+    studentEmail: student.email,
+    sent: Boolean(emailResult?.sent),
+    reason: emailResult?.reason || null,
+  };
+}
+
+async function sendTuitionReminderByStudent({ studentId, semesterCode }) {
+  if (!studentId) {
+    const err = new Error('Thiếu studentId');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const student = await Student.findById(studentId).lean();
+  if (!student) {
+    const err = new Error('Không tìm thấy sinh viên');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const billQuery = { student: student._id };
+  if (semesterCode) {
+    billQuery.semesterCode = semesterCode;
+  }
+
+  const bill = await TuitionBill.findOne(billQuery)
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (!bill) {
+    const err = new Error('Không tìm thấy bill học phí để gửi nhắc');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const emailResult = await notificationEmailService.sendTuitionReminderEmail({
+    studentEmail: student.email,
+    studentName: student.fullName,
+    bill,
+  });
+
+  return {
+    billId: bill._id,
+    studentId: student._id,
+    studentEmail: student.email,
+    semesterCode: bill.semesterCode,
+    sent: Boolean(emailResult?.sent),
+    reason: emailResult?.reason || null,
+  };
+}
+
 module.exports = {
   getMyTuitionSummary,
   resolveSemester,
@@ -720,4 +803,6 @@ module.exports = {
   createCurriculumPayment,
   payTuitionByWallet,
   getTuitionExcess,
+  sendTuitionReminderByBillId,
+  sendTuitionReminderByStudent,
 };

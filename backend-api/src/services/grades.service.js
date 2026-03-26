@@ -7,9 +7,9 @@ const ClassSection = require('../models/classSection.model');
 const Teacher = require('../models/teacher.model');
 const User = require('../models/user.model');
 const GradeChangeLog = require('../models/gradeChangeLog.model');
-const mailer = require('../external/mailer');
 const scoreComponentService = require('./scoreComponent.service');
 const emailTemplateService = require('./emailTemplate.service');
+const notificationEmailService = require('./notificationEmail.service');
 
 class GradesService {
   /**
@@ -1307,25 +1307,14 @@ class GradesService {
               },
             };
 
-            let renderedEmail;
-            try {
-              renderedEmail = await emailTemplateService.renderTemplateByCode(
-                'GRADE_PUBLISHED',
-                templateVariables,
-              );
-            } catch (_error) {
-              renderedEmail = {
+            const emailResult = await notificationEmailService.sendGradePublishedEmail({
+              studentEmail,
+              variables: templateVariables,
+              fallback: () => ({
                 subject: `[SSMS] Cong bo diem ${subjectName}`,
                 text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
                 html: this.buildGradePublishedEmail(templateVariables),
-              };
-            }
-
-            const emailResult = await mailer.sendMail({
-              to: studentEmail,
-              subject: renderedEmail.subject,
-              text: renderedEmail.text,
-              html: renderedEmail.html,
+              }),
             });
 
             if (emailResult?.sent) {

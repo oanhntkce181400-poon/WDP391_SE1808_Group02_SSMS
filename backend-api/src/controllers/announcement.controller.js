@@ -1,5 +1,6 @@
 const announcementService = require('../services/announcement.service');
 const { emitToStudents } = require('../services/realtimeNotification.service');
+const firebasePushService = require('../services/firebasePush.service');
 
 /**
  * Controller xử lý requests cho Announcement
@@ -61,6 +62,18 @@ class AnnouncementController {
         };
         emitToStudents(io, 'announcement-created', notificationPayload);
         emitToStudents(io, 'notification', notificationPayload);
+      }
+
+      try {
+        const pushResult = await firebasePushService.sendAnnouncementCreatedToStudents(
+          announcement
+        );
+        console.log('[AnnouncementController] Firebase push result:', pushResult);
+      } catch (pushError) {
+        console.error(
+          '[AnnouncementController] Firebase push failed:',
+          pushError.message
+        );
       }
 
       res.status(201).json({
