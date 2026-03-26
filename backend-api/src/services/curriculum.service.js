@@ -1,6 +1,35 @@
 // Curriculum Service - Database operations for Curriculum
 const Curriculum = require('../models/curriculum.model');
 const Subject = require('../models/subject.model');
+const Major = require('../models/major.model');
+
+/**
+ * Build a lookup map: majorId (string) → curricula.
+ * Uses majorId ObjectId for exact match — avoids mismatches between
+ * majorCode ("SE") vs major name ("Kỹ thuật Phần mềm").
+ */
+function buildCurriculumLookupByMajorId(curriculums = []) {
+  const lookup = new Map();
+  for (const c of curriculums) {
+    const key = c.majorId ? String(c.majorId) : null;
+    if (!key) continue;
+    if (!lookup.has(key)) lookup.set(key, []);
+    lookup.get(key).push(c);
+  }
+  return lookup;
+}
+
+/**
+ * Get the majorId for a student by majorCode.
+ * Caches in a map to avoid repeated DB queries in batch calls.
+ */
+async function getMajorIdByCode(majorCode, cache = null) {
+  if (cache && cache.has(majorCode)) return cache.get(majorCode);
+  const m = await Major.findOne({ majorCode }).lean();
+  const id = m ? String(m._id) : null;
+  if (cache) cache.set(majorCode, id);
+  return id;
+}
 
 function normalizeText(value) {
   return String(value || '').trim().toUpperCase();
@@ -179,14 +208,20 @@ function buildCurriculumLookup(curriculums = []) {
   const lookup = new Map();
 
   for (const curriculum of curriculums) {
-    const key = normalizeText(curriculum?.major);
-    if (!key) continue;
-
-    if (!lookup.has(key)) {
-      lookup.set(key, []);
+    // Ưu tiên majorId (ObjectId) — khớp chính xác, tránh mismtach tên ngành
+    if (curriculum.majorId) {
+      const key = String(curriculum.majorId);
+      if (!lookup.has(key)) lookup.set(key, []);
+      lookup.get(key).push(curriculum);
     }
-
-    lookup.get(key).push(curriculum);
+    // Fallback: major name (legacy curricula không có majorId)
+    const nameKey = normalizeText(curriculum?.major);
+    if (nameKey && !lookup.has(nameKey)) {
+      lookup.set(nameKey, []);
+    }
+    if (nameKey) {
+      lookup.get(nameKey).push(curriculum);
+    }
   }
 
   return lookup;
@@ -226,23 +261,39 @@ async function getCurriculumMatchForStudent(student, options = {}) {
   }
 
   const enrollmentYear = resolveStudentEnrollmentYear(student);
-  let majorAliases = [];
 
-  if (options.majorAliasesByCode instanceof Map && options.majorAliasesByCode.has(majorCode)) {
-    majorAliases = options.majorAliasesByCode.get(majorCode);
-  } else if (Array.isArray(options.majorAliases) && options.majorAliases.length > 0) {
-    majorAliases = options.majorAliases;
+  // Resolve majorId for exact curriculum lookup
+  // Ưu tiên: student.majorId (đã gán) > options cache > DB query
+  let majorId = null;
+  if (student?.majorId) {
+    majorId = String(student.majorId);
+  } else if (options.majorIdCache instanceof Map && options.majorIdCache.has(majorCode)) {
+    majorId = options.majorIdCache.get(majorCode);
   } else {
-    majorAliases = await resolveMajorAliases(majorCode);
+    majorId = await getMajorIdByCode(majorCode, options.majorIdCache || null);
   }
-
-  const normalizedAliases = Array.from(
-    new Set([majorCode, ...majorAliases.map((alias) => normalizeText(alias)).filter(Boolean)]),
-  );
 
   let matchingCurriculums = [];
   if (options.curriculumLookup instanceof Map) {
+    // Prefer majorId lookup (exact, avoids name-vs-code mismatch)
     const deduped = new Map();
+    if (majorId && options.curriculumLookup.get(majorId)) {
+      for (const curriculum of options.curriculumLookup.get(majorId) || []) {
+        deduped.set(String(curriculum._id), curriculum);
+      }
+    }
+    // Fallback to aliases for legacy curricula without majorId
+    let majorAliases = [];
+    if (options.majorAliasesByCode instanceof Map && options.majorAliasesByCode.has(majorCode)) {
+      majorAliases = options.majorAliasesByCode.get(majorCode);
+    } else if (Array.isArray(options.majorAliases) && options.majorAliases.length > 0) {
+      majorAliases = options.majorAliases;
+    } else {
+      majorAliases = await resolveMajorAliases(majorCode);
+    }
+    const normalizedAliases = Array.from(
+      new Set([majorCode, ...majorAliases.map((a) => normalizeText(a)).filter(Boolean)]),
+    );
     for (const alias of normalizedAliases) {
       for (const curriculum of options.curriculumLookup.get(alias) || []) {
         deduped.set(String(curriculum._id), curriculum);
@@ -250,17 +301,39 @@ async function getCurriculumMatchForStudent(student, options = {}) {
     }
     matchingCurriculums = Array.from(deduped.values());
   } else if (Array.isArray(options.curriculums)) {
-    matchingCurriculums = options.curriculums.filter((curriculum) =>
-      curriculumMatchesAnyAlias(curriculum, normalizedAliases),
-    );
+    // majorId match first
+    if (majorId) {
+      matchingCurriculums = options.curriculums.filter((c) => String(c.majorId) === majorId);
+    }
+    if (!matchingCurriculums.length) {
+      const majorAliases = await resolveMajorAliases(majorCode);
+      const normalizedAliases = Array.from(
+        new Set([majorCode, ...majorAliases.map((a) => normalizeText(a)).filter(Boolean)]),
+      );
+      matchingCurriculums = options.curriculums.filter((curriculum) =>
+        curriculumMatchesAnyAlias(curriculum, normalizedAliases),
+      );
+    }
   } else {
-    const allActiveCurriculums = await Curriculum.find({ status: 'active' }).lean();
-    matchingCurriculums = allActiveCurriculums.filter((curriculum) =>
-      curriculumMatchesAnyAlias(curriculum, normalizedAliases),
-    );
+    // Full DB query: match by majorId OR by name aliases
+    if (majorId) {
+      matchingCurriculums = await Curriculum.find({
+        status: 'active',
+        $or: [{ majorId: majorId }, { major: { $regex: majorCode, $options: 'i' } }],
+      }).lean();
+    } else {
+      const majorAliases = await resolveMajorAliases(majorCode);
+      const normalizedAliases = Array.from(
+        new Set([majorCode, ...majorAliases.map((a) => normalizeText(a)).filter(Boolean)]),
+      );
+      matchingCurriculums = await Curriculum.find({ status: 'active' }).lean();
+      matchingCurriculums = matchingCurriculums.filter((curriculum) =>
+        curriculumMatchesAnyAlias(curriculum, normalizedAliases),
+      );
+    }
   }
 
-  const availableCurriculumCodes = matchingCurriculums.map((curriculum) => curriculum.code).filter(Boolean);
+  const availableCurriculumCodes = matchingCurriculums.map((c) => c.code).filter(Boolean);
   if (!matchingCurriculums.length) {
     return {
       curriculum: null,
@@ -308,7 +381,6 @@ async function getCurriculumMatchForStudent(student, options = {}) {
     };
   }
 
-  // Ưu tiên khung có năm bắt đầu = năm nhập học (vd: nhập 2026 → AEX-SE-2026, không lấy khung 2025-2035 nếu đã có khung 2026)
   const exactIntakeMatch = matchedCurriculums.find((c) => {
     const range = parseAcademicYearRange(c.academicYear);
     return range && range.startYear === enrollmentYear;
@@ -763,6 +835,8 @@ const curriculumService = {
   // Parse "2026-2034" -> { startYear, endYear }
   parseAcademicYearRange,
   buildCurriculumLookup,
+  buildCurriculumLookupByMajorId,
+  getMajorIdByCode,
   resolveStudentEnrollmentYear,
   curriculumCoversEnrollmentYear,
   getCurriculumMatchForStudent,

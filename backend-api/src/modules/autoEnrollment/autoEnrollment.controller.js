@@ -51,8 +51,10 @@ async function trigger(req, res) {
       majorCodes,
       studentCodes,
       onlyStudentsWithoutEnrollments,
+      excludeStudentsAlreadyAssignedInSemester,
       mode,
       curriculumId,
+      classGroup,
     } = req.body || {};
     if (!semesterId) {
       return res.status(400).json({
@@ -83,8 +85,15 @@ async function trigger(req, res) {
       majorCodes: normalizeCodeList(majorCodes),
       studentCodes: normalizeCodeList(studentCodes),
       onlyStudentsWithoutEnrollments: onlyStudentsWithoutEnrollments === true,
+      excludeStudentsAlreadyAssignedInSemester:
+        excludeStudentsAlreadyAssignedInSemester === true,
       mode: mode === 'retake' ? 'retake' : 'normal',
       curriculumId: normalizedCurriculumId,
+      // classGroup: giới hạn xếp lớp cho một nhóm cụ thể (VD: "SE1808-01")
+      classGroup:
+        classGroup != null && String(classGroup).trim() !== ''
+          ? String(classGroup).trim()
+          : undefined,
     });
 
     // success=true ở đây nghĩa là request API đã được xử lý xong và service đã trả kết quả.
@@ -102,6 +111,131 @@ async function trigger(req, res) {
   }
 }
 
+async function getEnrollmentStatus(req, res) {
+  try {
+    const { semesterNum, academicYear, classGroup } = req.query;
+
+    if (!semesterNum || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'semesterNum and academicYear are required query params',
+      });
+    }
+
+    const data = await service.getEnrollmentStatus({
+      semesterNum: Number(semesterNum),
+      academicYear: String(academicYear),
+      classGroup: classGroup || undefined,
+    });
+
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to get enrollment status',
+    });
+  }
+}
+
+async function deleteEnrollments(req, res) {
+  try {
+    const { semesterNum, academicYear, classGroup, studentId } = req.query;
+
+    if (!semesterNum || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'semesterNum and academicYear are required',
+      });
+    }
+
+    const result = await service.deleteEnrollments({
+      semesterNum: Number(semesterNum),
+      academicYear: String(academicYear),
+      classGroup: classGroup || undefined,
+      studentId: studentId || undefined,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Deleted ${result.deletedCount} enrollment(s)`,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to delete enrollments',
+    });
+  }
+}
+
+async function deleteWaitlists(req, res) {
+  try {
+    const { semesterNum, academicYear, classGroup, studentId, subjectId } = req.query;
+
+    if (!semesterNum || !academicYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'semesterNum and academicYear are required',
+      });
+    }
+
+    const result = await service.deleteWaitlists({
+      semesterNum: Number(semesterNum),
+      academicYear: String(academicYear),
+      classGroup: classGroup || undefined,
+      studentId: studentId || undefined,
+      subjectId: subjectId || undefined,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Deleted ${result.deletedCount} waitlist record(s)`,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to delete waitlists',
+    });
+  }
+}
+
+async function promoteWaitlist(req, res) {
+  try {
+    const { waitlistId } = req.params;
+    const { targetClassSectionId } = req.body || {};
+
+    if (!waitlistId) {
+      return res.status(400).json({
+        success: false,
+        message: 'waitlistId is required',
+      });
+    }
+
+    const result = await service.promoteWaitlist(
+      String(waitlistId),
+      targetClassSectionId ? String(targetClassSectionId) : undefined,
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: result.alreadyEnrolled
+        ? 'Student was already enrolled in this class; waitlist updated.'
+        : 'Waitlist promoted to enrolled successfully.',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Failed to promote waitlist',
+    });
+  }
+}
+
 module.exports = {
   trigger,
+  getEnrollmentStatus,
+  deleteEnrollments,
+  deleteWaitlists,
+  promoteWaitlist,
 };

@@ -6,6 +6,12 @@ const studentSchema = new mongoose.Schema(
     fullName: { type: String, required: true, trim: true, index: true },
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
     majorCode: { type: String, required: true, trim: true, index: true },
+    // ObjectId của ngành — dùng để lookup Curriculum chính xác (tránh mismatch tên vs mã)
+    majorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Major',
+      index: true,
+    },
     cohort: { type: Number, required: true, index: true }, // K18, K19, K20...
     
     // Thông tin cá nhân

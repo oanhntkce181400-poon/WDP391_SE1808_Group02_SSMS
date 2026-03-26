@@ -71,7 +71,7 @@ async function list(req, res) {
         .skip(skip)
         .limit(limit)
         .select(
-          "title description semesterId curriculumId semesterSnapshot curriculumCode dryRun summary filters createdAt updatedAt",
+          "title description semesterId curriculumId semesterSnapshot curriculumCode curriculumSemester dryRun summary filters createdAt updatedAt",
         )
         .lean(),
       EnrollmentSnapshot.countDocuments(),
@@ -153,9 +153,13 @@ async function create(req, res) {
       description: description != null ? String(description).trim() : "",
       semesterId,
       curriculumId: curriculumOid,
-      semesterSnapshot: result.semester || {},
       curriculumCode:
         curriculumCode != null ? String(curriculumCode).trim() : "",
+      curriculumSemester:
+        result.curriculumSemester != null
+          ? Number(result.curriculumSemester)
+          : null,
+      semesterSnapshot: result.semester || {},
       filters: result.filters || {},
       dryRun: result.dryRun === true,
       durationMs: result.durationMs,

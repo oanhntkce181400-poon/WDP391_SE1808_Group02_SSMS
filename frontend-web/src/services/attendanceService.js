@@ -3,6 +3,9 @@ import axiosClient from './axiosClient';
 const attendanceService = {
   getClasses: () => axiosClient.get('/attendance/classes'),
 
+  getValidAttendanceDates: (classId) =>
+    axiosClient.get(`/attendance/classes/${classId}/valid-attendance-dates`),
+
   getMyAttendance: (params = {}) => axiosClient.get('/attendance/my-attendance', { params }),
 
   getClassSlots: (classId) => axiosClient.get(`/attendance/classes/${classId}/slots`),

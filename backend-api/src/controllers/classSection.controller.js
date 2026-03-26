@@ -585,6 +585,47 @@ const getMyClasses = async (req, res) => {
   }
 };
 
+/**
+ * Bulk create class sections from curriculum
+ * POST /api/classes/bulk-create-from-curriculum
+ */
+const bulkCreateClassSectionsFromCurriculum = async (req, res) => {
+  try {
+    const { curriculumId, curriculumSemesterOrder, academicYear, classGroupPrefix, semester } = req.body;
+
+    if (!curriculumId || !curriculumSemesterOrder || !academicYear || !classGroupPrefix || semester === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: curriculumId, curriculumSemesterOrder, academicYear, classGroupPrefix, semester',
+      });
+    }
+
+    const createdBy = req.auth?.sub || null;
+
+    const result = await classSectionService.bulkCreateClassSectionsFromCurriculum({
+      curriculumId,
+      curriculumSemesterOrder: Number(curriculumSemesterOrder),
+      academicYear,
+      classGroupPrefix,
+      semester: Number(semester),
+      createdBy,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Đã tạo ${result.totalCreated} lớp học phần cho nhóm ${result.newClassGroup}`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error bulk creating class sections:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to bulk create class sections',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   searchClasses,
   getClassList,
@@ -598,4 +639,5 @@ module.exports = {
   getClassEnrollments,
   dropCourse,
   getMyClasses,
+  bulkCreateClassSectionsFromCurriculum,
 };

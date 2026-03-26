@@ -13,6 +13,13 @@ router.get(
 );
 
 router.get(
+  '/classes/:classId/valid-attendance-dates',
+  authMiddleware,
+  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  attendanceController.getValidAttendanceDates,
+);
+
+router.get(
   '/classes/:classId/slots',
   authMiddleware,
   rbacMiddleware(['lecturer', 'admin', 'staff']),
