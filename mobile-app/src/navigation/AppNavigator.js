@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from '../screens/auth/LoginScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import HomeScreen from '../screens/student/HomeScreen';
 import FeedbackLecturerScreen from '../screens/student/FeedbackLecturerScreen';
 import ApplicationStatusScreen from '../screens/student/ApplicationStatusScreen';
@@ -24,6 +25,7 @@ export default function AppNavigator() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const [routeParams, setRouteParams] = useState(null);
+  const [authView, setAuthView] = useState('login');
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUser = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -34,6 +36,10 @@ export default function AppNavigator() {
     let mounted = true;
 
     async function bootstrapAuth() {
+      /*
+       * Khôi phục phiên đăng nhập từ local storage khi mở app lại để người dùng
+       * không phải đăng nhập lại ở mỗi lần khởi động.
+       */
       const persisted = await getItem(AUTH_STORAGE_KEY);
       if (mounted && persisted?.accessToken) {
         setAuth({
@@ -80,13 +86,9 @@ export default function AppNavigator() {
       return;
     }
 
-<<<<<<< HEAD
     const extraScreens = isAdminViewer
       ? new Set()
-      : new Set(['attendance', 'academicCalendar', 'notification-detail']);
-=======
-    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar', 'grades']);
->>>>>>> AcademicAnalytics
+      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
@@ -94,6 +96,7 @@ export default function AppNavigator() {
       setActiveTab(defaultTab);
       setRouteParams(null);
     }
+    setAuthView('login');
   }, [accessToken, activeTab, isAdminViewer, tabs]);
 
   function handleNavigate(nextTab, params = null) {
@@ -118,7 +121,11 @@ export default function AppNavigator() {
   }
 
   if (!accessToken) {
-    return <LoginScreen />;
+    if (authView === 'forgot-password') {
+      return <ForgotPasswordScreen onBackToLogin={() => setAuthView('login')} />;
+    }
+
+    return <LoginScreen onForgotPassword={() => setAuthView('forgot-password')} />;
   }
 
   let screen = isAdminViewer ? (

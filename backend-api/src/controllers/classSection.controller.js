@@ -10,11 +10,21 @@ const classSectionService = require('../services/classSection.service');
 /**
  * UC22 - Search Available Classes
  * GET /api/classes - Search classes with filters
- * Query params: subject_id, semester, keyword, page, limit, sortBy, sortOrder
+ * Query params: subject_id, semester, semesterId, academicYear, keyword, page, limit, sortBy, sortOrder
  */
 const searchClasses = async (req, res) => {
   try {
-    const { subject_id, semester, keyword, page, limit, sortBy, sortOrder } = req.query;
+    const {
+      subject_id,
+      semester,
+      semesterId,
+      academicYear,
+      keyword,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = req.query;
 
     // Validate search criteria
     const validation = classSectionService.validateSearchCriteria(req.query);
@@ -30,6 +40,8 @@ const searchClasses = async (req, res) => {
     const criteria = {
       subject_id,
       semester,
+      semesterId,
+      academicYear,
       keyword,
       page: page || 1,
       limit: limit || 20,

@@ -1,21 +1,20 @@
-@startuml
+﻿@startuml
 title UC04 - Update/Delete Student - Modify or Remove Student Record
 
-hide footbox
-
-actor PrimaryActor as "Admin / Staff"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant StudentRouter as "StudentRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant ValidationMiddleware as "ValidationMiddleware"
-participant StudentController as "StudentController"
-participant StudentService as "StudentService"
-participant StudentModel as "StudentModel"
-participant UserModel as "UserModel"
-participant ClassEnrollmentModel as "ClassEnrollmentModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Staff" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "StudentRouter" as StudentRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "ValidationMiddleware" as ValidationMiddleware <<control>>
+participant "StudentController" as StudentController <<control>>
+participant "StudentService" as StudentService <<control>>
+participant "StudentModel" as StudentModel <<entity>>
+participant "UserModel" as UserModel <<entity>>
+participant "ClassEnrollmentModel" as ClassEnrollmentModel <<entity>>
+database "Database" as DB
 == Flow A: Update Student ==
 
 activate PrimaryActor

@@ -39,9 +39,20 @@ SUMMARY.md
 TEST_GUIDE.md
 backend-api/MODELS_DOCUMENTATION.md
 backend-api/SEED_DATA_DOCUMENTATION.md
+*.md
+*.txt
+*.pdf
+*.drawio
+*.drawio.xml
+*.puml
+!payos-demo-reactJS-main/public/robots.txt
 
 # Docs folder (UC descriptions, helper scripts)
+docs/
 backend-api/docs/
+backend-api/diagrams/
+out/
+shared/my-doc/
 
 # Uploads folder
 uploads/
@@ -49,6 +60,7 @@ uploads/
 # Local Codex / editor artifacts
 .codex/
 backend-api/Microsoft/
+tools/
 
 # IDE and local runtime caches
 .idea/

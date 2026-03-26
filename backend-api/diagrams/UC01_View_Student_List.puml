@@ -1,20 +1,19 @@
-@startuml
+﻿@startuml
 title UC01 - View Student List - Retrieve and Display Students
 
-hide footbox
-
-actor PrimaryActor as "Admin / Staff"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant StudentRouter as "StudentRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant RBACMiddleware as "RBACMiddleware"
-participant StudentController as "StudentController"
-participant StudentService as "StudentService"
-participant StudentModel as "StudentModel"
-participant MajorModel as "MajorModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Staff" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "StudentRouter" as StudentRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "RBACMiddleware" as RBACMiddleware <<control>>
+participant "StudentController" as StudentController <<control>>
+participant "StudentService" as StudentService <<control>>
+participant "StudentModel" as StudentModel <<entity>>
+participant "MajorModel" as MajorModel <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) navigate to Student Management page
 activate Screen

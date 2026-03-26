@@ -26,6 +26,65 @@ function normalizeSemesterId(payload = {}) {
   return rawSemesterId;
 }
 
+function extractSemesterRefId(semester) {
+  if (!semester) {
+    return null;
+  }
+
+  if (typeof semester === 'object') {
+    return semester._id || semester.id || null;
+  }
+
+  return semester;
+}
+
+function normalizeSemesterContext(options = {}) {
+  const semesterId = extractSemesterRefId(options.semesterId || options.semester) || null;
+  const semesterNum = Number(options.semesterNum);
+  const academicYear = String(options.academicYear || '').trim();
+
+  return {
+    semesterId: semesterId ? String(semesterId) : null,
+    semesterNum: Number.isFinite(semesterNum) && semesterNum > 0 ? semesterNum : null,
+    academicYear: academicYear || null,
+  };
+}
+
+function periodMatchesSemesterContext(period, semesterContext) {
+  if (
+    !semesterContext?.semesterId &&
+    !semesterContext?.semesterNum &&
+    !semesterContext?.academicYear
+  ) {
+    return true;
+  }
+
+  if (!period?.semester) {
+    return true;
+  }
+
+  const periodSemesterId = extractSemesterRefId(period.semester);
+  if (semesterContext.semesterId && periodSemesterId) {
+    return String(periodSemesterId) === semesterContext.semesterId;
+  }
+
+  if (
+    semesterContext.semesterNum &&
+    Number(period.semester?.semesterNum) !== semesterContext.semesterNum
+  ) {
+    return false;
+  }
+
+  if (
+    semesterContext.academicYear &&
+    String(period.semester?.academicYear || '').trim() !== semesterContext.academicYear
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Tạo đợt đăng ký mới
  */
@@ -368,7 +427,7 @@ async function autoUpdatePeriodStatuses() {
  *  - requestType khớp với tham số, hoặc period.requestType = 'all'
  *  - cohort sinh viên nằm trong allowedCohorts (nếu mảng này không rỗng)
  */
-async function isRegistrationOpen(requestType, studentCohort) {
+async function isRegistrationOpen(requestType, studentCohort, options = {}) {
   // PSEUDOCODE (logic đơn giản):
   // 1. Lấy thời gian hiện tại (now)
   // 2. Tìm các RegistrationPeriod có:
@@ -382,6 +441,7 @@ async function isRegistrationOpen(requestType, studentCohort) {
   // 5. Nếu duyệt hết mà không period nào hợp lệ → isOpen = false
 
   const now = new Date();
+  const semesterContext = normalizeSemesterContext(options);
 
   // Nếu không truyền requestType thì coi như 'all'
   const normalizedRequestType = requestType || 'all';
@@ -396,11 +456,17 @@ async function isRegistrationOpen(requestType, studentCohort) {
     .populate('semester')
     .lean();
 
-  if (!periods || periods.length === 0) {
+  const matchingPeriods = periods.filter((period) =>
+    periodMatchesSemesterContext(period, semesterContext),
+  );
+
+  if (!matchingPeriods || matchingPeriods.length === 0) {
     return {
       isOpen: false,
-      reason: 'NO_ACTIVE_PERIOD',
-      message: 'No active registration period for this request type',
+      reason: semesterContext.semesterId ? 'NO_ACTIVE_PERIOD_FOR_SEMESTER' : 'NO_ACTIVE_PERIOD',
+      message: semesterContext.semesterId
+        ? 'No active registration period for this request type in the selected semester'
+        : 'No active registration period for this request type',
       period: null,
     };
   }
@@ -411,12 +477,12 @@ async function isRegistrationOpen(requestType, studentCohort) {
       isOpen: true,
       reason: 'OPEN_WITHOUT_COHORT_CHECK',
       message: 'Registration period is open (cohort not checked)',
-      period: periods[0],
+      period: matchingPeriods[0],
     };
   }
 
   // Duyệt từng period, check quyền theo cohort
-  for (const period of periods) {
+  for (const period of matchingPeriods) {
     const cohortResult = checkCohortAccess(studentCohort, period.allowedCohorts || []);
     if (cohortResult.allowed) {
       return {

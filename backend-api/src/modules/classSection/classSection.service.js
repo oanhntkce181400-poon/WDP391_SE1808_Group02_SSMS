@@ -21,6 +21,14 @@ const REQUIRED_CLASS_FIELDS = [
   "maxCapacity",
 ];
 
+function normalizeClassCodePart(value, { preserveDash = false } = {}) {
+  const pattern = preserveDash ? /[^0-9A-Za-z-]/g : /[^0-9A-Za-z]/g;
+  return String(value || "")
+    .trim()
+    .replace(pattern, "")
+    .toUpperCase();
+}
+
 // ─── Class Section ────────────────────────────────
 
 async function listClasses(query = {}) {
@@ -377,7 +385,12 @@ async function selfEnroll(userId, classId) {
   if (scheduleConflict?.hasConflict) errors.push(scheduleConflict.message);
   if (!eligibility.limits.overload.allowed) errors.push(eligibility.limits.overload.message);
   if (!eligibility.limits.credit.allowed) errors.push(eligibility.limits.credit.message);
-  if (!eligibility.limits.cohortAccess.allowed) errors.push(eligibility.limits.cohortAccess.message);
+  if (!eligibility.limits.registrationWindow.allowed) {
+    errors.push(eligibility.limits.registrationWindow.message);
+  }
+  if (!eligibility.limits.duplicateSubject.allowed) {
+    errors.push(eligibility.limits.duplicateSubject.message);
+  }
 
   if (errors.length > 0) {
     throw new Error(errors.join(" | "));
@@ -1048,8 +1061,20 @@ async function bulkCreateClassSectionsFromCurriculum(
         continue;
       }
 
-      // Tạo classCode duy nhất
-      const classCode = `${subject.subjectCode}-${academicYear.replace("/", "")}-${semester}-${String(newGroupIndex).padStart(2, "0")}`;
+      // Tạo classCode duy nhất cho nhóm mới.
+      // Dùng classGroup thực tế thay vì chỉ groupIndex để tránh đụng mã với nhóm/prefix khác.
+      const normalizedAcademicYear = normalizeClassCodePart(academicYear);
+      const normalizedClassGroup = normalizeClassCodePart(newClassGroup, {
+        preserveDash: true,
+      });
+      const classCode = [
+        normalizeClassCodePart(subject.subjectCode),
+        normalizedAcademicYear,
+        `S${Number(semester)}`,
+        normalizedClassGroup,
+      ]
+        .filter(Boolean)
+        .join("-");
 
       // Kiểm tra classCode đã tồn tại chưa
       const exists = await ClassSection.findOne({ classCode }).lean();

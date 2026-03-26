@@ -1,19 +1,18 @@
-@startuml
+﻿@startuml
 title UC02 - Search/Filter Student - Dynamic Search with Filters
 
-hide footbox
-
-actor PrimaryActor as "Admin / Staff"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant StudentRouter as "StudentRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant ValidationMiddleware as "ValidationMiddleware"
-participant StudentController as "StudentController"
-participant StudentService as "StudentService"
-participant StudentModel as "StudentModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Staff" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "StudentRouter" as StudentRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "ValidationMiddleware" as ValidationMiddleware <<control>>
+participant "StudentController" as StudentController <<control>>
+participant "StudentService" as StudentService <<control>>
+participant "StudentModel" as StudentModel <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) enter search keyword "Nguyen"
 activate Screen

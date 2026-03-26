@@ -1464,10 +1464,10 @@ export default function ClassManagement() {
 
       {/* ── Bulk Create From Curriculum Modal ── */}
       {showBulkCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[calc(100vh-2rem)] sm:max-h-[min(88vh,860px)] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 sm:px-7">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
                   <Users size={20} className="text-teal-600" />
@@ -1492,7 +1492,7 @@ export default function ClassManagement() {
             <form
               id="bulk-create-form"
               onSubmit={handleBulkCreateSubmit}
-              className="overflow-y-auto px-6 py-5 space-y-4"
+              className="min-h-0 overflow-y-auto px-6 py-5 space-y-4 sm:px-7 sm:py-6"
             >
               {/* Giới thiệu */}
               <div className="p-3 bg-teal-50 rounded-xl border border-teal-100 text-sm text-teal-700">
@@ -1601,7 +1601,7 @@ export default function ClassManagement() {
 
               {/* Result */}
               {bulkCreateResult && (
-                <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                <div className="p-4 bg-green-50 rounded-xl border border-green-200 space-y-2">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle size={18} className="text-green-600" />
                     <span className="font-medium text-green-700">
@@ -1612,16 +1612,28 @@ export default function ClassManagement() {
                     Nhóm lớp mới: <span className="font-semibold">{bulkCreateResult.newClassGroup}</span>
                   </p>
                   {bulkCreateResult.failed && bulkCreateResult.failed.length > 0 && (
-                    <p className="text-sm text-red-600 mt-2">
-                      {bulkCreateResult.failed.length} lớp thất bại
-                    </p>
+                    <div className="mt-2">
+                      <p className="text-sm text-red-600">
+                        {bulkCreateResult.failed.length} lớp thất bại
+                      </p>
+                      <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-red-200 bg-white/80 p-3 space-y-2 text-xs text-red-700">
+                        {bulkCreateResult.failed.map((item, index) => (
+                          <li
+                            key={`${item.subjectCode || item.classCode || "failed"}-${index}`}
+                            className="break-words leading-5"
+                          >
+                            {(item.subjectCode || item.classCode || "Không rõ môn")}: {item.error || "Tạo lớp thất bại"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}
             </form>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">
+            <div className="flex shrink-0 flex-col-reverse gap-3 px-6 py-4 border-t border-slate-100 sm:flex-row sm:justify-end sm:px-7">
               <button
                 type="button"
                 onClick={() => {

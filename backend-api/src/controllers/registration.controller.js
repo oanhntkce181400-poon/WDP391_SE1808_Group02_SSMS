@@ -192,7 +192,12 @@ const validateAll = async (req, res) => {
     if (scheduleConflictResult.hasConflict) validationErrors.push(scheduleConflictResult.message);
     if (!eligibility.limits.overload.allowed) validationErrors.push(eligibility.limits.overload.message);
     if (!eligibility.limits.credit.allowed) validationErrors.push(eligibility.limits.credit.message);
-    if (!eligibility.limits.cohortAccess.allowed) validationErrors.push(eligibility.limits.cohortAccess.message);
+    if (!eligibility.limits.registrationWindow.allowed) {
+      validationErrors.push(eligibility.limits.registrationWindow.message);
+    }
+    if (!eligibility.limits.duplicateSubject.allowed) {
+      validationErrors.push(eligibility.limits.duplicateSubject.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -206,6 +211,8 @@ const validateAll = async (req, res) => {
         overload: eligibility.limits.overload,
         credit: eligibility.limits.credit,
         cohortAccess: eligibility.limits.cohortAccess,
+        registrationWindow: eligibility.limits.registrationWindow,
+        duplicateSubject: eligibility.limits.duplicateSubject,
         eligibility,
         validationErrors,
       },

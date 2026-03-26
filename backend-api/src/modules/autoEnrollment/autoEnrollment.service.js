@@ -282,6 +282,73 @@ async function getCurriculumMatchCached(cache, student, options) {
   return cache.get(cacheKey);
 }
 
+function addAcademicYear(target, academicYear) {
+  const normalizedAcademicYear = String(academicYear || '').trim();
+  if (normalizedAcademicYear) {
+    target.add(normalizedAcademicYear);
+  }
+}
+
+function buildCurriculumsById(curriculums = []) {
+  const map = new Map();
+  for (const curriculum of curriculums) {
+    if (curriculum?._id) {
+      map.set(String(curriculum._id), curriculum);
+    }
+  }
+  return map;
+}
+
+async function resolveNormalModeAcademicYears({
+  semester,
+  candidateStudents,
+  curriculumIdFilter,
+  activeCurriculums,
+  curriculumLookup,
+  majorAliasesByCode,
+}) {
+  const academicYears = new Set();
+  addAcademicYear(academicYears, semester?.academicYear);
+
+  const curriculumsById = buildCurriculumsById(activeCurriculums);
+  if (curriculumIdFilter) {
+    addAcademicYear(
+      academicYears,
+      curriculumsById.get(String(curriculumIdFilter))?.academicYear,
+    );
+  }
+
+  if (!Array.isArray(candidateStudents) || candidateStudents.length === 0) {
+    return Array.from(academicYears);
+  }
+
+  const curriculumMatchCache = new Map();
+  const majorIdCache = new Map();
+
+  for (const student of candidateStudents) {
+    const directCurriculum = curriculumsById.get(String(student?.curriculumId || ''));
+    if (directCurriculum?.academicYear) {
+      addAcademicYear(academicYears, directCurriculum.academicYear);
+      continue;
+    }
+
+    const curriculumMatch = await getCurriculumMatchCached(
+      curriculumMatchCache,
+      student,
+      {
+        curriculumLookup,
+        majorAliasesByCode,
+        allowSingleCurriculumFallback: true,
+        majorIdCache,
+      },
+    );
+
+    addAcademicYear(academicYears, curriculumMatch?.curriculum?.academicYear);
+  }
+
+  return Array.from(academicYears);
+}
+
 // Xác định sinh viên đang thuộc curriculum semester nào ở thời điểm chạy batch.
 // Ưu tiên lấy từ hồ sơ student nếu trường currentCurriculumSemester đã được set.
 // Nếu chưa có, hệ thống tính động dựa trên năm nhập học và học kỳ hiện tại.
@@ -1207,10 +1274,40 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         majorCodes: requestedMajorCodes,
         studentCodes: requestedStudentCodes,
         curriculumId: curriculumIdFilter,
+        classGroup: classGroupFilter,
       }),
       repo.findActiveCurriculums(),
       paymentValidationService.resolveTermsPerYear(semester),
     ]);
+
+  const candidateMajorCodes = Array.from(
+    new Set(
+      candidateStudents
+        .map((student) =>
+          String(student.majorCode || '')
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean),
+    ),
+  );
+  const candidateMajorAliasesByCode = buildMajorAliasesByCode(
+    candidateMajorCodes,
+    await repo.findMajorsByCodes(candidateMajorCodes),
+  );
+  const curriculumLookupForMatching =
+    curriculumService.buildCurriculumLookup(activeCurriculums);
+  const normalModeAcademicYears =
+    enrollmentMode === 'normal'
+      ? await resolveNormalModeAcademicYears({
+          semester,
+          candidateStudents,
+          curriculumIdFilter,
+          activeCurriculums,
+          curriculumLookup: curriculumLookupForMatching,
+          majorAliasesByCode: candidateMajorAliasesByCode,
+        })
+      : [];
 
   // Chặng 2b: Load classSections.
   // - Normal mode: load ALL open class sections (sẽ match bằng classGroup)
@@ -1234,6 +1331,17 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 
   // Chuẩn bị các lookup/cache trong RAM để giảm việc lặp query trong vòng for lớn.
   // Chặng 3: dựng lookup/cache trong RAM để tránh query lặp trong vòng for lớn.
+  // Normal mode vẫn cần nới academicYear để khớp niên khóa curriculum,
+  // nhưng không được tràn sang semester khác của hệ thống.
+  if (enrollmentMode === 'normal') {
+    classSections = await repo.findOpenClassSectionsBySemesterYears({
+      semesterNum: semester.semesterNum,
+      academicYears: normalModeAcademicYears,
+      statuses: OPEN_CLASS_STATUSES,
+      classGroup: classGroupFilter,
+    });
+  }
+
   const { classSectionsById, classSectionsBySubject, classSectionsByGroup } =
     buildClassSectionPools(classSections);
   const classSectionIds = Array.from(classSectionsById.keys());
@@ -1672,8 +1780,11 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // Chặng 6: nếu không phải dryRun thì mới bulk ghi DB thật.
   if (!dryRun) {
     try {
-      await repo.bulkUpsertEnrollments(pendingEnrollmentDocs);
-      await repo.bulkIncrementClassSections(classSectionIncrementMap);
+      const enrollmentPersistResult =
+        await repo.bulkUpsertEnrollments(pendingEnrollmentDocs);
+      await repo.bulkIncrementClassSections(
+        enrollmentPersistResult.insertedClassSectionCounts,
+      );
       await repo.bulkUpsertWaitlists(pendingWaitlistDocs);
     } catch (error) {
       const persistError = formatAutoEnrollmentPersistenceError(error);

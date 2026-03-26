@@ -1,7 +1,9 @@
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
+const Schedule = require('../models/schedule.model');
 const Semester = require('../models/semester.model');
 const Student = require('../models/student.model');
+const Timeslot = require('../models/timeslot.model');
 const curriculumService = require('./curriculum.service');
 const paymentValidationService = require('./paymentValidation.service');
 const registrationPeriodService = require('./registrationPeriod.service');
@@ -67,12 +69,261 @@ async function getSemesterEnrollments(studentId, semester) {
         semester: semester.semesterNum,
         academicYear: semester.academicYear,
       },
+      populate: [
+        {
+          path: 'subject',
+          select: 'subjectCode subjectName credits',
+        },
+        {
+          path: 'timeslot',
+          select: 'groupName startTime endTime startPeriod endPeriod',
+        },
+      ],
+    })
+    .lean();
+}
+
+function buildTimeslotKey(startPeriod, endPeriod) {
+  const normalizedStart = Number(startPeriod);
+  const normalizedEnd = Number(endPeriod);
+  if (!Number.isFinite(normalizedStart) || !Number.isFinite(normalizedEnd)) {
+    return null;
+  }
+
+  return `${normalizedStart}:${normalizedEnd}`;
+}
+
+function buildFallbackScheduleBlocks(classSection) {
+  if (!classSection?.dayOfWeek || !classSection?.timeslot) {
+    return [];
+  }
+
+  return [
+    {
+      dayOfWeek: classSection.dayOfWeek,
+      startPeriod: Number(classSection.timeslot.startPeriod || 0) || null,
+      endPeriod: Number(classSection.timeslot.endPeriod || 0) || null,
+      startTime: classSection.timeslot.startTime || null,
+      endTime: classSection.timeslot.endTime || null,
+    },
+  ];
+}
+
+function buildScheduleBlocks(classSection, schedules = [], timeslotByPeriodKey = new Map()) {
+  if (!Array.isArray(schedules) || schedules.length === 0) {
+    return buildFallbackScheduleBlocks(classSection);
+  }
+
+  return schedules
+    .map((schedule) => {
+      const periodKey = buildTimeslotKey(schedule.startPeriod, schedule.endPeriod);
+      const matchedTimeslot = periodKey ? timeslotByPeriodKey.get(periodKey) : null;
+      const fallbackTimeslot =
+        classSection?.timeslot &&
+        Number(classSection.timeslot.startPeriod) === Number(schedule.startPeriod) &&
+        Number(classSection.timeslot.endPeriod) === Number(schedule.endPeriod)
+          ? classSection.timeslot
+          : null;
+
+      return {
+        dayOfWeek: schedule.dayOfWeek,
+        startPeriod: Number(schedule.startPeriod || 0) || null,
+        endPeriod: Number(schedule.endPeriod || 0) || null,
+        startTime: matchedTimeslot?.startTime || fallbackTimeslot?.startTime || null,
+        endTime: matchedTimeslot?.endTime || fallbackTimeslot?.endTime || null,
+      };
+    })
+    .filter((block) => block.dayOfWeek && (block.startPeriod || (block.startTime && block.endTime)));
+}
+
+function blocksOverlap(firstBlock, secondBlock) {
+  if (!firstBlock || !secondBlock || firstBlock.dayOfWeek !== secondBlock.dayOfWeek) {
+    return false;
+  }
+
+  const firstStartPeriod = Number(firstBlock.startPeriod || 0);
+  const firstEndPeriod = Number(firstBlock.endPeriod || 0);
+  const secondStartPeriod = Number(secondBlock.startPeriod || 0);
+  const secondEndPeriod = Number(secondBlock.endPeriod || 0);
+  const hasPeriodData =
+    Number.isFinite(firstStartPeriod) &&
+    Number.isFinite(firstEndPeriod) &&
+    Number.isFinite(secondStartPeriod) &&
+    Number.isFinite(secondEndPeriod) &&
+    firstStartPeriod > 0 &&
+    firstEndPeriod > 0 &&
+    secondStartPeriod > 0 &&
+    secondEndPeriod > 0;
+
+  if (hasPeriodData) {
+    return firstStartPeriod <= secondEndPeriod && secondStartPeriod <= firstEndPeriod;
+  }
+
+  const firstStartMinutes = timeToMinutes(firstBlock.startTime);
+  const firstEndMinutes = timeToMinutes(firstBlock.endTime);
+  const secondStartMinutes = timeToMinutes(secondBlock.startTime);
+  const secondEndMinutes = timeToMinutes(secondBlock.endTime);
+
+  if (
+    firstStartMinutes == null ||
+    firstEndMinutes == null ||
+    secondStartMinutes == null ||
+    secondEndMinutes == null
+  ) {
+    return false;
+  }
+
+  return isOverlapped(firstStartMinutes, firstEndMinutes, secondStartMinutes, secondEndMinutes);
+}
+
+function resolveEntityId(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    return value._id || value.id || null;
+  }
+
+  return value;
+}
+
+async function findSameSubjectEnrollmentInSemester(studentId, classSection) {
+  const subjectId = resolveEntityId(classSection?.subject);
+  if (!subjectId || !classSection?.semester || !classSection?.academicYear) {
+    return null;
+  }
+
+  const siblingClassSections = await ClassSection.find({
+    subject: subjectId,
+    semester: classSection.semester,
+    academicYear: classSection.academicYear,
+  })
+    .select('_id')
+    .lean();
+
+  const siblingIds = siblingClassSections
+    .map((item) => item?._id)
+    .filter((id) => String(id) !== String(classSection._id));
+
+  if (siblingIds.length === 0) {
+    return null;
+  }
+
+  return ClassEnrollment.findOne({
+    student: studentId,
+    classSection: { $in: siblingIds },
+    status: { $in: ['enrolled', 'completed'] },
+  })
+    .populate({
+      path: 'classSection',
+      select: 'classCode className semester academicYear subject',
       populate: {
         path: 'subject',
-        select: 'subjectCode subjectName credits',
+        select: 'subjectCode subjectName',
       },
     })
     .lean();
+}
+
+async function hasSubjectEnrollmentHistory(studentId, subjectId) {
+  const resolvedSubjectId = resolveEntityId(subjectId);
+  if (!resolvedSubjectId) {
+    return false;
+  }
+
+  const classSections = await ClassSection.find({ subject: resolvedSubjectId })
+    .select('_id')
+    .lean();
+  const classSectionIds = classSections.map((item) => item._id);
+
+  if (classSectionIds.length === 0) {
+    return false;
+  }
+
+  const existingEnrollment = await ClassEnrollment.findOne({
+    student: studentId,
+    classSection: { $in: classSectionIds },
+    status: { $in: ['enrolled', 'completed', 'dropped'] },
+  })
+    .select('_id')
+    .lean();
+
+  return Boolean(existingEnrollment);
+}
+
+async function getHistoricalSubjectIdSet(studentId) {
+  const historicalEnrollments = await ClassEnrollment.find({
+    student: studentId,
+    status: { $in: ['completed', 'dropped'] },
+  })
+    .populate({
+      path: 'classSection',
+      select: 'subject',
+      populate: {
+        path: 'subject',
+        select: '_id',
+      },
+    })
+    .lean();
+
+  return new Set(
+    (historicalEnrollments || [])
+      .map((enrollment) => resolveEntityId(enrollment?.classSection?.subject)?.toString())
+      .filter(Boolean),
+  );
+}
+
+async function resolveRegistrationWindow(student, classSection, overloadInfo, semester = null) {
+  if (!classSection) {
+    return {
+      allowed: true,
+      requestType: 'all',
+      message: 'No class selected',
+      period: null,
+      reason: 'NO_CLASS_SELECTED',
+    };
+  }
+
+  if (overloadInfo?.enrollingCourseIsOverload === true) {
+    const result = await registrationPeriodService.isRegistrationOpen('overload', student.cohort, {
+      semesterId: semester?._id || null,
+      semesterNum: semester?.semesterNum || null,
+      academicYear: semester?.academicYear || null,
+    });
+    return {
+      allowed: result.isOpen === true,
+      requestType: 'overload',
+      message: result.message,
+      period: result.period || null,
+      reason: result.reason || null,
+    };
+  }
+
+  const isRepeatCourse = await hasSubjectEnrollmentHistory(student._id, classSection.subject);
+  if (isRepeatCourse) {
+    const result = await registrationPeriodService.isRegistrationOpen('repeat', student.cohort, {
+      semesterId: semester?._id || null,
+      semesterNum: semester?.semesterNum || null,
+      academicYear: semester?.academicYear || null,
+    });
+    return {
+      allowed: result.isOpen === true,
+      requestType: 'repeat',
+      message: result.message,
+      period: result.period || null,
+      reason: result.reason || null,
+    };
+  }
+
+  return {
+    allowed: false,
+    requestType: 'normal',
+    message:
+      'Môn thuộc chương trình hiện tại được xử lý bởi auto-enrollment. Màn này chỉ dùng cho học lại hoặc học vượt.',
+    period: null,
+    reason: 'AUTO_ENROLLMENT_MANAGED',
+  };
 }
 
 // Xác định "bộ môn chuẩn" mà curriculum cho phép trong kỳ hiện tại của sinh viên.
@@ -264,7 +515,7 @@ const validateWallet = async (studentId, classId) => {
  */
 const checkScheduleConflict = async (studentId, classSectionId, semesterId = null) => {
   const selectedClass = await ClassSection.findById(classSectionId)
-    .populate('timeslot', 'startTime endTime groupName')
+    .populate('timeslot', 'startTime endTime groupName startPeriod endPeriod')
     .populate('subject', 'subjectCode subjectName')
     .lean();
 
@@ -273,38 +524,6 @@ const checkScheduleConflict = async (studentId, classSectionId, semesterId = nul
       valid: false,
       hasConflict: true,
       message: 'Selected class section not found',
-      conflicts: [],
-    };
-  }
-
-  const selectedDay = selectedClass.dayOfWeek;
-  const selectedStart = selectedClass.timeslot?.startTime;
-  const selectedEnd = selectedClass.timeslot?.endTime;
-
-  if (!selectedDay || !selectedStart || !selectedEnd) {
-    return {
-      valid: true,
-      hasConflict: false,
-      message: 'Selected class section has no schedule yet. Conflict check skipped.',
-      selectedClass: {
-        classId: selectedClass._id,
-        classCode: selectedClass.classCode,
-      },
-      conflicts: [],
-    };
-  }
-
-  const selectedStartMin = timeToMinutes(selectedStart);
-  const selectedEndMin = timeToMinutes(selectedEnd);
-  if (selectedStartMin == null || selectedEndMin == null) {
-    return {
-      valid: true,
-      hasConflict: false,
-      message: 'Selected class section time is invalid. Conflict check skipped.',
-      selectedClass: {
-        classId: selectedClass._id,
-        classCode: selectedClass.classCode,
-      },
       conflicts: [],
     };
   }
@@ -325,35 +544,84 @@ const checkScheduleConflict = async (studentId, classSectionId, semesterId = nul
     .map((e) => e.classSection)
     .filter((cls) => cls && String(cls._id) !== String(classSectionId));
 
+  const allClassIds = [selectedClass._id, ...existingClasses.map((cls) => cls._id)];
+  const [scheduleDocs, activeTimeslots] = await Promise.all([
+    Schedule.find({
+      classSection: { $in: allClassIds },
+      status: 'active',
+    })
+      .select('classSection dayOfWeek startPeriod endPeriod')
+      .lean(),
+    Timeslot.find({ status: 'active' })
+      .select('groupName startTime endTime startPeriod endPeriod')
+      .lean(),
+  ]);
+
+  const timeslotByPeriodKey = new Map(
+    activeTimeslots
+      .map((slot) => [buildTimeslotKey(slot.startPeriod, slot.endPeriod), slot])
+      .filter(([key]) => Boolean(key)),
+  );
+  const schedulesByClassId = scheduleDocs.reduce((acc, item) => {
+    const key = String(item.classSection);
+    if (!acc.has(key)) {
+      acc.set(key, []);
+    }
+    acc.get(key).push(item);
+    return acc;
+  }, new Map());
+
+  const selectedBlocks = buildScheduleBlocks(
+    selectedClass,
+    schedulesByClassId.get(String(selectedClass._id)) || [],
+    timeslotByPeriodKey,
+  );
+
+  if (selectedBlocks.length === 0) {
+    return {
+      valid: true,
+      hasConflict: false,
+      message: 'Selected class section has no schedule yet. Conflict check skipped.',
+      selectedClass: {
+        classId: selectedClass._id,
+        classCode: selectedClass.classCode,
+      },
+      conflicts: [],
+    };
+  }
+
   const conflicts = [];
 
   for (const cls of existingClasses) {
-    const day = cls.dayOfWeek;
-    const start = cls?.timeslot?.startTime;
-    const end = cls?.timeslot?.endTime;
+    const classBlocks = buildScheduleBlocks(
+      cls,
+      schedulesByClassId.get(String(cls._id)) || [],
+      timeslotByPeriodKey,
+    );
 
-    if (!day || !start || !end) continue;
-    if (day !== selectedDay) continue;
+    for (const selectedBlock of selectedBlocks) {
+      const matchedConflict = classBlocks.find((classBlock) =>
+        blocksOverlap(selectedBlock, classBlock),
+      );
 
-    const startMin = timeToMinutes(start);
-    const endMin = timeToMinutes(end);
-    if (startMin == null || endMin == null) continue;
-
-    if (isOverlapped(selectedStartMin, selectedEndMin, startMin, endMin)) {
-      conflicts.push({
-        classId: cls._id,
-        classCode: cls.classCode,
-        className: cls.className,
-        subjectCode: cls?.subject?.subjectCode,
-        subjectName: cls?.subject?.subjectName,
-        dayOfWeek: day,
-        startTime: start,
-        endTime: end,
-      });
+      if (matchedConflict) {
+        conflicts.push({
+          classId: cls._id,
+          classCode: cls.classCode,
+          className: cls.className,
+          subjectCode: cls?.subject?.subjectCode,
+          subjectName: cls?.subject?.subjectName,
+          dayOfWeek: matchedConflict.dayOfWeek,
+          startTime: matchedConflict.startTime,
+          endTime: matchedConflict.endTime,
+        });
+        break;
+      }
     }
   }
 
   if (conflicts.length > 0) {
+    const primarySelectedBlock = selectedBlocks[0];
     return {
       valid: true,
       hasConflict: true,
@@ -361,14 +629,15 @@ const checkScheduleConflict = async (studentId, classSectionId, semesterId = nul
       selectedClass: {
         classId: selectedClass._id,
         classCode: selectedClass.classCode,
-        dayOfWeek: selectedDay,
-        startTime: selectedStart,
-        endTime: selectedEnd,
+        dayOfWeek: primarySelectedBlock.dayOfWeek,
+        startTime: primarySelectedBlock.startTime,
+        endTime: primarySelectedBlock.endTime,
       },
       conflicts,
     };
   }
 
+  const primarySelectedBlock = selectedBlocks[0];
   return {
     valid: true,
     hasConflict: false,
@@ -376,9 +645,9 @@ const checkScheduleConflict = async (studentId, classSectionId, semesterId = nul
     selectedClass: {
       classId: selectedClass._id,
       classCode: selectedClass.classCode,
-      dayOfWeek: selectedDay,
-      startTime: selectedStart,
-      endTime: selectedEnd,
+      dayOfWeek: primarySelectedBlock.dayOfWeek,
+      startTime: primarySelectedBlock.startTime,
+      endTime: primarySelectedBlock.endTime,
     },
     conflicts: [],
   };
@@ -410,16 +679,19 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
     .filter((item) => item.classSection)
     .map((item) => ({
       ...item,
-      subjectId: item.classSection?.subject?._id?.toString(),
+      subjectId: resolveEntityId(item.classSection?.subject)?.toString(),
     }));
 
   const { subjectIdSet } = await getCurriculumSubjectIdSet(student, semester);
+  const historicalSubjectIdSet = await getHistoricalSubjectIdSet(studentId);
 
   // currentOverloadCount = số môn overload mà sinh viên đã đăng ký từ trước.
   const currentOverloadCount = normalizedEnrollments.filter((enrollment) => {
     if (enrollment.isOverload === true) return true;
     if (!subjectIdSet.size) return enrollment.isOverload === true;
-    return enrollment.subjectId && !subjectIdSet.has(enrollment.subjectId);
+    if (!enrollment.subjectId) return false;
+    if (historicalSubjectIdSet.has(enrollment.subjectId)) return false;
+    return !subjectIdSet.has(enrollment.subjectId);
   }).length;
 
   let projectedOverloadCount = currentOverloadCount;
@@ -427,11 +699,14 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
 
   // Nếu FE đang kiểm tra cho một class cụ thể thì project thêm trạng thái của môn sắp đăng ký,
   // từ đó biết sau khi bấm Register thì có vượt quá 2 môn overload hay không.
-  if (classSection?.subject?._id) {
-    const subjectId = classSection.subject._id.toString();
+  const selectedSubjectId = resolveEntityId(classSection?.subject)?.toString();
+  if (selectedSubjectId) {
+    const subjectId = selectedSubjectId;
     const alreadyEnrolled = normalizedEnrollments.some((e) => e.subjectId === subjectId);
     if (!alreadyEnrolled) {
-      if (!subjectIdSet.size) {
+      if (historicalSubjectIdSet.has(subjectId)) {
+        enrollingCourseIsOverload = false;
+      } else if (!subjectIdSet.size) {
         enrollingCourseIsOverload = false;
       } else {
         enrollingCourseIsOverload = !subjectIdSet.has(subjectId);
@@ -510,6 +785,15 @@ async function getStudentEligibilitySummary(studentId, classId = null, semesterI
 
   const semester = await resolveSemester(semesterId, classSection);
   const overload = await checkOverloadLimit(studentId, semester?._id, classId);
+  const registrationWindow = classSection
+    ? await resolveRegistrationWindow(student, classSection, overload, semester)
+    : {
+        allowed: true,
+        requestType: 'all',
+        message: 'No class selected',
+        period: null,
+        reason: 'NO_CLASS_SELECTED',
+      };
   const credit = await checkCreditLimit(
     studentId,
     semester?._id,
@@ -517,6 +801,34 @@ async function getStudentEligibilitySummary(studentId, classId = null, semesterI
     20,
   );
   const cohortAccess = await registrationPeriodService.validateCurrentPeriodCohort(student.cohort);
+  const duplicateSubject = classSection
+    ? await (async () => {
+        const existingEnrollment = await findSameSubjectEnrollmentInSemester(studentId, classSection);
+        if (!existingEnrollment) {
+          return {
+            allowed: true,
+            message: 'No duplicate subject enrollment in this semester',
+            existingEnrollment: null,
+          };
+        }
+
+        return {
+          allowed: false,
+          message: `Bạn đã có lớp ${existingEnrollment.classSection?.classCode || ''} cho cùng môn trong học kỳ này.`,
+          existingEnrollment: {
+            enrollmentId: existingEnrollment._id,
+            classId: existingEnrollment.classSection?._id || null,
+            classCode: existingEnrollment.classSection?.classCode || null,
+            subjectCode: existingEnrollment.classSection?.subject?.subjectCode || null,
+            subjectName: existingEnrollment.classSection?.subject?.subjectName || null,
+          },
+        };
+      })()
+    : {
+        allowed: true,
+        message: 'No class selected',
+        existingEnrollment: null,
+      };
 
   return {
     student: {
@@ -539,8 +851,14 @@ async function getStudentEligibilitySummary(studentId, classId = null, semesterI
       overload,
       credit,
       cohortAccess,
+      registrationWindow,
+      duplicateSubject,
     },
-    canRegister: overload.allowed && credit.allowed && cohortAccess.allowed,
+    canRegister:
+      overload.allowed &&
+      credit.allowed &&
+      registrationWindow.allowed &&
+      duplicateSubject.allowed,
   };
 }
 

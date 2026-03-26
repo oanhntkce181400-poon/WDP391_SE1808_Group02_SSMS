@@ -1,25 +1,24 @@
-@startuml Check Schedule Conflict - Verify Room and Teacher Availability
+﻿@startuml
 title Check Schedule Conflict - Verify Room and Teacher Availability
 
-hide footbox
-
-actor PrimaryActor as "Admin / Academic Staff"
-participant Screen as "Screen (Schedule Form)"
-participant APIClient as "API Client (Frontend)"
-participant ScheduleRouter as "ScheduleRouter"
-participant Validation as "ValidationMiddleware"
-participant ScheduleController as "ScheduleController"
-participant ScheduleService as "ScheduleService"
-participant ScheduleRepository as "ScheduleRepository"
-participant ClassSectionRepository as "ClassSectionRepository"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Academic Staff" as PrimaryActor
+participant "Screen (Schedule Form)" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "ScheduleRouter" as ScheduleRouter <<control>>
+participant "ValidationMiddleware" as Validation <<control>>
+participant "ScheduleController" as ScheduleController <<control>>
+participant "ScheduleService" as ScheduleService <<control>>
+participant "ScheduleRepository" as ScheduleRepository <<entity>>
+participant "ClassSectionRepository" as ClassSectionRepository <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) enter schedule details\n(room, teacher, dayOfWeek, startPeriod, endPeriod)
 activate Screen
 
 Screen -> APIClient: (2) POST /api/classes/:classId/schedules/check-conflict\n{ room_id, teacher_id, day_of_week, start_period, end_period, semester, academic_year }
-APIClientactivate 
+activate APIClient
 
 APIClient -> ScheduleRouter: (3) forward request
 activate ScheduleRouter
@@ -32,7 +31,7 @@ alt invalid - missing required fields
 
   ScheduleRouter --> APIClient: (4.1.2) 400 Bad Request
   APIClient --> Screen: (4.1.3) show validation error
-  Screen --> PrimaryActor: (4.1.4) display error: "Thiếu thông tin bắt buộc"
+  Screen --> PrimaryActor: (4.1.4) display error: "Thi蘯ｿu thﾃｴng tin b蘯ｯt bu盻冂"
 else valid
   deactivate Validation
 

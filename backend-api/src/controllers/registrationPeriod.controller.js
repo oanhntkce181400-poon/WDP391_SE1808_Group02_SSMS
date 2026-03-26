@@ -252,7 +252,7 @@ const deletePeriod = async (req, res) => {
  */
 const checkRequestRegistrationOpen = async (req, res) => {
   try {
-    const { requestType, studentCohort } = req.query;
+    const { requestType, studentCohort, semesterId, semesterNum, academicYear } = req.query;
 
     if (!requestType) {
       return res.status(400).json({
@@ -261,7 +261,11 @@ const checkRequestRegistrationOpen = async (req, res) => {
       });
     }
 
-    const result = await registrationPeriodService.isRegistrationOpen(requestType, studentCohort);
+    const result = await registrationPeriodService.isRegistrationOpen(requestType, studentCohort, {
+      semesterId: semesterId || null,
+      semesterNum: semesterNum || null,
+      academicYear: academicYear || null,
+    });
 
     return res.status(200).json({
       success: true,

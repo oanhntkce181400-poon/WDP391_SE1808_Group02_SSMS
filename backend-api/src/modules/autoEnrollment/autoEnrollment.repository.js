@@ -40,6 +40,20 @@ function normalizeCodeList(values = []) {
   );
 }
 
+function normalizeAcademicYearList(values = []) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 async function findEligibleStudents(filters = {}) {
   const query = {
     isActive: true,
@@ -70,7 +84,7 @@ async function findEligibleStudents(filters = {}) {
 
   return Student.find(query)
     .select(
-      'studentCode fullName email majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId',
+      'studentCode fullName email majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId classSection',
     )
     .sort({ studentCode: 1, _id: 1 })
     .lean();
@@ -107,6 +121,32 @@ async function findOpenClassSections({ semesterNum, academicYear, statuses, clas
   return ClassSection.find(query)
     .select(
       '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex',
+    )
+    .lean();
+}
+
+async function findOpenClassSectionsBySemesterYears({
+  semesterNum,
+  academicYears,
+  statuses,
+  classGroup,
+}) {
+  const query = {
+    semester: semesterNum,
+    status: { $in: statuses },
+  };
+  const normalizedAcademicYears = normalizeAcademicYearList(academicYears);
+  if (normalizedAcademicYears.length === 1) {
+    query.academicYear = normalizedAcademicYears[0];
+  } else if (normalizedAcademicYears.length > 1) {
+    query.academicYear = { $in: normalizedAcademicYears };
+  }
+  if (classGroup && typeof classGroup === 'string' && classGroup.trim() !== '') {
+    query.classGroup = classGroup.trim();
+  }
+  return ClassSection.find(query)
+    .select(
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex curriculum curriculumSemesterOrder',
     )
     .lean();
 }
@@ -256,6 +296,7 @@ async function bulkUpsertEnrollments(enrollmentDocs) {
       modifiedCount: 0,
       upsertedCount: 0,
       upsertedIds: {},
+      insertedClassSectionCounts: {},
     };
   }
 
@@ -272,7 +313,45 @@ async function bulkUpsertEnrollments(enrollmentDocs) {
     },
   }));
 
-  return ClassEnrollment.bulkWrite(operations, { ordered: false });
+  const bulkResult = await ClassEnrollment.bulkWrite(operations, { ordered: false });
+  const insertedIndexes = new Set();
+
+  if (bulkResult?.upsertedIds && typeof bulkResult.upsertedIds === 'object') {
+    Object.keys(bulkResult.upsertedIds).forEach((key) => {
+      const parsedIndex = Number(key);
+      if (Number.isInteger(parsedIndex) && parsedIndex >= 0) {
+        insertedIndexes.add(parsedIndex);
+      }
+    });
+  }
+
+  if (Array.isArray(bulkResult?.result?.upserted)) {
+    bulkResult.result.upserted.forEach((item) => {
+      const parsedIndex = Number(item?.index);
+      if (Number.isInteger(parsedIndex) && parsedIndex >= 0) {
+        insertedIndexes.add(parsedIndex);
+      }
+    });
+  }
+
+  const insertedClassSectionCounts = {};
+  insertedIndexes.forEach((index) => {
+    const classSectionId = enrollmentDocs[index]?.classSection;
+    if (!classSectionId) {
+      return;
+    }
+
+    const key = String(classSectionId);
+    insertedClassSectionCounts[key] = Number(insertedClassSectionCounts[key] || 0) + 1;
+  });
+
+  return {
+    matchedCount: Number(bulkResult?.matchedCount || 0),
+    modifiedCount: Number(bulkResult?.modifiedCount || 0),
+    upsertedCount: Number(bulkResult?.upsertedCount || 0),
+    upsertedIds: bulkResult?.upsertedIds || {},
+    insertedClassSectionCounts,
+  };
 }
 
 // Waitlist cũng được upsert theo bộ khóa student + subject + target semester + year.
@@ -309,7 +388,12 @@ async function bulkUpsertWaitlists(waitlistDocs) {
 // Sau khi service quyết định được các enrollment mới, repository mới ghi tăng currentEnrollment.
 // Việc cộng dồn trước trong Map rồi bulkWrite một lần giúp giảm số lần round-trip tới DB.
 async function bulkIncrementClassSections(classSectionIncrementMap) {
-  const operations = Array.from(classSectionIncrementMap.entries())
+  const incrementEntries =
+    classSectionIncrementMap instanceof Map
+      ? Array.from(classSectionIncrementMap.entries())
+      : Object.entries(classSectionIncrementMap || {});
+
+  const operations = incrementEntries
     .filter(([, incrementBy]) => Number(incrementBy) > 0)
     .map(([classSectionId, incrementBy]) => ({
       updateOne: {
@@ -362,7 +446,14 @@ async function getEnrollmentStatus({ semesterNum, academicYear, classGroup, curr
     status: 'enrolled',
   })
     .populate('student', 'studentCode fullName')
-    .populate('classSection', 'classCode subject')
+    .populate({
+      path: 'classSection',
+      select: 'classCode className subject',
+      populate: {
+        path: 'subject',
+        select: 'subjectCode subjectName',
+      },
+    })
     .lean();
 
   // 3. Lấy waitlist (chỉ WAITING)
@@ -372,7 +463,12 @@ async function getEnrollmentStatus({ semesterNum, academicYear, classGroup, curr
     status: 'WAITING',
   };
   if (classGroup && typeof classGroup === 'string') {
-    waitlistQuery.classGroup = classGroup.trim();
+    const groupedSubjectIds = [
+      ...new Set(classSections.map((section) => String(section.subject || '')).filter(Boolean)),
+    ];
+    waitlistQuery.subject = {
+      $in: groupedSubjectIds.map((id) => new mongoose.Types.ObjectId(id)),
+    };
   }
   const waitlistDocs = await Waitlist.find(waitlistQuery)
     .populate('student', 'studentCode fullName')
@@ -601,6 +697,7 @@ module.exports = {
   findActiveCurriculums,
   findMajorsByCodes,
   findOpenClassSections,
+  findOpenClassSectionsBySemesterYears,
   findOpenClassSectionsAllSemesters,
   findSemesterEnrollments,
   findSemesterWaitlists,

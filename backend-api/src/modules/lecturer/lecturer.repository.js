@@ -53,6 +53,20 @@ async function findTeacherByEmail(email) {
   return Teacher.findOne({ email: { $regex: pattern } }).lean();
 }
 
+async function findTeacherByUserId(userId, options = {}) {
+  if (!userId) return null;
+
+  const filter = {
+    userId: toObjectId(userId),
+  };
+
+  if (options.excludeTeacherId) {
+    filter._id = { $ne: toObjectId(options.excludeTeacherId) };
+  }
+
+  return Teacher.findOne(filter).lean();
+}
+
 async function createTeacher(data, session) {
   const [teacher] = await Teacher.create([data], { session });
   return teacher;
@@ -95,13 +109,22 @@ async function findUserByEmail(email) {
   return User.findOne({ email: { $regex: pattern } }).lean();
 }
 
+async function findUserById(id) {
+  if (!id) return null;
+  return User.findById(toObjectId(id)).lean();
+}
+
 async function createUser(data, session) {
   const [user] = await User.create([data], { session });
   return user;
 }
 
-async function updateUserById(id, data) {
-  return User.findByIdAndUpdate(toObjectId(id), { $set: data });
+async function updateUserById(id, data, session) {
+  return User.findByIdAndUpdate(
+    toObjectId(id),
+    { $set: data },
+    { new: true, ...(session ? { session } : {}) },
+  );
 }
 
 module.exports = {
@@ -110,12 +133,14 @@ module.exports = {
   findLecturerById,
   findTeacherByCode,
   findTeacherByEmail,
+  findTeacherByUserId,
   findTeacherDocById,
   createTeacher,
   updateLecturerById,
   directUpdateLecturerById,
   saveLecturerDoc,
   findUserByEmail,
+  findUserById,
   createUser,
   updateUserById,
 };

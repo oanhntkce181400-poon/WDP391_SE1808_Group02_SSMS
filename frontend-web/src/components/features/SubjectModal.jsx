@@ -216,23 +216,32 @@ export default function SubjectModal({ isOpen, onClose, onSubmit, subject, loadi
     return Object.keys(newErrors).length === 0;
   };
 
-  // Map faculty code to department codes for filtering lecturers
-  // Bộ môn (department) hiện lưu mã: CNTT, QTKD, KT, TCNH, NN
-  const facultyToDeptCodesMap = {
-    'CNTT': ['CNTT'],
-    'QTKD': ['QTKD'],
-    'KT': ['KT'],
-    'TCNH': ['TCNH'],
-    'NN': ['NN'],
-    'DLKS': ['DLKS'],
-  };
-
-  // Filter lecturers based on selected faculty (Step 1)
-  // Department field stores: CNTT, QTKD, KT, TCNH, NN (department codes)
+  // Filter lecturers based on selected faculty.
+  // Ưu tiên dữ liệu đúng chuẩn mới: department = facultyCode.
+  // Đồng thời chấp nhận dữ liệu cũ bị lưu lệch theo facultyName / majorCode / majorName
+  // để lecturer đã tạo trước đây vẫn còn xuất hiện ở bước gán giáo viên cho môn.
   const filteredLecturers = selectedFaculty
     ? lecturers.filter(lecturer => {
-        const deptCodes = facultyToDeptCodesMap[selectedFaculty] || [];
-        return deptCodes.includes(lecturer.department);
+        const departmentValue = String(lecturer.department || '').trim().toLowerCase();
+        if (!departmentValue) return false;
+
+        const selectedFacultyDoc = faculties.find(
+          (faculty) => String(faculty.facultyCode || '').trim() === selectedFaculty,
+        );
+        const relatedMajors = getMajorsByFaculty(selectedFaculty);
+
+        const allowedTokens = new Set(
+          [
+            selectedFaculty,
+            selectedFacultyDoc?.facultyName,
+            selectedFacultyDoc?.shortName,
+            ...relatedMajors.flatMap((major) => [major.majorCode, major.majorName]),
+          ]
+            .map((value) => String(value || '').trim().toLowerCase())
+            .filter(Boolean),
+        );
+
+        return allowedTokens.has(departmentValue);
       })
     : lecturers;
 
