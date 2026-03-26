@@ -4,6 +4,7 @@ const router = express.Router();
 const authMiddleware = require("../middlewares/auth.middleware");
 const rbacMiddleware = require("../middlewares/rbac.middleware");
 const classSectionController = require("../modules/classSection/classSection.controller");
+const attendanceController = require("../controllers/attendance.controller");
 
 const ADMIN_STAFF = rbacMiddleware(["admin", "staff"]);
 
@@ -14,6 +15,13 @@ router.patch(
   authMiddleware,
   ADMIN_STAFF,
   classSectionController.assignLecturer,
+);
+
+router.get(
+  "/:id/performance",
+  authMiddleware,
+  rbacMiddleware(["admin", "staff", "lecturer"]),
+  attendanceController.getClassPerformance,
 );
 
 // UC99 - View Class Roster

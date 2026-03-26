@@ -73,6 +73,28 @@ async function getClassById(classId) {
   return cls;
 }
 
+async function findStudentProfileByUser(userId) {
+  if (!userId) {
+    throw new Error("Unauthorized user");
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  let student = await Student.findOne({ userId }).lean();
+  if (!student && user.email) {
+    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
+  }
+
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  return { user, student };
+}
+
 async function createClassSection(body = {}) {
   const missing = REQUIRED_CLASS_FIELDS.filter((f) => !body[f]);
   if (missing.length > 0)
@@ -321,23 +343,7 @@ async function enrollStudent(classId, studentId, options = {}) {
 }
 
 async function selfEnroll(userId, classId) {
-  if (!userId) {
-    throw new Error("Unauthorized user");
-  }
-
-  const user = await User.findById(userId).lean();
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  let student = await Student.findOne({ userId }).lean();
-  if (!student && user.email) {
-    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
-  }
-
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const [prerequisites, capacity, wallet, scheduleConflict, eligibility] = await Promise.all([
     registrationService.validatePrerequisites(student._id, classId),
@@ -631,11 +637,7 @@ async function getMyClasses(userId) {
   const Student = require("../../models/student.model");
   const ClassEnrollment = require("../../models/classEnrollment.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Find enrollments for this student
   const enrollments = await ClassEnrollment.find({
@@ -768,14 +770,9 @@ async function getClassListWithCapacity() {
 
 async function getClassDetails(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
   const Schedule = require("../../models/schedule.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Check if student is enrolled in this class
   const enrollment = await ClassEnrollment.findOne({
@@ -790,11 +787,7 @@ async function getClassDetails(classId, userId) {
 
   // Get class with all related data
   const repo = require("./classSection.repository");
-  const cls = await repo.findClassById(classId)
-    .populate("subject")
-    .populate("teacher")
-    .populate("room")
-    .populate("timeslot");
+  const cls = await repo.findClassById(classId);
 
   if (!cls) {
     throw new Error("Class section not found");
@@ -849,13 +842,9 @@ async function getClassDetails(classId, userId) {
 
 async function getClassRosterForStudent(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
 
   // BR17: Authorization dựa trên enrollment hợp lệ
-  const student = await Student.findOne({ userId }).lean();
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const cls = await repo.findClassById(classId);
   if (!cls) {

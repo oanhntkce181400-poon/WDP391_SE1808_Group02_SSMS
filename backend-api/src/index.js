@@ -100,6 +100,7 @@ app.use("/api/dashboard", require("./routes/dashboard.routes"));
 // Lecturer feedback flow used by the mobile app (submit/view/update).
 app.use("/api/feedbacks", require("./routes/feedback.routes"));
 app.use("/api/feedback-templates", require("./routes/feedbackTemplate.routes"));
+app.use("/api/email-templates", require("./routes/emailTemplate.routes"));
 app.use(
   "/api/feedback-submissions",
   require("./routes/feedbackSubmission.routes"),

@@ -58,6 +58,10 @@ const feedbackService = {
     return axiosClient.get('/feedbacks/my-feedbacks');
   },
 
+  getFeedbackAvailability() {
+    return axiosClient.get('/feedbacks/availability');
+  },
+
   updateFeedback(feedbackId, data) {
     return axiosClient.put(`/feedbacks/${feedbackId}`, data);
   },

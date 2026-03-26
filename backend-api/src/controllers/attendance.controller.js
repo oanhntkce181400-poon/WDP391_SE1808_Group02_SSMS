@@ -45,6 +45,28 @@ const getClasses = async (req, res) => {
   }
 };
 
+const getClassPerformance = async (req, res) => {
+  try {
+    const { id: classId } = req.params;
+    const userId = req.auth.sub;
+
+    const data = await attendanceService.getClassPerformance(classId, userId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lay thong ke diem danh lop hoc thanh cong',
+      data,
+    });
+  } catch (error) {
+    console.error('[AttendanceController] getClassPerformance error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Loi may chu, thu lai sau',
+    });
+  }
+};
+
 // ─────────────────────────────────────────────────────────────
 // GET /api/attendance/classes/:classId/slots
 // Lấy danh sách các buổi học đã điểm danh của một lớp
@@ -188,6 +210,7 @@ const getMyAttendance = async (req, res) => {
 
 module.exports = {
   getClasses,
+  getClassPerformance,
   getValidAttendanceDates,
   getClassSlots,
   getSlotAttendance,

@@ -17,6 +17,10 @@ const feedbackTemplateService = {
     return axiosClient.get('/feedback-templates/active');
   },
 
+  syncDefaultTemplates() {
+    return axiosClient.post('/feedback-templates/sync-defaults');
+  },
+
   // Create new feedback template
   createFeedbackTemplate(data) {
     return axiosClient.post('/feedback-templates', data);
