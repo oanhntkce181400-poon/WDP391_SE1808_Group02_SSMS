@@ -9,6 +9,7 @@ import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
+import GradeReportScreen from '../screens/student/GradeReportScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
 import NotificationListScreen from '../screens/student/NotificationListScreen';
 import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
@@ -67,6 +68,7 @@ export default function AppNavigator() {
       { key: 'notification', icon: 'notifications', label: 'Thông báo' },
       { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
+      { key: 'grades', icon: 'bar-chart', label: 'Điểm' },
       { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
       { key: 'profile', icon: 'person', label: 'Tài khoản' },
@@ -78,9 +80,13 @@ export default function AppNavigator() {
       return;
     }
 
+<<<<<<< HEAD
     const extraScreens = isAdminViewer
       ? new Set()
       : new Set(['attendance', 'academicCalendar', 'notification-detail']);
+=======
+    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar', 'grades']);
+>>>>>>> AcademicAnalytics
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
@@ -144,6 +150,9 @@ export default function AppNavigator() {
   }
   if (activeTab === 'attendance') {
     screen = <AttendanceReportScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'grades') {
+    screen = <GradeReportScreen />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;

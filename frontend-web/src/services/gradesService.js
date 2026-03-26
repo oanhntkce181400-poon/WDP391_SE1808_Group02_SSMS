@@ -275,6 +275,252 @@ const gradesService = {
       console.error('Error submitting final class grades:', error);
       throw error;
     }
+  },
+
+  /**
+   * Xuất báo cáo điểm dưới dạng Excel
+   * GET /api/grades/export?format=excel&semester=...&academicYear=...&classSection=...&major=...
+   * @param {string} format - 'excel' (mặc định)
+   * @param {object} filters - { semester, academicYear, classSection, major }
+   */
+  exportGrades: async (format = 'excel', filters = {}) => {
+    try {
+      const params = new URLSearchParams({
+        format: 'excel' // Always use excel
+      });
+
+      if (filters.semester) params.append('semester', filters.semester);
+      if (filters.academicYear) params.append('academicYear', filters.academicYear);
+      if (filters.classSection) params.append('classSection', filters.classSection);
+      if (filters.major) params.append('major', filters.major);
+
+      const url = `/grades/export?${params.toString()}`;
+      
+      // Use blob response type for file download
+      const response = await axiosClient.get(url, {
+        responseType: 'blob',
+        transformResponse: [(data) => data] // Don't transform response
+      });
+
+      // Check if response is an error (if content-type is JSON)
+      const contentType = response.headers['content-type'];
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message || 'Export failed');
+      }
+
+      // Generate filename
+      const timestamp = new Date().getTime();
+      const ext = format === 'excel' ? 'xlsx' : 'pdf';
+      const filename = `BaoCaoDiem_${timestamp}.${ext}`;
+
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data], {
+        type: format === 'excel' 
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/pdf'
+      });
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 100);
+
+      return {
+        success: true,
+        message: 'Export successful',
+        filename
+      };
+    } catch (error) {
+      console.error('Error exporting grades:', error);
+      // Extract error message better
+      let errorMessage = error.message;
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      throw new Error(errorMessage || 'Failed to export grades');
+    }
+  },
+
+  /**
+   * Xuất báo cáo điểm cho một kỳ học cụ thể
+   * @param {string} format - 'excel' hoặc 'pdf'
+   * @param {string} semester - Số kỳ học
+   * @param {string} academicYear - Năm học (e.g., '2024-2025')
+   */
+  exportGradesBySemester: async (format = 'excel', semester, academicYear) => {
+    return gradesService.exportGrades(format, {
+      semester,
+      academicYear
+    });
+  },
+
+  /**
+   * Lấy báo cáo phân bố điểm
+   * GET /api/reports/grade-distribution
+   * @param {object} filters - { semester, academicYear, classSection, major }
+   */
+  getGradeDistributionReport: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.semester) params.append('semester', filters.semester);
+      if (filters.academicYear) params.append('academicYear', filters.academicYear);
+      if (filters.classSection) params.append('classSection', filters.classSection);
+      if (filters.major) params.append('major', filters.major);
+
+      const url = `/reports/grade-distribution${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await axiosClient.get(url);
+      return response;
+    } catch (error) {
+      console.error('Error fetching grade distribution report:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy danh sách sinh viên xuất sắc
+   * GET /api/honors/honor-roll
+   * @param {object} filters - { semesterId, semesterCode, academicYear }
+   */
+  getHonorRollStudents: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.semesterId) params.append('semesterId', filters.semesterId);
+      if (filters.semesterCode) params.append('semesterCode', filters.semesterCode);
+      if (filters.academicYear) params.append('academicYear', filters.academicYear);
+
+      const url = `/honors/honor-roll${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await axiosClient.get(url);
+      return response;
+    } catch (error) {
+      console.error('Error fetching honor roll students:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Lấy danh sách tất cả các kỳ học
+   * GET /api/honors/semesters
+   */
+  getHonorRollSemesters: async () => {
+    try {
+      const response = await axiosClient.get('/honors/semesters');
+      return response;
+    } catch (error) {
+      console.error('Error fetching honor roll semesters:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Xuất danh sách sinh viên xuất sắc dưới dạng Excel
+   * @param {object} honorRollData - Dữ liệu danh sách xuất sắc
+   */
+  exportHonorRollToExcel: async (honorRollData, semesterName) => {
+    try {
+      const ExcelJS = window.ExcelJS;
+      if (!ExcelJS) {
+        throw new Error('ExcelJS library not loaded');
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Danh sách xuất sắc');
+
+      // Set column widths
+      worksheet.columns = [
+        { header: 'Mã SV', key: 'studentCode', width: 12 },
+        { header: 'Họ và tên', key: 'fullName', width: 25 },
+        { header: 'Chuyên ngành', key: 'major', width: 20 },
+        { header: 'GPA', key: 'gpa', width: 10 },
+        { header: 'Tổng TC', key: 'totalCredits', width: 10 },
+        { header: 'Số môn học', key: 'enrollmentCount', width: 12 }
+      ];
+
+      // Add header styling
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' }
+      };
+      headerRow.alignment = { horizontal: 'center', vertical: 'center' };
+
+      // Add data rows
+      if (honorRollData && Array.isArray(honorRollData)) {
+        honorRollData.forEach((student, index) => {
+          worksheet.addRow({
+            studentCode: student.studentCode,
+            fullName: student.fullName,
+            major: student.major || 'N/A',
+            gpa: student.gpa,
+            totalCredits: student.totalCredits,
+            enrollmentCount: student.enrollmentCount
+          });
+
+          // Alternate row colors
+          if (index % 2 === 0) {
+            const row = worksheet.getRow(index + 2);
+            row.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFF2F2F2' }
+            };
+          }
+        });
+      }
+
+      // Center align numeric columns
+      worksheet.columns.forEach((col) => {
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+          const cell = worksheet.getCell(i, col.key === 'gpa' ? 4 : col.key === 'totalCredits' ? 5 : col.key === 'enrollmentCount' ? 6 : 1);
+          if (['gpa', 'totalCredits', 'enrollmentCount'].includes(col.key)) {
+            cell.alignment = { horizontal: 'center' };
+          }
+        }
+      });
+
+      // Generate filename
+      const timestamp = new Date().toLocaleString('vi-VN').replace(/[/:\s,]/g, '_');
+      const filename = `DanhSachXuatSac_${semesterName || timestamp}.xlsx`;
+
+      // Save file
+      await workbook.xlsx.writeBuffer().then((buffer) => {
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+
+        setTimeout(() => {
+          link.parentNode.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }, 100);
+      });
+
+      return {
+        success: true,
+        message: 'Export successful',
+        filename
+      };
+    } catch (error) {
+      console.error('Error exporting honor roll to Excel:', error);
+      throw error;
+    }
   }
 };
 

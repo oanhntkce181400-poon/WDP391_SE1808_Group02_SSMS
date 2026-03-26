@@ -67,6 +67,9 @@ import LecturerClassStudentsPage from "./pages/lecturer/LecturerClassStudentsPag
 import LecturerExamSchedulePage from "./pages/lecturer/LecturerExamSchedulePage";
 import ClassPerformancePage from "./pages/admin/ClassPerformancePage";
 import LecturerClassPerformancePage from "./pages/lecturer/LecturerClassPerformancePage";
+import GradeDistributionReportPage from "./pages/admin/GradeDistributionReportPage";
+import HonorRollStudentsPage from "./pages/admin/HonorRollStudentsPage";
+
 export default function App() {
   return (
     <>
@@ -118,6 +121,8 @@ export default function App() {
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="attendance" element={<AttendancePage />} />
           <Route path="class-performance" element={<ClassPerformancePage />} />
+          <Route path="grade-distribution-report" element={<GradeDistributionReportPage />} />
+          <Route path="honor-roll-students" element={<HonorRollStudentsPage />} />
           <Route path="classes" element={<ClassManagement />} />
           <Route path="lecturers" element={<LecturerManagement />} />
           <Route path="students" element={<StudentManagementPage />} />
