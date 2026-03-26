@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import feedbackService from '../../services/feedbackService';
 
+const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const CRITERIA = [
-  ['teachingQuality', 'Ch\u1ea5t l\u01b0\u1ee3ng gi\u1ea3ng d\u1ea1y'],
-  ['courseContent', 'N\u1ed9i dung m\u00f4n h\u1ecdc'],
-  ['classEnvironment', 'M\u00f4i tr\u01b0\u1eddng l\u1edbp h\u1ecdc'],
-  ['materialQuality', 'Ch\u1ea5t l\u01b0\u1ee3ng t\u00e0i li\u1ec7u'],
+  ['teachingQuality', 'Chất lượng giảng dạy'],
+  ['courseContent', 'Nội dung môn học'],
+  ['classEnvironment', 'Môi trường lớp học'],
+  ['materialQuality', 'Chất lượng tài liệu'],
 ];
 
 const emptyForm = () => ({
@@ -17,18 +18,55 @@ const emptyForm = () => ({
 
 const formatDate = (value) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('vi-VN');
+  return Number.isNaN(date.getTime())
+    ? 'N/A'
+    : date.toLocaleDateString('vi-VN', { timeZone: VIETNAM_TIMEZONE });
+};
+
+const formatDateTime = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'N/A'
+    : date.toLocaleString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: VIETNAM_TIMEZONE,
+      });
+};
+
+const formatDuration = (value) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 phút';
+  }
+
+  const totalSeconds = Math.floor(value / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} ngày`);
+  if (hours > 0) parts.push(`${hours} giờ`);
+  if (minutes > 0) parts.push(`${minutes} phút`);
+  if (days === 0 && hours === 0) parts.push(`${seconds} giây`);
+
+  return parts.slice(0, 3).join(' ');
 };
 
 const formatSentiment = (value) =>
   ({
-    excellent: 'Xu\u1ea5t s\u1eafc',
-    'very good': 'R\u1ea5t t\u1ed1t',
-    good: 'T\u1ed1t',
-    average: 'Trung b\u00ecnh',
-    fair: 'Kh\u00e1 th\u1ea5p',
-    poor: 'Th\u1ea5p',
-    'no feedback yet': 'Ch\u01b0a c\u00f3 \u0111\u00e1nh gi\u00e1',
+    excellent: 'Xuất sắc',
+    'very good': 'Rất tốt',
+    good: 'Tốt',
+    average: 'Trung bình',
+    fair: 'Khá thấp',
+    poor: 'Thấp',
+    'no feedback yet': 'Chưa có đánh giá',
   }[String(value || '').toLowerCase()] ||
     value ||
     'N/A');
@@ -37,15 +75,15 @@ const normalizeClasses = (rows = []) =>
   rows.map((item) => ({
     id: item._id,
     code: item.subject?.subjectCode || item.subjectCode || 'N/A',
-    name: item.className || 'L\u1edbp h\u1ecdc',
+    name: item.className || 'Lớp học',
     subjectName:
-      item.subject?.subjectName || item.subjectName || item.className || 'M\u00f4n h\u1ecdc',
-    teacher: item.teacher?.fullName || 'Ch\u01b0a ph\u00e2n c\u00f4ng gi\u1ea3ng vi\u00ean',
+      item.subject?.subjectName || item.subjectName || item.className || 'Môn học',
+    teacher: item.teacher?.fullName || 'Chưa phân công giảng viên',
     room:
       item.room?.roomNumber ||
       item.room?.roomCode ||
       item.room?.roomName ||
-      'Ch\u01b0a c\u00f3 ph\u00f2ng',
+      'Chưa có phòng',
     semester: item.semester || 'N/A',
     academicYear: item.academicYear || 'N/A',
     classCode: item.classCode || item.sectionCode || 'N/A',
@@ -56,8 +94,8 @@ const normalizeMyFeedback = (rows = []) =>
     id: item._id,
     classSectionId: item.classSection?._id || item.classSection,
     code: item.classSection?.subject?.subjectCode || item.classSection?.subjectCode || 'N/A',
-    className: item.classSection?.className || 'L\u1edbp h\u1ecdc',
-    teacher: item.classSection?.teacher?.fullName || 'Ch\u01b0a ph\u00e2n c\u00f4ng gi\u1ea3ng vi\u00ean',
+    className: item.classSection?.className || 'Lớp học',
+    teacher: item.classSection?.teacher?.fullName || 'Chưa phân công giảng viên',
     rating: Number(item.rating || 0),
     comment: item.comment || '',
     isAnonymous: item.isAnonymous !== false,
@@ -69,8 +107,8 @@ const normalizePending = (rows = []) =>
   rows.map((item) => ({
     id: item._id,
     code: item.classSection?.subject?.subjectCode || 'N/A',
-    className: item.classSection?.className || 'L\u1edbp h\u1ecdc',
-    teacher: item.classSection?.teacher?.fullName || 'Ch\u01b0a ph\u00e2n c\u00f4ng gi\u1ea3ng vi\u00ean',
+    className: item.classSection?.className || 'Lớp học',
+    teacher: item.classSection?.teacher?.fullName || 'Chưa phân công giảng viên',
     rating: Number(item.rating || 0),
     comment: item.comment || '',
     createdAt: item.createdAt,
@@ -86,7 +124,7 @@ function Stars({ value, onChange }) {
           onClick={() => onChange?.(star)}
           className={star <= value ? 'text-amber-400' : 'text-slate-300'}
         >
-          {'\u2605'}
+          {'★'}
         </button>
       ))}
     </div>
@@ -112,6 +150,8 @@ export default function LecturerFeedbackPortal({
   const [saving, setSaving] = useState(false);
   const [moderatingId, setModeratingId] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [feedbackAvailability, setFeedbackAvailability] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) || null,
@@ -127,6 +167,19 @@ export default function LecturerFeedbackPortal({
     setMessage({ type: '', text: '' });
     try {
       if (isStudent) {
+        const availabilityRes = await feedbackService.getFeedbackAvailability();
+        const availabilityData = availabilityRes?.data?.data || null;
+        setFeedbackAvailability(availabilityData);
+
+        if (availabilityData?.isOpen !== true) {
+          setClasses([]);
+          setMyFeedbacks([]);
+          setSelectedClassId('');
+          setClassFeedbacks([]);
+          setClassStats(null);
+          return;
+        }
+
         const [classesRes, myRes] = await Promise.all([
           feedbackService.getMyClasses(),
           feedbackService.getMyFeedback(),
@@ -140,6 +193,7 @@ export default function LecturerFeedbackPortal({
         setMyFeedbacks(nextMine);
         setSelectedClassId(nextSelected);
       } else {
+        setFeedbackAvailability(null);
         const [classesRes, pendingRes] = await Promise.all([
           feedbackService.getClassList(),
           showModeration ? feedbackService.getPendingFeedback(50, 0) : Promise.resolve(null),
@@ -155,9 +209,12 @@ export default function LecturerFeedbackPortal({
       }
     } catch (error) {
       console.error('Error loading feedback base data:', error);
+      if (isStudent) {
+        setFeedbackAvailability(null);
+      }
       setMessage({
         type: 'error',
-        text: error?.response?.data?.message || 'Kh\u00f4ng th\u1ec3 t\u1ea3i d\u1eef li\u1ec7u \u0111\u00e1nh gi\u00e1.',
+        text: error?.response?.data?.message || 'Không thể tải dữ liệu đánh giá.',
       });
     } finally {
       setLoading(false);
@@ -183,7 +240,7 @@ export default function LecturerFeedbackPortal({
         type: 'error',
         text:
           error?.response?.data?.message ||
-          'Kh\u00f4ng th\u1ec3 t\u1ea3i chi ti\u1ebft \u0111\u00e1nh gi\u00e1 c\u1ee7a l\u1edbp.',
+          'Không thể tải chi tiết đánh giá của lớp.',
       });
     }
   }
@@ -191,6 +248,18 @@ export default function LecturerFeedbackPortal({
   useEffect(() => {
     loadBaseData();
   }, [isStudent, showModeration]);
+
+  useEffect(() => {
+    if (!isStudent) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [isStudent]);
 
   useEffect(() => {
     setForm(
@@ -207,7 +276,7 @@ export default function LecturerFeedbackPortal({
       setMessage({
         type: 'error',
         text:
-          'Vui l\u00f2ng ch\u1ecdn l\u1edbp v\u00e0 ch\u1ea5m \u0111i\u1ec3m t\u1ed5ng th\u1ec3 tr\u01b0\u1edbc khi g\u1eedi.',
+          'Vui lòng chọn lớp và chấm điểm tổng thể trước khi gửi.',
       });
       return;
     }
@@ -231,8 +300,8 @@ export default function LecturerFeedbackPortal({
       setMessage({
         type: 'success',
         text: currentFeedback
-          ? 'C\u1eadp nh\u1eadt \u0111\u00e1nh gi\u00e1 th\u00e0nh c\u00f4ng.'
-          : 'G\u1eedi \u0111\u00e1nh gi\u00e1 th\u00e0nh c\u00f4ng.',
+          ? 'Cập nhật đánh giá thành công.'
+          : 'Gửi đánh giá thành công.',
       });
       await loadBaseData();
       await loadClassDetails(selectedClassId);
@@ -240,7 +309,7 @@ export default function LecturerFeedbackPortal({
       console.error('Error saving feedback:', error);
       setMessage({
         type: 'error',
-        text: error?.response?.data?.message || 'Kh\u00f4ng th\u1ec3 l\u01b0u \u0111\u00e1nh gi\u00e1.',
+        text: error?.response?.data?.message || 'Không thể lưu đánh giá.',
       });
     } finally {
       setSaving(false);
@@ -253,8 +322,8 @@ export default function LecturerFeedbackPortal({
       const reason =
         action === 'reject'
           ? window.prompt(
-              'Nh\u1eadp l\u00fd do t\u1eeb ch\u1ed1i:',
-              'N\u1ed9i dung ch\u01b0a ph\u00f9 h\u1ee3p',
+              'Nhập lý do từ chối:',
+              'Nội dung chưa phù hợp',
             )
           : null;
       if (action === 'reject' && !reason) return;
@@ -267,8 +336,8 @@ export default function LecturerFeedbackPortal({
         type: 'success',
         text:
           action === 'approve'
-            ? '\u0110\u00e3 duy\u1ec7t \u0111\u00e1nh gi\u00e1.'
-            : '\u0110\u00e3 t\u1eeb ch\u1ed1i \u0111\u00e1nh gi\u00e1.',
+            ? 'Đã duyệt đánh giá.'
+            : 'Đã từ chối đánh giá.',
       });
       await loadBaseData();
       if (selectedClassId) await loadClassDetails(selectedClassId);
@@ -276,17 +345,99 @@ export default function LecturerFeedbackPortal({
       console.error('Error moderating feedback:', error);
       setMessage({
         type: 'error',
-        text: error?.response?.data?.message || 'Kh\u00f4ng th\u1ec3 x\u1eed l\u00fd \u0111\u00e1nh gi\u00e1.',
+        text: error?.response?.data?.message || 'Không thể xử lý đánh giá.',
       });
     } finally {
       setModeratingId('');
     }
   }
 
+  const liveFeedbackAvailability = useMemo(() => {
+    if (!feedbackAvailability) {
+      return null;
+    }
+
+    const currentMs = now.getTime();
+    const startMs = feedbackAvailability.startsAt
+      ? new Date(feedbackAvailability.startsAt).getTime()
+      : null;
+    const endMs = feedbackAvailability.endsAt
+      ? new Date(feedbackAvailability.endsAt).getTime()
+      : null;
+    const autoRuntimeStates = new Set(['open', 'scheduled']);
+
+    if (
+      autoRuntimeStates.has(feedbackAvailability.state) &&
+      Number.isFinite(startMs) &&
+      Number.isFinite(endMs)
+    ) {
+      if (currentMs < startMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: false,
+          state: 'scheduled',
+          message: `Đợt đánh giá giảng viên sẽ mở từ ${formatDateTime(
+            feedbackAvailability.startsAt,
+          )}.`,
+        };
+      }
+
+      if (currentMs >= startMs && currentMs <= endMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: true,
+          state: 'open',
+          message: `Đợt đánh giá giảng viên đang mở đến ${formatDateTime(
+            feedbackAvailability.endsAt,
+          )}.`,
+        };
+      }
+
+      if (currentMs > endMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: false,
+          state: 'closed',
+          message: `Đợt đánh giá giảng viên đã kết thúc vào ${formatDateTime(
+            feedbackAvailability.endsAt,
+          )}.`,
+        };
+      }
+    }
+
+    return feedbackAvailability;
+  }, [feedbackAvailability, now]);
+
+  const availabilityCountdown = useMemo(() => {
+    if (!liveFeedbackAvailability) {
+      return null;
+    }
+
+    const target = liveFeedbackAvailability.isOpen
+      ? liveFeedbackAvailability.endsAt
+      : liveFeedbackAvailability.startsAt;
+
+    if (!target) {
+      return null;
+    }
+
+    const remainingMs = new Date(target).getTime() - now.getTime();
+    if (remainingMs <= 0) {
+      return null;
+    }
+
+    return liveFeedbackAvailability.isOpen
+      ? `Còn lại ${formatDuration(remainingMs)} để sinh viên gửi feedback.`
+      : `Còn ${formatDuration(remainingMs)} nữa sẽ mở feedback.`;
+  }, [liveFeedbackAvailability, now]);
+
+  const isFeedbackClosed =
+    isStudent && liveFeedbackAvailability && !liveFeedbackAvailability.isOpen;
+
   if (loading && !classes.length) {
     return (
       <div className="rounded-3xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-        {'\u0110ang t\u1ea3i d\u1eef li\u1ec7u \u0111\u00e1nh gi\u00e1 gi\u1ea3ng vi\u00ean...'}
+        {'Đang tải dữ liệu đánh giá giảng viên...'}
       </div>
     );
   }
@@ -307,19 +458,19 @@ export default function LecturerFeedbackPortal({
                   onClick={() => setTab('classes')}
                   className={`rounded-full px-4 py-2 ${tab === 'classes' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
                 >
-                  {'Theo l\u1edbp'}
+                  {'Theo lớp'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setTab('mine')}
                   className={`rounded-full px-4 py-2 ${tab === 'mine' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
                 >
-                  {'\u0110\u00e1nh gi\u00e1 c\u1ee7a t\u00f4i'}
+                  {'Đánh giá của tôi'}
                 </button>
               </div>
             ) : (
               <div className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
-                {'Ch\u1ebf \u0111\u1ed9 xem c\u1ee7a qu\u1ea3n tr\u1ecb vi\u00ean / nh\u00e2n vi\u00ean'}
+                {'Chế độ xem của quản trị viên / nhân viên'}
               </div>
             )}
             <button
@@ -327,7 +478,7 @@ export default function LecturerFeedbackPortal({
               onClick={loadBaseData}
               className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
             >
-              {'L\u00e0m m\u1edbi'}
+              {'Làm mới'}
             </button>
           </div>
         </div>
@@ -345,19 +496,59 @@ export default function LecturerFeedbackPortal({
         </div>
       ) : null}
 
+      {isStudent && liveFeedbackAvailability ? (
+        <div
+          className={`rounded-3xl border p-5 shadow-sm ${
+            liveFeedbackAvailability.isOpen
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em]">
+                {liveFeedbackAvailability.isOpen ? 'Đợt feedback đang mở' : 'Đợt feedback chưa mở'}
+              </p>
+              <h2 className="mt-2 text-xl font-bold">{liveFeedbackAvailability.message}</h2>
+              <p className="mt-2 text-sm leading-6">
+                {liveFeedbackAvailability.templateName
+                  ? `Mẫu đang áp dụng: ${liveFeedbackAvailability.templateName}.`
+                  : 'Quản trị viên chưa cấu hình mẫu feedback khả dụng cho sinh viên.'}
+              </p>
+              <p className="mt-2 text-sm font-medium">
+                Bây giờ: {formatDateTime(now)}
+              </p>
+              {availabilityCountdown ? (
+                <p className="mt-1 text-sm font-medium text-sky-700">{availabilityCountdown}</p>
+              ) : null}
+            </div>
+            <div className="rounded-2xl bg-white/70 px-4 py-3 text-sm shadow-sm ring-1 ring-black/5">
+              <p>
+                <span className="font-semibold">Bắt đầu:</span>{' '}
+                {liveFeedbackAvailability.startsAtLabel || 'Chưa thiết lập'}
+              </p>
+              <p className="mt-1">
+                <span className="font-semibold">Kết thúc:</span>{' '}
+                {liveFeedbackAvailability.endsAtLabel || 'Chưa thiết lập'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {showModeration && !isStudent ? (
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                {'\u0110\u00e1nh gi\u00e1 ch\u1edd duy\u1ec7t'}
+                {'Đánh giá chờ duyệt'}
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                {'Lu\u1ed3ng n\u00e0y d\u00f9ng chung API /api/feedbacks v\u1edbi mobile v\u00e0 web student.'}
+                {'Luồng này dùng chung API /api/feedbacks với mobile và web student.'}
               </p>
             </div>
             <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-              {pendingFeedbacks.length} {'m\u1ee5c'}
+              {pendingFeedbacks.length} {'mục'}
             </div>
           </div>
           <div className="mt-5 space-y-4">
@@ -371,10 +562,10 @@ export default function LecturerFeedbackPortal({
                       </p>
                       <h3 className="mt-1 text-lg font-bold text-slate-900">{item.className}</h3>
                       <p className="mt-2 text-sm text-slate-500">
-                        {'Gi\u1ea3ng vi\u00ean: '} {item.teacher}
+                        {'Giảng viên: '} {item.teacher}
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {'Ng\u00e0y g\u1eedi: '} {formatDate(item.createdAt)}
+                        {'Ngày gửi: '} {formatDate(item.createdAt)}
                       </p>
                     </div>
                     <div className="rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-700">
@@ -382,7 +573,7 @@ export default function LecturerFeedbackPortal({
                     </div>
                   </div>
                   <p className="mt-4 text-sm leading-6 text-slate-700">
-                    {item.comment || 'Ch\u01b0a c\u00f3 nh\u1eadn x\u00e9t chi ti\u1ebft.'}
+                    {item.comment || 'Chưa có nhận xét chi tiết.'}
                   </p>
                   <div className="mt-4 flex justify-end gap-3">
                     <button
@@ -391,7 +582,7 @@ export default function LecturerFeedbackPortal({
                       onClick={() => moderateFeedback(item.id, 'reject')}
                       className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
                     >
-                      {'T\u1eeb ch\u1ed1i'}
+                      {'Từ chối'}
                     </button>
                     <button
                       type="button"
@@ -399,21 +590,38 @@ export default function LecturerFeedbackPortal({
                       onClick={() => moderateFeedback(item.id, 'approve')}
                       className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
                     >
-                      Duy\u1ec7t
+                      Duyệt
                     </button>
                   </div>
                 </div>
               ))
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                {'Ch\u01b0a c\u00f3 \u0111\u00e1nh gi\u00e1 n\u00e0o \u0111ang ch\u1edd duy\u1ec7t.'}
+                {'Chưa có đánh giá nào đang chờ duyệt.'}
               </div>
             )}
           </div>
         </div>
       ) : null}
 
-      {isStudent && tab === 'mine' ? (
+      {isFeedbackClosed ? (
+        <div className="rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
+          <div className="mx-auto max-w-2xl">
+            <h3 className="text-2xl font-bold text-slate-900">
+              Hiện chưa đến thời gian đánh giá giảng viên
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              Khi quản trị viên mở đợt feedback, hệ thống sẽ hiển thị danh sách lớp và form đánh
+              giá ngay tại trang này.
+            </p>
+            {liveFeedbackAvailability?.startsAt ? (
+              <p className="mt-4 text-sm font-medium text-sky-700">
+                Thời gian dự kiến: {formatDateTime(liveFeedbackAvailability.startsAt)}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : isStudent && tab === 'mine' ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {myFeedbacks.length ? (
             myFeedbacks.map((item) => (
@@ -429,19 +637,19 @@ export default function LecturerFeedbackPortal({
                 <p className="text-xs font-bold uppercase tracking-wide text-sky-700">{item.code}</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-900">{item.className}</h3>
                 <p className="mt-2 text-sm text-slate-500">
-                  {'Gi\u1ea3ng vi\u00ean: '} {item.teacher}
+                  {'Giảng viên: '} {item.teacher}
                 </p>
                 <p className="mt-3 text-sm text-slate-700">
-                  {item.comment || 'Ch\u01b0a c\u00f3 nh\u1eadn x\u00e9t chi ti\u1ebft.'}
+                  {item.comment || 'Chưa có nhận xét chi tiết.'}
                 </p>
                 <p className="mt-3 text-sm text-slate-500">
-                  {'\u0110\u00e3 g\u1eedi: '} {formatDate(item.createdAt)}
+                  {'Đã gửi: '} {formatDate(item.createdAt)}
                 </p>
               </button>
             ))
           ) : (
             <div className="rounded-3xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-              {'B\u1ea1n ch\u01b0a c\u00f3 \u0111\u00e1nh gi\u00e1 n\u00e0o.'}
+              {'Bạn chưa có đánh giá nào.'}
             </div>
           )}
         </div>
@@ -449,14 +657,14 @@ export default function LecturerFeedbackPortal({
         <>
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <label className="block text-sm font-semibold text-slate-700">
-              {'Ch\u1ecdn l\u1edbp h\u1ecdc'}
+              {'Chọn lớp học'}
             </label>
             <select
               value={selectedClassId}
               onChange={(event) => setSelectedClassId(event.target.value)}
               className="mt-3 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700"
             >
-              <option value="">{'Ch\u1ecdn m\u1ed9t l\u1edbp h\u1ecdc'}</option>
+              <option value="">{'Chọn một lớp học'}</option>
               {classes.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.code} - {item.classCode} - {item.name}
@@ -476,19 +684,19 @@ export default function LecturerFeedbackPortal({
                 <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {'Gi\u1ea3ng vi\u00ean'}
+                      {'Giảng viên'}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">{selectedClass.teacher}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {'H\u1ecdc k\u1ef3'}
+                      {'Học kỳ'}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">{selectedClass.semester}</p>
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {'N\u0103m h\u1ecdc'}
+                      {'Năm học'}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">
                       {selectedClass.academicYear}
@@ -496,7 +704,7 @@ export default function LecturerFeedbackPortal({
                   </div>
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {'Ph\u00f2ng'}
+                      {'Phòng'}
                     </p>
                     <p className="mt-2 text-sm font-semibold text-slate-900">{selectedClass.room}</p>
                   </div>
@@ -505,19 +713,19 @@ export default function LecturerFeedbackPortal({
 
               <div className="grid gap-4 xl:grid-cols-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-sm text-slate-500">{'T\u1ed5ng \u0111\u00e1nh gi\u00e1'}</p>
+                  <p className="text-sm text-slate-500">{'Tổng đánh giá'}</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900">
                     {classStats?.totalFeedback ?? 0}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-sm text-slate-500">{'\u0110i\u1ec3m trung b\u00ecnh'}</p>
+                  <p className="text-sm text-slate-500">{'Điểm trung bình'}</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900">
                     {classStats?.averageRating ?? 0}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-sm text-slate-500">{'C\u1ea3m nh\u1eadn chung'}</p>
+                  <p className="text-sm text-slate-500">{'Cảm nhận chung'}</p>
                   <p className="mt-2 text-3xl font-bold text-slate-900">
                     {formatSentiment(classStats?.sentiment)}
                   </p>
@@ -528,17 +736,17 @@ export default function LecturerFeedbackPortal({
                 <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
                   <h3 className="text-xl font-bold text-slate-900">
                     {currentFeedback
-                      ? 'C\u1eadp nh\u1eadt \u0111\u00e1nh gi\u00e1 c\u1ee7a b\u1ea1n'
-                      : 'G\u1eedi \u0111\u00e1nh gi\u00e1 c\u1ee7a b\u1ea1n'}
+                      ? 'Cập nhật đánh giá của bạn'
+                      : 'Gửi đánh giá của bạn'}
                   </h3>
                   <p className="mt-2 text-sm text-slate-500">
                     {currentFeedback
-                      ? 'B\u1ea1n c\u00f3 th\u1ec3 s\u1eeda l\u1ea1i \u0111\u00e1nh gi\u00e1 \u0111\u00e3 g\u1eedi ngay tr\u00ean flow th\u1ed1ng nh\u1ea5t n\u00e0y.'
-                      : '\u0110\u00e1nh gi\u00e1 c\u1ee7a b\u1ea1n s\u1ebd \u0111\u01b0\u1ee3c d\u00f9ng chung cho mobile app, web student v\u00e0 web admin.'}
+                      ? 'Bạn có thể sửa lại đánh giá đã gửi ngay trên flow thống nhất này.'
+                      : 'Đánh giá của bạn sẽ được dùng chung cho mobile app, web student và web admin.'}
                   </p>
                   <div className="mt-6">
                     <label className="block text-sm font-semibold text-slate-700">
-                      {'\u0110\u00e1nh gi\u00e1 t\u1ed5ng th\u1ec3'}
+                      {'Đánh giá tổng thể'}
                     </label>
                     <div className="mt-3">
                       <Stars
@@ -567,13 +775,13 @@ export default function LecturerFeedbackPortal({
                   </div>
                   <div className="mt-6">
                     <label className="block text-sm font-semibold text-slate-700">
-                      {'Nh\u1eadn x\u00e9t'}
+                      {'Nhận xét'}
                     </label>
                     <textarea
                       value={form.comment}
                       onChange={(event) => setForm((prev) => ({ ...prev, comment: event.target.value }))}
                       rows={5}
-                      placeholder="Chia s\u1ebb tr\u1ea3i nghi\u1ec7m h\u1ecdc t\u1eadp c\u1ee7a b\u1ea1n..."
+                      placeholder="Chia sẻ trải nghiệm học tập của bạn..."
                       className="mt-3 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700"
                     />
                   </div>
@@ -589,10 +797,10 @@ export default function LecturerFeedbackPortal({
                       />
                       <span>
                         <span className="block text-sm font-semibold text-slate-700">
-                          {'\u0110\u00e1nh gi\u00e1 \u1ea9n danh'}
+                          {'Đánh giá ẩn danh'}
                         </span>
                         <span className="mt-1 block text-sm text-slate-500">
-                          {'T\u00ean c\u1ee7a b\u1ea1n s\u1ebd kh\u00f4ng xu\u1ea5t hi\u1ec7n trong danh s\u00e1ch c\u00f4ng khai.'}
+                          {'Tên của bạn sẽ không xuất hiện trong danh sách công khai.'}
                         </span>
                       </span>
                     </label>
@@ -604,10 +812,10 @@ export default function LecturerFeedbackPortal({
                       className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {saving
-                        ? '\u0110ang l\u01b0u...'
+                        ? 'Đang lưu...'
                         : currentFeedback
-                          ? 'C\u1eadp nh\u1eadt \u0111\u00e1nh gi\u00e1'
-                          : 'G\u1eedi \u0111\u00e1nh gi\u00e1'}
+                          ? 'Cập nhật đánh giá'
+                          : 'Gửi đánh giá'}
                     </button>
                   </div>
                 </form>
@@ -615,7 +823,7 @@ export default function LecturerFeedbackPortal({
 
               <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
                 <h3 className="text-xl font-bold text-slate-900">
-                  {'\u0110\u00e1nh gi\u00e1 c\u00f4ng khai c\u1ee7a l\u1edbp'}
+                  {'Đánh giá công khai của lớp'}
                 </h3>
                 <div className="mt-5 space-y-4">
                   {classFeedbacks.length ? (
@@ -630,18 +838,18 @@ export default function LecturerFeedbackPortal({
                           </div>
                           <div className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                             {item.isAnonymous
-                              ? '\u0110\u00e1nh gi\u00e1 \u1ea9n danh'
-                              : '\u0110\u00e1nh gi\u00e1 c\u00f3 t\u00ean'}
+                            ? 'Đánh giá ẩn danh'
+                            : 'Đánh giá có tên'}
                           </div>
                         </div>
                         <p className="mt-4 text-sm leading-6 text-slate-700">
-                          {item.comment || 'Ch\u01b0a c\u00f3 nh\u1eadn x\u00e9t chi ti\u1ebft.'}
+                          {item.comment || 'Chưa có nhận xét chi tiết.'}
                         </p>
                       </div>
                     ))
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                      {'Ch\u01b0a c\u00f3 \u0111\u00e1nh gi\u00e1 c\u00f4ng khai n\u00e0o cho l\u1edbp h\u1ecdc n\u00e0y.'}
+                      {'Chưa có đánh giá công khai nào cho lớp học này.'}
                     </div>
                   )}
                 </div>
@@ -649,7 +857,7 @@ export default function LecturerFeedbackPortal({
             </>
           ) : (
             <div className="rounded-3xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
-              {'Ch\u1ecdn m\u1ed9t l\u1edbp h\u1ecdc \u0111\u1ec3 xem \u0111\u00e1nh gi\u00e1 v\u00e0 th\u1ed1ng k\u00ea.'}
+              {'Chọn một lớp học để xem đánh giá và thống kê.'}
             </div>
           )}
         </>

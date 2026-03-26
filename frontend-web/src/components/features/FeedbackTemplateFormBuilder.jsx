@@ -4,6 +4,8 @@ import closeIcon from '../../assets/close.png';
 import feedbackTemplateService from '../../services/feedbackTemplateService';
 import FeedbackQuestionEditor from './FeedbackQuestionEditor';
 
+const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
+
 export default function FeedbackTemplateFormBuilder({ isOpen, onClose, onSuccess, templateData = null, loading = false }) {
   const [formData, setFormData] = useState({
     templateName: '',
@@ -46,7 +48,26 @@ export default function FeedbackTemplateFormBuilder({ isOpen, onClose, onSuccess
   const formatDateForInput = (date) => {
     if (!date) return '';
     const d = new Date(date);
-    return d.toISOString().split('T')[0];
+    if (Number.isNaN(d.getTime())) return '';
+
+    const parts = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: VIETNAM_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+      .formatToParts(d)
+      .reduce((acc, part) => {
+        if (part.type !== 'literal') {
+          acc[part.type] = part.value;
+        }
+        return acc;
+      }, {});
+
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
   };
 
   const resetForm = () => {
@@ -155,15 +176,11 @@ export default function FeedbackTemplateFormBuilder({ isOpen, onClose, onSuccess
 
     setIsSaving(true);
     try {
-      // Convert dates to ISO string format
-      const startDate = new Date(formData.feedbackStartDate);
-      const endDate = new Date(formData.feedbackEndDate);
-
       const payload = {
         templateName: formData.templateName.trim(),
         description: formData.description.trim(),
-        feedbackStartDate: startDate.toISOString(),
-        feedbackEndDate: endDate.toISOString(),
+        feedbackStartDate: formData.feedbackStartDate,
+        feedbackEndDate: formData.feedbackEndDate,
         status: formData.status,
         evaluationTarget: formData.evaluationTarget,
         subject: formData.subject || null,
@@ -287,7 +304,7 @@ export default function FeedbackTemplateFormBuilder({ isOpen, onClose, onSuccess
                     Ngày bắt đầu *
                   </label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     name="feedbackStartDate"
                     value={formData.feedbackStartDate}
                     onChange={handleInputChange}
@@ -302,7 +319,7 @@ export default function FeedbackTemplateFormBuilder({ isOpen, onClose, onSuccess
                     Ngày kết thúc *
                   </label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     name="feedbackEndDate"
                     value={formData.feedbackEndDate}
                     onChange={handleInputChange}

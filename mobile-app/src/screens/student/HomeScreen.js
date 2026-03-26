@@ -80,11 +80,11 @@ export default function HomeScreen({ onNavigate }) {
       icon: <MaterialCommunityIcons name="calendar-clock" size={24} color="#1d4ed8" />,
     },
     {
-      key: 'calendar',
-      title: 'Lịch học vụ',
-      subtitle: 'Xem các mốc thời gian quan trọng',
+      key: 'schedule',
+      title: 'Thời khóa biểu',
+      subtitle: 'Xem lịch học tuần theo lớp, giờ và phòng',
       tone: '#0f766e',
-      icon: <MaterialCommunityIcons name="calendar-month" size={24} color="#0f766e" />,
+      icon: <Ionicons name="calendar-outline" size={24} color="#0f766e" />,
     },
     {
       key: 'attendance',
@@ -227,6 +227,12 @@ export default function HomeScreen({ onNavigate }) {
             onPress={() => onNavigate?.('feedback')}
           />
           <ServiceRow
+            title="Mở thời khóa biểu tuần"
+            subtitle="Xem lịch học thật đang áp dụng cho tuần hiện tại, có lớp, giảng viên, phòng và slot học."
+            icon={<Ionicons name="calendar-outline" size={22} color="#0f766e" />}
+            onPress={() => onNavigate?.('schedule')}
+          />
+          <ServiceRow
             title="Xem lịch thi"
             subtitle="Mở lịch thi để tránh bỏ lỡ thay đổi về phòng, ngày hoặc ca thi."
             icon={<Ionicons name="document-text-outline" size={22} color="#1d4ed8" />}
@@ -237,6 +243,12 @@ export default function HomeScreen({ onNavigate }) {
             subtitle="Theo dõi điểm danh sớm để phát hiện vấn đề trước khi kết thúc học kỳ."
             icon={<MaterialCommunityIcons name="clipboard-pulse-outline" size={22} color="#7c3aed" />}
             onPress={() => onNavigate?.('attendance')}
+          />
+          <ServiceRow
+            title="Xem lịch học vụ"
+            subtitle="Mở lịch học vụ để kiểm tra các mốc quan trọng của học kỳ và nhà trường."
+            icon={<MaterialCommunityIcons name="calendar-month" size={22} color="#0f766e" />}
+            onPress={() => onNavigate?.('academicCalendar')}
           />
         </View>
       </ScrollView>

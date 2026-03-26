@@ -82,6 +82,19 @@ const classSectionSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    // Khung chương trình mà lớp này thuộc về
+    curriculum: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Curriculum",
+      required: false,
+    },
+    // Kỳ trong khung CT mà môn này thuộc về (1, 2, 3...)
+    // Dùng để auto-enrollment khớp đúng lớp cho đúng kỳ trong khung
+    curriculumSemesterOrder: {
+      type: Number,
+      min: 1,
+      required: false,
+    },
   },
   { timestamps: true },
 );
@@ -97,6 +110,8 @@ classSectionSchema.index({ teacher: 1, timeslot: 1, dayOfWeek: 1 });
 classSectionSchema.index({ room: 1, timeslot: 1, dayOfWeek: 1 });
 // Index for date range queries
 classSectionSchema.index({ startDate: 1, endDate: 1 });
+// Index for auto-enrollment matching on curriculum + curriculumSemesterOrder
+classSectionSchema.index({ curriculum: 1, curriculumSemesterOrder: 1, semester: 1 });
 
 const ClassSection = mongoose.model("ClassSection", classSectionSchema);
 

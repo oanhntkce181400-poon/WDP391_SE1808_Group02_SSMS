@@ -48,6 +48,15 @@ const classService = {
 
   // Bulk create class sections from curriculum
   bulkCreate: (classes) => axiosClient.post('/classes/bulk-create', { classes }),
+
+  // Bulk create class sections from curriculum with classGroup
+  bulkCreateFromCurriculum: (data) => axiosClient.post('/classes/bulk-create-from-curriculum', data),
+
+  // Bulk assign classGroup to multiple existing class sections
+  bulkAssignGroup: (data) => axiosClient.post('/classes/bulk-assign-group', data),
+
+  // Get distinct classGroups for filtering
+  getClassGroups: (params) => axiosClient.get('/classes/groups', { params }),
 };
 
 export default classService;

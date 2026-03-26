@@ -1,14 +1,58 @@
-import LecturerFeedbackPortal from '../../components/features/LecturerFeedbackPortal';
+import { useState } from 'react';
+import FeedbackTemplateList from '../../components/features/FeedbackTemplateList';
+import FeedbackSubmissionMonitor from '../../components/features/FeedbackSubmissionMonitor';
 
 export default function FeedbackManagementPage() {
+  const [activeTab, setActiveTab] = useState('campaigns');
+
   return (
-    <div className="p-6">
-      <LecturerFeedbackPortal
-        mode="admin"
-        title="Qu\u1ea3n l\u00fd \u0111\u00e1nh gi\u00e1 gi\u1ea3ng vi\u00ean"
-        description="Trang n\u00e0y d\u00f9ng c\u00f9ng flow d\u1eef li\u1ec7u v\u1edbi mobile app v\u00e0 web sinh vi\u00ean. Qu\u1ea3n tr\u1ecb vi\u00ean c\u00f3 th\u1ec3 xem to\u00e0n b\u1ed9 l\u1edbp, theo d\u00f5i th\u1ed1ng k\u00ea v\u00e0 x\u1eed l\u00fd c\u00e1c b\u1ea3n ghi pending n\u1ebfu CSDL c\u00f2n d\u1eef li\u1ec7u ch\u1edd duy\u1ec7t."
-        showModeration
-      />
+    <div className="space-y-6 p-6">
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Quản lý đánh giá giảng viên</h1>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
+              Quản trị viên mở hoặc đóng đợt feedback bằng mẫu đánh giá ở đây. Sinh viên chỉ thấy
+              form tại trang <span className="font-semibold text-sky-700">/student/feedback</span>{' '}
+              khi có mẫu đánh giá giảng viên ở trạng thái <span className="font-semibold">Đang mở</span>{' '}
+              và thời gian hiện tại nằm trong khoảng đã cấu hình.
+            </p>
+          </div>
+          <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setActiveTab('campaigns')}
+              className={`rounded-full px-4 py-2 ${
+                activeTab === 'campaigns' ? 'bg-blue-600 text-white' : 'text-slate-600'
+              }`}
+            >
+              Cấu hình đợt feedback
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('responses')}
+              className={`rounded-full px-4 py-2 ${
+                activeTab === 'responses' ? 'bg-blue-600 text-white' : 'text-slate-600'
+              }`}
+            >
+              Theo dõi phản hồi
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {activeTab === 'campaigns' ? (
+        <>
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-800">
+            Mẹo dùng nhanh: tạo một mẫu có đối tượng <strong>Giảng viên</strong>, đặt thời điểm bắt
+            đầu và kết thúc, rồi chuyển trạng thái sang <strong>Đang mở</strong>. Khi hết đợt, chỉ
+            cần đổi sang <strong>Đã đóng</strong> hoặc chỉnh lại khoảng thời gian.
+          </div>
+          <FeedbackTemplateList />
+        </>
+      ) : (
+        <FeedbackSubmissionMonitor />
+      )}
     </div>
   );
 }

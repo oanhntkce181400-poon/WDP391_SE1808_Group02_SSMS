@@ -68,6 +68,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/subjects", require("./routes/subject.routes"));
+app.use("/api/score-components", require("./routes/scoreComponent.routes"));
 app.use("/api/curriculums", require("./routes/curriculum.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
@@ -99,6 +100,7 @@ app.use("/api/dashboard", require("./routes/dashboard.routes"));
 // Lecturer feedback flow used by the mobile app (submit/view/update).
 app.use("/api/feedbacks", require("./routes/feedback.routes"));
 app.use("/api/feedback-templates", require("./routes/feedbackTemplate.routes"));
+app.use("/api/email-templates", require("./routes/emailTemplate.routes"));
 app.use(
   "/api/feedback-submissions",
   require("./routes/feedbackSubmission.routes"),

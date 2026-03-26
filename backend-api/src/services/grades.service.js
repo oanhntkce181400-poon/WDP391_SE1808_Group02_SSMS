@@ -8,6 +8,8 @@ const Teacher = require('../models/teacher.model');
 const User = require('../models/user.model');
 const GradeChangeLog = require('../models/gradeChangeLog.model');
 const mailer = require('../external/mailer');
+const scoreComponentService = require('./scoreComponent.service');
+const emailTemplateService = require('./emailTemplate.service');
 
 class GradesService {
   /**
@@ -99,9 +101,108 @@ class GradesService {
   }
 
   /**
-   * Apply score fields to enrollment and auto-calculate final grade if enough data.
+   * Calculate PT average from multiple PT scores
+   * @param {Array} ptScores - Array of PT score objects: [{type, score}, ...]
+   * @returns {Number} Average of all PT scores, or null if no PT scores
    */
-  applyScoresToEnrollment(enrollment, { midtermScore, finalScore, otherScore, continuousScore }, autoCalculate) {
+  calculatePTAverage(ptScores) {
+    if (!ptScores || !Array.isArray(ptScores) || ptScores.length === 0) {
+      return null;
+    }
+    const sum = ptScores.reduce((acc, item) => acc + item.score, 0);
+    return parseFloat((sum / ptScores.length).toFixed(2));
+  }
+
+  /**
+   * Get grading weights from subject or use defaults
+   * @param {Object} subject - Subject document with gradingWeights
+   * @returns {Object} Grading weights: {GK, CK, BT, PT, QT}
+   */
+  getGradingWeights(subject) {
+    const Subject = require('../models/subject.model');
+    
+    // Use subject's grading weights if available, otherwise use defaults
+    if (subject && subject.gradingWeights) {
+      return {
+        GK: subject.gradingWeights.GK || 30,
+        CK: subject.gradingWeights.CK || 50,
+        BT: subject.gradingWeights.BT || 20,
+        PT: subject.gradingWeights.PT || 0,
+        QT: subject.gradingWeights.QT || 0
+      };
+    }
+    
+    // Default weights
+    return {
+      GK: 30,  // Giữa kỳ
+      CK: 50,  // Cuối kỳ
+      BT: 0,   // Bài tập (assignment)
+      PT: 20,  // Kiểm tra thường xuyên (practical/progress tests)
+      QT: 0    // Quá trình
+    };
+  }
+
+  /**
+   * Calculate final grade with dynamic formula based on subject weights
+   * @param {Object} enrollment - ClassEnrollment document with all score fields
+   * @param {Object} weights - Grading weights {GK, CK, BT, PT, QT}
+   * @returns {Number} Calculated final grade, or null if insufficient data
+   */
+  calculateGradeWithDynamicWeights(enrollment, weights) {
+    // Minimum requirement: both GK and CK must be provided
+    if (enrollment.midtermScore === null || enrollment.finalScore === null) {
+      return null;
+    }
+
+    let calculatedGrade = 0;
+    let totalWeight = 0;
+
+    // Calculate GK (Giữa kỳ) contribution
+    if (weights.GK > 0) {
+      calculatedGrade += enrollment.midtermScore * (weights.GK / 100);
+      totalWeight += weights.GK;
+    }
+
+    // Calculate CK (Cuối kỳ) contribution
+    if (weights.CK > 0) {
+      calculatedGrade += enrollment.finalScore * (weights.CK / 100);
+      totalWeight += weights.CK;
+    }
+
+    // Calculate BT (Bài tập) contribution if available
+    if (weights.BT > 0 && enrollment.assignmentScore !== null) {
+      calculatedGrade += enrollment.assignmentScore * (weights.BT / 100);
+      totalWeight += weights.BT;
+    }
+
+    // Calculate PT (Kiểm tra thường xuyên) average if available
+    if (weights.PT > 0) {
+      const ptAverage = this.calculatePTAverage(enrollment.ptScores);
+      if (ptAverage !== null) {
+        calculatedGrade += ptAverage * (weights.PT / 100);
+        totalWeight += weights.PT;
+      }
+    }
+
+    // Calculate QT (Quá trình) contribution if available
+    if (weights.QT > 0 && enrollment.continuousScore !== null) {
+      calculatedGrade += enrollment.continuousScore * (weights.QT / 100);
+      totalWeight += weights.QT;
+    }
+
+    // Normalize if not all weights are used
+    if (totalWeight > 0 && totalWeight !== 100) {
+      calculatedGrade = (calculatedGrade / totalWeight) * 100;
+    }
+
+    return parseFloat(calculatedGrade.toFixed(2));
+  }
+
+  /**
+   * Apply score fields to enrollment and auto-calculate final grade based on subject's grading weights.
+   * Async version to fetch subject data.
+   */
+  async applyScoresToEnrollmentAsync(enrollment, { midtermScore, finalScore, otherScore, continuousScore, ptScores }, subject, autoCalculate) {
     if (midtermScore !== null && midtermScore !== undefined) {
       enrollment.midtermScore = midtermScore;
     }
@@ -115,18 +216,63 @@ class GradesService {
     if (continuousScore !== null && continuousScore !== undefined) {
       enrollment.continuousScore = continuousScore;
     }
+    if (ptScores !== null && ptScores !== undefined && Array.isArray(ptScores)) {
+      enrollment.ptScores = ptScores;
+    }
 
-    if (
-      autoCalculate &&
-      enrollment.midtermScore !== null &&
-      enrollment.finalScore !== null &&
-      enrollment.assignmentScore !== null
-    ) {
-      const calculatedGrade =
-        (enrollment.midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore) +
-        (enrollment.finalScore * this.constructor.GRADE_WEIGHTS.finalScore) +
-        (enrollment.assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore);
-      enrollment.grade = parseFloat(calculatedGrade.toFixed(2));
+    if (autoCalculate) {
+      // Get grading weights from subject
+      const weights = this.getGradingWeights(subject);
+      
+      // Calculate grade using dynamic weights
+      const calculatedGrade = this.calculateGradeWithDynamicWeights(enrollment, weights);
+      if (calculatedGrade !== null) {
+        enrollment.grade = calculatedGrade;
+      }
+    }
+  }
+
+  /**
+   * Synchronous version for backward compatibility
+   * Uses default weights from static GRADE_WEIGHTS
+   */
+  applyScoresToEnrollment(enrollment, { midtermScore, finalScore, otherScore, continuousScore, ptScores }, autoCalculate) {
+    if (midtermScore !== null && midtermScore !== undefined) {
+      enrollment.midtermScore = midtermScore;
+    }
+    if (finalScore !== null && finalScore !== undefined) {
+      enrollment.finalScore = finalScore;
+    }
+    if (otherScore !== null && otherScore !== undefined) {
+      // Keep backward compatibility with existing schema: otherScore -> assignmentScore
+      enrollment.assignmentScore = otherScore;
+    }
+    if (continuousScore !== null && continuousScore !== undefined) {
+      enrollment.continuousScore = continuousScore;
+    }
+    if (ptScores !== null && ptScores !== undefined && Array.isArray(ptScores)) {
+      enrollment.ptScores = ptScores;
+    }
+
+    if (autoCalculate) {
+      // Calculate grade if at least GK and CK are provided (minimum requirement)
+      if (enrollment.midtermScore !== null && enrollment.finalScore !== null) {
+        let calculatedGrade = 0;
+        
+        // Always include GK and CK
+        calculatedGrade += enrollment.midtermScore * this.constructor.GRADE_WEIGHTS.midtermScore; // 30%
+        calculatedGrade += enrollment.finalScore * this.constructor.GRADE_WEIGHTS.finalScore;     // 50%
+        
+        // Add BT (Assignment) if provided, otherwise distribute its weight to CK
+        if (enrollment.assignmentScore !== null) {
+          calculatedGrade += enrollment.assignmentScore * this.constructor.GRADE_WEIGHTS.assignmentScore; // 20%
+        } else {
+          // If BT not provided, distribute BT's 20% weight to CK
+          calculatedGrade += enrollment.finalScore * 0.2;
+        }
+        
+        enrollment.grade = parseFloat(calculatedGrade.toFixed(2));
+      }
     }
   }
 
@@ -142,27 +288,20 @@ class GradesService {
     }
   }
 
-  buildGradePublishedEmail({ studentName, classCode, subjectName, grade, teacherName }) {
-    return `
-      <div style="font-family: Inter, sans-serif; background: #f8fafc; padding: 24px;">
-        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
-          <div style="background: #1A237E; padding: 18px 24px; color: #ffffff;">
-            <h2 style="margin: 0; font-size: 18px;">SSMS - Cong bo diem chinh thuc</h2>
-          </div>
-          <div style="padding: 24px; color: #334155;">
-            <p style="margin-top: 0;">Xin chao <strong>${studentName || 'Sinh vien'}</strong>,</p>
-            <p>Diem chinh thuc cua ban da duoc cong bo:</p>
-            <ul style="line-height: 1.8; padding-left: 18px;">
-              <li>Lop: <strong>${classCode || 'N/A'}</strong></li>
-              <li>Mon hoc: <strong>${subjectName || 'N/A'}</strong></li>
-              <li>Diem tong ket: <strong>${grade ?? 'N/A'}</strong></li>
-              <li>Giang vien: <strong>${teacherName || 'N/A'}</strong></li>
-            </ul>
-            <p style="margin-bottom: 0; color: #64748b; font-size: 13px;">Vui long dang nhap he thong de xem chi tiet thanh phan diem.</p>
-          </div>
-        </div>
-      </div>
-    `;
+  buildGradePublishedEmail({ studentName, classCode, subjectName, grade, teacherName, scoreComponents = {} }) {
+    return emailTemplateService.renderSystemTemplateFallback('GRADE_PUBLISHED', {
+      studentName: studentName || 'Sinh vien',
+      classCode: classCode || 'N/A',
+      subjectName: subjectName || 'N/A',
+      grade: grade ?? 'N/A',
+      teacherName: teacherName || 'N/A',
+      gk: scoreComponents.gk ?? '',
+      ck: scoreComponents.ck ?? '',
+      pt: scoreComponents.pt ?? '',
+      bt: scoreComponents.bt ?? '',
+      qt: scoreComponents.qt ?? '',
+      ptAverage: scoreComponents.ptAverage ?? '',
+    }).html;
   }
 
   /**
@@ -174,6 +313,7 @@ class GradesService {
       finalScore: enrollment.finalScore ?? null,
       assignmentScore: enrollment.assignmentScore ?? null,
       continuousScore: enrollment.continuousScore ?? null,
+      ptScores: enrollment.ptScores ?? [],
       grade: enrollment.grade ?? null,
     };
   }
@@ -183,11 +323,20 @@ class GradesService {
    */
   getChangedFields(beforeScores, afterScores) {
     const fields = ['midtermScore', 'finalScore', 'assignmentScore', 'continuousScore', 'grade'];
-    return fields.filter((field) => {
+    const changedFields = fields.filter((field) => {
       const beforeValue = beforeScores[field] ?? null;
       const afterValue = afterScores[field] ?? null;
       return beforeValue !== afterValue;
     });
+
+    // Check if ptScores changed
+    const beforePT = JSON.stringify(beforeScores.ptScores ?? []);
+    const afterPT = JSON.stringify(afterScores.ptScores ?? []);
+    if (beforePT !== afterPT) {
+      changedFields.push('ptScores');
+    }
+
+    return changedFields;
   }
 
   /**
@@ -198,6 +347,8 @@ class GradesService {
     const { userId, role } = requester;
     const { grade = {}, reason = '' } = payload;
 
+    console.log('[updateEnrollmentGrade] Received grade payload:', JSON.stringify(grade, null, 2));
+
     if (!enrollmentId) {
       const error = new Error('enrollmentId is required');
       error.statusCode = 400;
@@ -206,7 +357,14 @@ class GradesService {
 
     const enrollment = await ClassEnrollment.findById(enrollmentId)
       .populate('student', 'studentCode fullName')
-      .populate('classSection', 'classCode teacher');
+      .populate({
+        path: 'classSection',
+        select: 'classCode teacher subject',
+        populate: {
+          path: 'subject',
+          select: 'subjectCode subjectName gradingWeights'
+        }
+      });
 
     if (!enrollment) {
       const error = new Error('Enrollment not found');
@@ -228,19 +386,36 @@ class GradesService {
 
     this.ensureEnrollmentEditable(enrollment);
 
-    const { midtermScore, finalScore, otherScore, continuousScore } = grade;
+    const { midtermScore, finalScore, otherScore, continuousScore, ptScores } = grade;
     this.validateScore(midtermScore, 'midtermScore');
     this.validateScore(finalScore, 'finalScore');
     this.validateScore(otherScore, 'otherScore');
     this.validateScore(continuousScore, 'continuousScore');
 
+    // Validate ptScores if provided
+    if (ptScores !== null && ptScores !== undefined && Array.isArray(ptScores)) {
+      ptScores.forEach(pt => {
+        if (pt.type && !['PT1', 'PT2', 'PT3'].includes(pt.type)) {
+          const error = new Error('Invalid PT type. Must be PT1, PT2, or PT3');
+          error.statusCode = 400;
+          throw error;
+        }
+        this.validateScore(pt.score, `ptScores[${pt.type}].score`);
+      });
+    }
+
     const beforeScores = this.buildScoreSnapshot(enrollment);
 
-    this.applyScoresToEnrollment(
+    // Use async version to get subject's grading weights
+    const subject = enrollment.classSection?.subject || null;
+    await this.applyScoresToEnrollmentAsync(
       enrollment,
-      { midtermScore, finalScore, otherScore, continuousScore },
+      { midtermScore, finalScore, otherScore, continuousScore, ptScores },
+      subject,
       true
     );
+
+    console.log('[updateEnrollmentGrade] After apply - enrollment.ptScores:', JSON.stringify(enrollment.ptScores, null, 2));
 
     const afterScores = this.buildScoreSnapshot(enrollment);
     const changedFields = this.getChangedFields(beforeScores, afterScores);
@@ -252,6 +427,10 @@ class GradesService {
     }
 
     const savedEnrollment = await enrollment.save();
+
+    console.log('[updateEnrollmentGrade] Saved enrollment ptScores:', JSON.stringify(savedEnrollment.ptScores, null, 2));
+    console.log('[updateEnrollmentGrade] Change log - beforeScores:', JSON.stringify(beforeScores, null, 2));
+    console.log('[updateEnrollmentGrade] Change log - afterScores:', JSON.stringify(afterScores, null, 2));
 
     const savedLog = await GradeChangeLog.create({
       enrollment: savedEnrollment._id,
@@ -315,6 +494,11 @@ class GradesService {
       .populate('changedBy', 'fullName email role')
       .sort({ createdAt: -1 })
       .lean();
+
+    console.log('[getEnrollmentGradeChangeLogs] Found', logs.length, 'logs for enrollment:', enrollmentId);
+    if (logs.length > 0) {
+      console.log('[getEnrollmentGradeChangeLogs] First log afterScores:', JSON.stringify(logs[0].afterScores, null, 2));
+    }
 
     return {
       success: true,
@@ -530,7 +714,7 @@ class GradesService {
           path: 'classSection',
           populate: {
             path: 'subject',
-            select: 'subjectCode subjectName credits'
+            select: 'subjectCode subjectName credits gradingWeights'
           }
         })
         .populate('student', 'studentCode fullName')
@@ -546,18 +730,59 @@ class GradesService {
         );
       }
 
+      // Filter to only include enrollments with grades (at least GK and CK)
+      result = result.filter(e => e.midtermScore !== null && e.finalScore !== null);
+
       // Add processed grade details to each enrollment
-      const detailedEnrollments = result.map(e => ({
-        ...e,
-        gradeComponents: {
-          GK: e.midtermScore,
-          CK: e.finalScore,
-          BT: e.assignmentScore,
-          'Quá trình': e.continuousScore
-        },
-        finalGrade: e.grade,
-        allComponentsProvided: e.midtermScore !== null && e.finalScore !== null && e.assignmentScore !== null
-      }));
+      const detailedEnrollments = result.map(e => {
+        // Recalculate final grade from component scores dynamically
+        let recalculatedGrade = e.grade; // default to stored grade
+        
+        const weights = e.classSection?.subject?.gradingWeights || {
+          GK: 30,
+          CK: 50,
+          BT: 0,
+          PT: 20,
+          QT: 0
+        };
+        
+        // Recalculate using dynamic weights
+        if (e.midtermScore !== null && e.finalScore !== null) {
+          let grade = (e.midtermScore * 0.3) + (e.finalScore * 0.5);
+          
+          // Check if assignment score exists
+          if (e.assignmentScore !== null) {
+            grade += e.assignmentScore * 0.2;
+            recalculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Check if PT scores exist
+          else if (e.ptScores && Array.isArray(e.ptScores) && e.ptScores.length > 0) {
+            const ptAverage = e.ptScores.reduce((sum, pt) => sum + pt.score, 0) / e.ptScores.length;
+            grade += ptAverage * 0.2;
+            recalculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // If neither, scale up
+          else {
+            recalculatedGrade = parseFloat((grade / 0.8).toFixed(2));
+          }
+        }
+        
+        return {
+          ...e,
+          gradingWeights: weights,
+          gradeComponents: {
+            GK: e.midtermScore,
+            CK: e.finalScore,
+            BT: e.assignmentScore,
+            PT: e.ptScores?.length > 0 
+              ? parseFloat((e.ptScores.reduce((sum, pt) => sum + pt.score, 0) / e.ptScores.length).toFixed(2))
+              : null,
+            'Quá trình': e.continuousScore
+          },
+          finalGrade: recalculatedGrade,  // Use recalculated grade, not stored
+          allComponentsProvided: e.midtermScore !== null && e.finalScore !== null && e.assignmentScore !== null
+        };
+      });
 
       return {
         success: true,
@@ -629,7 +854,7 @@ class GradesService {
           path: 'classSection',
           populate: {
             path: 'subject',
-            select: 'subjectCode subjectName credits'
+            select: 'subjectCode subjectName credits gradingWeights'
           }
         })
         .populate('student', 'studentCode fullName')
@@ -679,7 +904,15 @@ class GradesService {
           finalScore: enrollment.finalScore,
           assignmentScore: enrollment.assignmentScore,
           continuousScore: enrollment.continuousScore,
+          ptScores: enrollment.ptScores || [],
           classCode: enrollment.classSection.classCode,
+          gradingWeights: enrollment.classSection.subject?.gradingWeights || {
+            GK: 30,
+            CK: 50,
+            BT: 20,
+            PT: 0,
+            QT: 0
+          },
           gradeComponents: {
             GK: enrollment.midtermScore,
             CK: enrollment.finalScore,
@@ -741,7 +974,7 @@ class GradesService {
       // --- Single mode ---
       if (isSinglePayload) {
         const { studentId, classSectionId, grade = {} } = payload;
-        const { midtermScore, finalScore, otherScore } = grade;
+        const { midtermScore, finalScore, otherScore, ptScores } = grade;
 
         const permission = await this.checkLecturerPermission({
           userId: requester.userId,
@@ -758,6 +991,18 @@ class GradesService {
         this.validateScore(finalScore, 'finalScore');
         this.validateScore(otherScore, 'otherScore');
 
+        // Validate ptScores if provided
+        if (ptScores !== null && ptScores !== undefined && Array.isArray(ptScores)) {
+          ptScores.forEach(pt => {
+            if (pt.type && !['PT1', 'PT2', 'PT3'].includes(pt.type)) {
+              const error = new Error('Invalid PT type. Must be PT1, PT2, or PT3');
+              error.statusCode = 400;
+              throw error;
+            }
+            this.validateScore(pt.score, `ptScores[${pt.type}].score`);
+          });
+        }
+
         const enrollment = await ClassEnrollment.findOne({
           student: studentId,
           classSection: classSectionId,
@@ -772,7 +1017,7 @@ class GradesService {
 
         this.applyScoresToEnrollment(
           enrollment,
-          { midtermScore, finalScore, otherScore },
+          { midtermScore, finalScore, otherScore, ptScores },
           autoCalculate
         );
 
@@ -898,7 +1143,7 @@ class GradesService {
           }
         })
         .populate('student', 'studentCode fullName email')
-        .select('student classSection midtermScore finalScore assignmentScore continuousScore grade status isFinalized submittedAt')
+        .select('student classSection midtermScore finalScore assignmentScore continuousScore ptScores grade status isFinalized submittedAt')
         .lean();
 
       if (!enrollments || enrollments.length === 0) {
@@ -980,29 +1225,43 @@ class GradesService {
       for (const enrollment of enrollments) {
         try {
           // Skip if no grades entered
-          if (enrollment.midtermScore === null && enrollment.finalScore === null && enrollment.assignmentScore === null) {
+          if (enrollment.midtermScore === null && enrollment.finalScore === null && enrollment.assignmentScore === null && (!enrollment.ptScores || enrollment.ptScores.length === 0)) {
             errors.push({
               studentCode: enrollment.student?.studentCode,
-              error: 'Chưa nhập điểm nào'
+              error: 'Chua nhap diem nao'
             });
             continue;
           }
 
-          // Skip if not all grades are entered (require all 3 components)
-          if (enrollment.midtermScore === null || enrollment.finalScore === null || enrollment.assignmentScore === null) {
+          // Skip if minimum required grades not entered (need GK + CK at minimum)
+          if (enrollment.midtermScore === null || enrollment.finalScore === null) {
             errors.push({
               studentCode: enrollment.student?.studentCode,
-              error: 'Chưa nhập đủ 3 thành phần điểm (GK, CK, BT)'
+              error: 'Chua nhap du 2 thanh phan toi thieu (GK, CK)'
             });
             continue;
           }
 
-          // Calculate final grade
+          // Calculate final grade with new formula: GK×30% + CK×50% + PT×20%
           const gk = enrollment.midtermScore;
           const ck = enrollment.finalScore;
-          const bt = enrollment.assignmentScore;
-          const calculatedGrade = (gk * 0.3) + (ck * 0.5) + (bt * 0.2);
-          const finalGrade = Math.round(calculatedGrade * 100) / 100;
+          const bt = enrollment.assignmentScore; // Keep for display but not in calculation
+          const qt = enrollment.continuousScore; // Keep for display
+          
+          let finalGrade = (gk * 0.3) + (ck * 0.5);
+          let ptAverage = null;
+          
+          // Add PT scores if available
+          if (enrollment.ptScores && enrollment.ptScores.length > 0) {
+            const ptSum = enrollment.ptScores.reduce((sum, pt) => sum + (pt.score || 0), 0);
+            ptAverage = Math.round((ptSum / enrollment.ptScores.length) * 100) / 100;
+            finalGrade += ptAverage * 0.2;
+          } else {
+            // If no PT scores, scale up the existing component weights
+            finalGrade = finalGrade / 0.8;
+          }
+          
+          finalGrade = Math.round(finalGrade * 100) / 100;
 
           // Update enrollment
           enrollment.grade = finalGrade;
@@ -1012,7 +1271,7 @@ class GradesService {
           
           await enrollment.save();
 
-          const studentName = enrollment.student?.fullName || 'Sinh vien';
+          const studentName = enrollment.student?.fullName || 'Sinh viên';
           const studentEmail = enrollment.student?.email;
           const studentUserId = enrollment.student?.userId;
           const classCode = enrollment.classSection?.classCode || 'N/A';
@@ -1021,8 +1280,8 @@ class GradesService {
           if (studentUserId && io && typeof io.sendToUser === 'function') {
             io.sendToUser(String(studentUserId), 'grade-finalized', {
               type: 'grade-finalized',
-              title: 'Cong bo diem chinh thuc',
-              message: `${subjectName} (${classCode}) da duoc cong bo diem`,
+              title: 'Công bố điểm chính thức',
+              message: `${subjectName} (${classCode}) đã được công bố điểm`,
               classSectionId,
               grade: finalGrade,
               studentCode: enrollment.student?.studentCode,
@@ -1032,19 +1291,41 @@ class GradesService {
           }
 
           if (studentEmail) {
-            const emailHtml = this.buildGradePublishedEmail({
+            const templateVariables = {
               studentName,
               classCode,
               subjectName,
               grade: finalGrade,
-              teacherName: requester.role || 'Giang vien',
-            });
+              teacherName: requester.fullName || requester.role || 'Giang vien',
+              scoreComponents: {
+                gk,
+                ck,
+                pt: enrollment.ptScores && enrollment.ptScores.length > 0 ? enrollment.ptScores.length + ' lan' : null,
+                bt,
+                qt,
+                ptAverage,
+              },
+            };
+
+            let renderedEmail;
+            try {
+              renderedEmail = await emailTemplateService.renderTemplateByCode(
+                'GRADE_PUBLISHED',
+                templateVariables,
+              );
+            } catch (_error) {
+              renderedEmail = {
+                subject: `[SSMS] Cong bo diem ${subjectName}`,
+                text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
+                html: this.buildGradePublishedEmail(templateVariables),
+              };
+            }
 
             const emailResult = await mailer.sendMail({
               to: studentEmail,
-              subject: `[SSMS] Cong bo diem ${subjectName}`,
-              text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
-              html: emailHtml,
+              subject: renderedEmail.subject,
+              text: renderedEmail.text,
+              html: renderedEmail.html,
             });
 
             if (emailResult?.sent) {
@@ -1059,8 +1340,9 @@ class GradesService {
             components: {
               GK: gk,
               CK: ck,
+              PT: ptAverage,
               BT: bt,
-              QT: enrollment.continuousScore
+              QT: qt
             }
           });
 
@@ -1087,6 +1369,82 @@ class GradesService {
     } catch (error) {
       console.error('Error submitting final class grades:', error);
       throw new Error(`Lỗi nộp điểm: ${error.message}`);
+    }
+  }
+
+  /**
+   * Tính điểm cuối cùng với công thức động từ ScoreComponent
+   * @param {Object} enrollment - Enrollment document với tất cả scores
+   * @param {Object} scoreComponent - ScoreComponent definition
+   * @returns {Promise<number>} Điểm cuối cùng
+   */
+  async calculateGradeWithScoreComponent(enrollment, scoreComponent) {
+    try {
+      if (!enrollment || !scoreComponent) {
+        console.warn('[GradesService] Missing enrollment or scoreComponent for calculation');
+        return null;
+      }
+
+      const enrollmentScores = {
+        ptScores: enrollment.ptScores || [],
+        midtermScore: enrollment.midtermScore,
+        finalScore: enrollment.finalScore,
+        assignmentScore: enrollment.assignmentScore,
+        continuousScore: enrollment.continuousScore
+      };
+
+      const finalScore = scoreComponentService.calculateFinalScore(enrollmentScores, scoreComponent);
+      return finalScore;
+    } catch (error) {
+      console.error('[GradesService] Error calculating grade with score component:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Apply scores to enrollment với công thức động
+   * @param {Object} enrollment - Enrollment document
+   * @param {Object} scores - { midtermScore, finalScore, otherScore, continuousScore, ptScores }
+   * @param {Object} scoreComponent - ScoreComponent definition
+   */
+  async applyScoresToEnrollmentWithComponent(enrollment, scores, scoreComponent) {
+    try {
+      // Apply individual scores first
+      this.applyScoresToEnrollment(enrollment, scores, false);
+
+      // Calculate grade using score component
+      if (scoreComponent) {
+        const finalGrade = await this.calculateGradeWithScoreComponent(enrollment, scoreComponent);
+        if (finalGrade !== null) {
+          enrollment.grade = finalGrade;
+        }
+      }
+    } catch (error) {
+      console.error('[GradesService] Error applying scores with component:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy ScoreComponent cho một ClassSection/Subject
+   * @param {string} classSectionId - ID của class section
+   * @returns {Promise<Object>} ScoreComponent hoặc null
+   */
+  async getScoreComponentForClassSection(classSectionId) {
+    try {
+      const classSection = await ClassSection.findById(classSectionId)
+        .select('subject')
+        .lean();
+
+      if (!classSection) {
+        return null;
+      }
+
+      const scoreComponent = await scoreComponentService.getScoreComponentBySubject(classSection.subject);
+      return scoreComponent;
+    } catch (error) {
+      console.error('[GradesService] Error getting score component for class section:', error);
+      return null;
     }
   }
 }

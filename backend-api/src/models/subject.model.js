@@ -10,27 +10,72 @@ const majorRequirementSchema = new mongoose.Schema({
   isRequired: { type: Boolean, default: true },
 });
 
+const gradingWeightsSchema = new mongoose.Schema(
+  {
+    GK: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 30,
+    },
+    CK: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 50,
+    },
+    BT: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 20,
+    },
+    PT: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    QT: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+  },
+  { _id: false },
+);
+
 const subjectSchema = new mongoose.Schema(
   {
     subjectCode: { type: String, required: true, unique: true, trim: true },
     subjectName: { type: String, required: true, trim: true },
     credits: { type: Number, required: true },
-    tuitionFee: { type: Number, default: 0 }, // Học phí (VNĐ) - 100 VNĐ/tín chỉ
-    majorCode: { type: String, trim: true }, // Single department (backward compatibility)
-    majorCodes: [{ type: String, trim: true }], // Multiple departments (backward compatibility)
-    isCommon: { type: Boolean, default: false }, // Môn chung cho toàn khoa
-    facultyCode: { type: String, trim: true }, // New: Mã khoa quản lý môn học
-    majorRequirements: [majorRequirementSchema], // Danh sách chuyên ngành áp dụng với yêu cầu (bắt buộc/tự chọn)
-    description: { type: String, trim: true }, // Mô tả môn học
+    tuitionFee: { type: Number, default: 0 },
+    majorCode: { type: String, trim: true },
+    majorCodes: [{ type: String, trim: true }],
+    isCommon: { type: Boolean, default: false },
+    facultyCode: { type: String, trim: true },
+    majorRequirements: [majorRequirementSchema],
+    description: { type: String, trim: true },
     prerequisites: [prerequisiteSchema],
-    // Giáo viên phụ trách môn học (hỗ trợ xếp lịch giảng dạy)
-    teachers: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Teacher'
-    }],
-    
-    // Học kỳ đề xuất (dùng để gợi ý khi thiết lập khung chương trình)
+    teachers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Teacher',
+      },
+    ],
     suggestedSemester: { type: Number, min: 1, max: 9, default: 1 },
+    gradingWeights: {
+      type: gradingWeightsSchema,
+      default: () => ({
+        GK: 30,
+        CK: 50,
+        BT: 20,
+        PT: 0,
+        QT: 0,
+      }),
+    },
   },
   { timestamps: true },
 );

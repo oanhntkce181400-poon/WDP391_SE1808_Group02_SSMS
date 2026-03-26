@@ -22,7 +22,6 @@ module.exports = function authMiddleware(req, res, next) {
     }
 
     const payload = verifyAccessToken(token);
-    console.log('Auth payload:', payload); // Debug log
     req.auth = payload;
     return next();
   } catch (err) {

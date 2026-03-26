@@ -27,6 +27,8 @@ const enrollmentSnapshotSchema = new mongoose.Schema(
       academicYear: String,
     },
     curriculumCode: { type: String, trim: true },
+    /** Kỳ trong khung chương trình mà batch này xếp (null nếu retake mixed) */
+    curriculumSemester: { type: Number, default: null },
     filters: { type: mongoose.Schema.Types.Mixed, default: {} },
     dryRun: { type: Boolean, default: false },
     durationMs: { type: Number },

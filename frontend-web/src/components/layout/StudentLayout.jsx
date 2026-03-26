@@ -149,6 +149,7 @@ export default function StudentLayout() {
     { name: 'Giáo trình & Tài liệu', path: '/student/materials', icon: '📚' },
   ];
 
+  // Removed duplicate /student/registration - already exists in menu above
   const handleLogout = async () => {
     try {
       // Try to logout on server
@@ -432,6 +433,11 @@ export default function StudentLayout() {
                 <div className="text-right">
                   <p className="text-sm font-medium text-slate-900">{user.fullName || 'Student'}</p>
                   <p className="text-xs text-slate-500">{user.email}</p>
+                  {user.student?.placementClassName && (
+                    <p className="mt-0.5 text-[11px] font-semibold text-emerald-700">
+                      Lớp: {user.student.placementClassName}
+                    </p>
+                  )}
                 </div>
                 <button
                   className="rounded-md bg-white px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"

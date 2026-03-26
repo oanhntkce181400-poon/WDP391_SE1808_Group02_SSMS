@@ -34,6 +34,13 @@ export default function LecturerGradesEntryPage() {
   const [changeLogs, setChangeLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
 
+  // Modal PT scores
+  const [showPTModal, setShowPTModal] = useState(false);
+  const [selectedEnrollmentForPT, setSelectedEnrollmentForPT] = useState(null);
+  const [ptType, setPTType] = useState('PT1');
+  const [ptScore, setPTScore] = useState('');
+  const [savingPT, setSavingPT] = useState(false);
+
   // Khi classSectionId thay đổi: kiểm tra ID rồi tải thông tin lớp + danh sách sinh viên
   useEffect(() => {
     if (!classSectionId) {
@@ -72,6 +79,7 @@ export default function LecturerGradesEntryPage() {
           midtermScore: item.midtermScore ?? '',
           finalScore: item.finalScore ?? '',
           otherScore: item.assignmentScore ?? '',
+          ptScores: item.ptScores ?? [],
         };
       });
       setGradeDrafts(drafts);
@@ -123,7 +131,7 @@ export default function LecturerGradesEntryPage() {
   // Lưu điểm cho 1 sinh viên: validate dữ liệu, gọi API lưu, rồi tải lại danh sách
   const handleSaveRow = async (enrollment) => {
     try {
-      if (!enrollment?._id || !enrollment?.student?._id) {
+      if (!enrollment?._id) {
         setError('Khong tim thay du lieu enrollment de luu diem.');
         return;
       }
@@ -133,14 +141,20 @@ export default function LecturerGradesEntryPage() {
       setError(null);
       setSuccess(null);
 
-      await gradesService.submitSingleStudentGrade({
-        studentId: enrollment.student._id,
-        classSectionId,
-        grade: {
-          midtermScore: normalizeScoreInput(draft.midtermScore),
-          finalScore: normalizeScoreInput(draft.finalScore),
-          otherScore: normalizeScoreInput(draft.otherScore),
-        },
+      // Sử dụng PATCH endpoint để lưu tất cả điểm bao gồm ptScores
+      const scoreData = {
+        midtermScore: normalizeScoreInput(draft.midtermScore),
+        finalScore: normalizeScoreInput(draft.finalScore),
+        otherScore: normalizeScoreInput(draft.otherScore),
+        continuousScore: null,
+        ptScores: draft.ptScores || [],
+      };
+
+      console.log('Saving grade for enrollment:', enrollment._id, 'data:', scoreData);
+
+      await gradesService.updateEnrollmentGrade(enrollment._id, {
+        grade: scoreData,
+        reason: 'Lưu điểm từ giao diện nhập điểm',
       });
 
       setSuccess(`Đã lưu điểm cho ${enrollment.student?.fullName || 'sinh viên'}.`);
@@ -248,6 +262,80 @@ export default function LecturerGradesEntryPage() {
     }
   };
 
+  const openPTModal = (enrollment) => {
+    setSelectedEnrollmentForPT(enrollment);
+    setPTType('PT1');
+    setPTScore('');
+    setShowPTModal(true);
+  };
+
+  const handleSavePT = async () => {
+    try {
+      if (!selectedEnrollmentForPT?._id) {
+        setError('Không tìm thấy enrollment để lưu điểm PT.');
+        return;
+      }
+
+      if (!ptScore || Number(ptScore) < 0 || Number(ptScore) > 10) {
+        setError('Điểm PT phải nằm trong khoảng 0-10.');
+        return;
+      }
+
+      setSavingPT(true);
+      setError(null);
+      setSuccess(null);
+
+      // Cập nhật draft với PT mới
+      const updatedPTScores = [...(gradeDrafts[selectedEnrollmentForPT._id]?.ptScores || [])];
+      const existingIndex = updatedPTScores.findIndex(pt => pt.type === ptType);
+      
+      if (existingIndex >= 0) {
+        // Cập nhật PT tồn tại
+        updatedPTScores[existingIndex].score = Number(ptScore);
+      } else {
+        // Thêm PT mới
+        updatedPTScores.push({
+          type: ptType,
+          score: Number(ptScore),
+        });
+      }
+
+      setGradeDrafts((prev) => ({
+        ...prev,
+        [selectedEnrollmentForPT._id]: {
+          ...(prev[selectedEnrollmentForPT._id] || {}),
+          ptScores: updatedPTScores,
+        },
+      }));
+
+      setSuccess(`Đã thêm ${ptType} có điểm ${ptScore}.`);
+      setShowPTModal(false);
+      setSelectedEnrollmentForPT(null);
+    } catch (err) {
+      console.error('Error saving PT:', err);
+      setError('Không thể lưu điểm PT. Vui lòng thử lại.');
+    } finally {
+      setSavingPT(false);
+    }
+  };
+
+  const handleRemovePT = (enrollmentId, ptType) => {
+    setGradeDrafts((prev) => ({
+      ...prev,
+      [enrollmentId]: {
+        ...(prev[enrollmentId] || {}),
+        ptScores: (prev[enrollmentId]?.ptScores || []).filter(pt => pt.type !== ptType),
+      },
+    }));
+  };
+
+  const getPTDisplay = (enrollment) => {
+    const ptScores = gradeDrafts[enrollment._id]?.ptScores || [];
+    return ptScores.length > 0
+      ? ptScores.map(pt => `${pt.type}: ${pt.score}`).join(', ')
+      : 'Chưa có';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -328,7 +416,7 @@ export default function LecturerGradesEntryPage() {
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Tên Sinh Viên</th>
                   <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Điểm GK</th>
                   <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Điểm CK</th>
-                  <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Điểm khác</th>
+                  <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Điểm PT</th>
                   <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Hành động</th>
                 </tr>
               </thead>
@@ -381,24 +469,33 @@ export default function LecturerGradesEntryPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center text-sm text-gray-800">
-                      <div className="inline-flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          max="10"
-                          step="0.1"
-                          value={gradeDrafts[enrollment._id]?.otherScore ?? ''}
-                          onChange={(e) => handleDraftChange(enrollment._id, 'otherScore', e.target.value)}
-                          disabled={isFinalizedEnrollment(enrollment)}
-                          className="w-24 rounded border border-gray-300 px-2 py-1 text-center disabled:bg-slate-100"
-                        />
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded w-full">
+                          {getPTDisplay(enrollment)}
+                        </div>
                         <button
-                          onClick={() => openEditModal(enrollment)}
+                          onClick={() => openPTModal(enrollment)}
                           disabled={isFinalizedEnrollment(enrollment)}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-slate-300"
+                          className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-slate-300 px-2 py-1 border border-blue-300 rounded hover:bg-blue-50 disabled:border-slate-200"
                         >
-                          Edit
+                          + Thêm PT
                         </button>
+                        {(gradeDrafts[enrollment._id]?.ptScores || []).length > 0 && (
+                          <div className="text-xs w-full">
+                            {(gradeDrafts[enrollment._id]?.ptScores || []).map((pt) => (
+                              <div key={pt.type} className="flex items-center justify-between bg-blue-50 px-2 py-1 rounded mt-1">
+                                <span>{pt.type}: {pt.score}</span>
+                                <button
+                                  onClick={() => handleRemovePT(enrollment._id, pt.type)}
+                                  disabled={isFinalizedEnrollment(enrollment)}
+                                  className="text-red-500 hover:text-red-700 disabled:text-slate-300 ml-2"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -564,26 +661,105 @@ export default function LecturerGradesEntryPage() {
                 {!loadingLogs && changeLogs.length > 0 && (
                   <div className="space-y-3">
                     {changeLogs.map((log) => (
-                      <div key={log._id} className="border border-gray-200 rounded p-3">
-                        <div className="text-xs text-gray-500 mb-2">
+                      <div key={log._id} className="border border-gray-200 rounded p-3 bg-gray-50">
+                        <div className="text-xs text-gray-500 mb-3 font-medium">
                           {new Date(log.createdAt).toLocaleString('vi-VN')} - {log.changedBy?.fullName || log.changedBy?.email || 'Unknown'}
                         </div>
-                        <div className="text-sm text-gray-700 mb-1">
-                          Changed fields: {(log.changedFields || []).join(', ') || '—'}
-                        </div>
-                        <div className="text-sm text-gray-700 mb-1">
-                          Before: GK {formatScore(log.beforeScores?.midtermScore)} | CK {formatScore(log.beforeScores?.finalScore)} | Other {formatScore(log.beforeScores?.assignmentScore)}
-                        </div>
-                        <div className="text-sm text-gray-700 mb-1">
-                          After: GK {formatScore(log.afterScores?.midtermScore)} | CK {formatScore(log.afterScores?.finalScore)} | Other {formatScore(log.afterScores?.assignmentScore)}
-                        </div>
-                        <div className="text-sm text-gray-700">
-                          Reason: {log.reason || 'Không có'}
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-700">
+                            <span className="font-semibold">Trước:</span> GK {formatScore(log.beforeScores?.midtermScore)} | CK {formatScore(log.beforeScores?.finalScore)}{' '}
+                            {log.beforeScores?.ptScores && log.beforeScores?.ptScores.length > 0 && (
+                              <>| PT: {log.beforeScores.ptScores.map(pt => `${pt.type}:${pt.score}`).join(', ')}</>
+                            )}
+                            {(!log.beforeScores?.ptScores || log.beforeScores?.ptScores.length === 0) && (
+                              <>| PT: —</>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-700">
+                            <span className="font-semibold">Sau:</span> GK {formatScore(log.afterScores?.midtermScore)} | CK {formatScore(log.afterScores?.finalScore)}{' '}
+                            {log.afterScores?.ptScores && log.afterScores?.ptScores.length > 0 && (
+                              <>| PT: {log.afterScores.ptScores.map(pt => `${pt.type}:${pt.score}`).join(', ')}</>
+                            )}
+                            {(!log.afterScores?.ptScores || log.afterScores?.ptScores.length === 0) && (
+                              <>| PT: —</>
+                            )}
+                          </div>
+                          {log.reason && (
+                            <div className="text-xs text-gray-600 mt-2 italic">
+                              Ghi chú: {log.reason}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PT Modal */}
+        {showPTModal && selectedEnrollmentForPT && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="w-full max-w-md bg-white rounded-lg shadow-lg">
+              <div className="px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">Thêm Điểm PT</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedEnrollmentForPT.student?.fullName || '—'} ({selectedEnrollmentForPT.student?.studentCode || '—'})
+                </p>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Loại PT</label>
+                  <select
+                    value={ptType}
+                    onChange={(e) => setPTType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="PT1">PT1</option>
+                    <option value="PT2">PT2</option>
+                    <option value="PT3">PT3</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Điểm (0-10)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    value={ptScore}
+                    onChange={(e) => setPTScore(e.target.value)}
+                    placeholder="Nhập điểm PT"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800">
+                  Ghi chú: Nếu PT này đã tồn tại, điểm sẽ được cập nhật thay vì thêm mới.
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowPTModal(false);
+                    setSelectedEnrollmentForPT(null);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={handleSavePT}
+                  disabled={savingPT || !ptScore}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {savingPT ? 'Đang lưu...' : 'Lưu'}
+                </button>
               </div>
             </div>
           </div>

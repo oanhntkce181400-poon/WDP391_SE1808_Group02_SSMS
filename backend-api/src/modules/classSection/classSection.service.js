@@ -43,6 +43,7 @@ async function listClasses(query = {}) {
     const subjectIds = await repo.findSubjectIdsBySearch(search);
     filter.$or = [
       { classCode: { $regex: search, $options: "i" } },
+      { className: { $regex: search, $options: "i" } },
       { classGroup: { $regex: search, $options: "i" } },
       ...(subjectIds.length > 0 ? [{ subject: { $in: subjectIds } }] : []),
     ];
@@ -73,6 +74,28 @@ async function getClassById(classId) {
   return cls;
 }
 
+async function findStudentProfileByUser(userId) {
+  if (!userId) {
+    throw new Error("Unauthorized user");
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  let student = await Student.findOne({ userId }).lean();
+  if (!student && user.email) {
+    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
+  }
+
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  return { user, student };
+}
+
 async function createClassSection(body = {}) {
   const missing = REQUIRED_CLASS_FIELDS.filter((f) => !body[f]);
   if (missing.length > 0)
@@ -87,8 +110,7 @@ async function createClassSection(body = {}) {
     status = "published";
   }
 
-  // Tạo lớp học phần
-  const newClass = await repo.createClass({
+  const createPayload = {
     classCode: body.classCode,
     className: body.className,
     subject: body.subject,
@@ -101,7 +123,24 @@ async function createClassSection(body = {}) {
     status: status,
     dayOfWeek: body.dayOfWeek,
     curriculum: body.curriculum || undefined,
-  });
+  };
+
+  if (body.curriculumSemesterOrder != null && body.curriculumSemesterOrder !== "") {
+    const o = Number(body.curriculumSemesterOrder);
+    if (!Number.isNaN(o)) createPayload.curriculumSemesterOrder = o;
+  }
+  if (body.classGroup != null && String(body.classGroup).trim() !== "") {
+    createPayload.classGroup = String(body.classGroup).trim();
+  }
+  if (body.groupIndex != null && body.groupIndex !== "") {
+    const g = Number(body.groupIndex);
+    if (!Number.isNaN(g)) createPayload.groupIndex = g;
+  }
+  if (body.startDate) createPayload.startDate = new Date(body.startDate);
+  if (body.endDate) createPayload.endDate = new Date(body.endDate);
+
+  // Tạo lớp học phần
+  const newClass = await repo.createClass(createPayload);
 
   // 🔥 GỌI WAITLIST AUTO-ASSIGN KHI TẠO LỚP THÀNH CÔNG VÀ STATUS LÀ PUBLISHED
   if (status === 'published') {
@@ -305,23 +344,7 @@ async function enrollStudent(classId, studentId, options = {}) {
 }
 
 async function selfEnroll(userId, classId) {
-  if (!userId) {
-    throw new Error("Unauthorized user");
-  }
-
-  const user = await User.findById(userId).lean();
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  let student = await Student.findOne({ userId }).lean();
-  if (!student && user.email) {
-    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
-  }
-
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const [prerequisites, capacity, wallet, scheduleConflict, eligibility] = await Promise.all([
     registrationService.validatePrerequisites(student._id, classId),
@@ -615,11 +638,7 @@ async function getMyClasses(userId) {
   const Student = require("../../models/student.model");
   const ClassEnrollment = require("../../models/classEnrollment.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Find enrollments for this student
   const enrollments = await ClassEnrollment.find({
@@ -778,14 +797,9 @@ async function getClassListWithCapacity() {
 
 async function getClassDetails(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
   const Schedule = require("../../models/schedule.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Check if student is enrolled in this class
   const enrollment = await ClassEnrollment.findOne({
@@ -800,11 +814,7 @@ async function getClassDetails(classId, userId) {
 
   // Get class with all related data
   const repo = require("./classSection.repository");
-  const cls = await repo.findClassById(classId)
-    .populate("subject")
-    .populate("teacher")
-    .populate("room")
-    .populate("timeslot");
+  const cls = await repo.findClassById(classId);
 
   if (!cls) {
     throw new Error("Class section not found");
@@ -859,13 +869,9 @@ async function getClassDetails(classId, userId) {
 
 async function getClassRosterForStudent(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
 
   // BR17: Authorization dựa trên enrollment hợp lệ
-  const student = await Student.findOne({ userId }).lean();
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const cls = await repo.findClassById(classId);
   if (!cls) {
@@ -965,6 +971,265 @@ async function bulkCreateClassSections(classDataList, createdBy) {
   return results;
 }
 
+async function bulkCreateClassSectionsFromCurriculum(
+  { curriculumId, curriculumSemesterOrder, academicYear, classGroupPrefix, semester, createdBy }
+) {
+  const Subject = require("../../models/subject.model");
+  const CurriculumSemester = require("../../models/curriculumSemester.model");
+  const CurriculumCourse = require("../../models/curriculumCourse.model");
+
+  const results = { success: [], failed: [] };
+
+  // 1. Lấy danh sách môn học từ curriculum semester
+  const curriculumSemester = await CurriculumSemester.findOne({
+    curriculum: curriculumId,
+    semesterOrder: Number(curriculumSemesterOrder),
+  });
+
+  if (!curriculumSemester) {
+    throw new Error(`Không tìm thấy học kỳ ${curriculumSemesterOrder} trong khung chương trình`);
+  }
+
+  const courses = await CurriculumCourse.find({ semester: curriculumSemester._id })
+    .populate("subject", "subjectCode subjectName credits")
+    .lean();
+
+  if (!courses || courses.length === 0) {
+    throw new Error(`Không có môn học nào trong học kỳ ${curriculumSemesterOrder}`);
+  }
+
+  // 2. Lấy danh sách classGroup đã tồn tại cho prefix này trong học kỳ
+  const existingGroups = await ClassSection.find({
+    classGroup: { $regex: `^${classGroupPrefix}-`, $options: "i" },
+    academicYear,
+    semester: Number(semester),
+  })
+    .select("classGroup")
+    .lean();
+
+  // Tìm số nhóm lớn nhất để tạo nhóm mới
+  let maxGroupIndex = 0;
+  for (const cls of existingGroups) {
+    const match = cls.classGroup?.match(/(\d+)$/);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      if (idx > maxGroupIndex) maxGroupIndex = idx;
+    }
+  }
+
+  // 3. Với mỗi môn học, tạo một lớp học phần mới cho nhóm mới
+  const newGroupIndex = maxGroupIndex + 1;
+  const newClassGroup = `${classGroupPrefix}-${String(newGroupIndex).padStart(2, "0")}`;
+
+  for (const course of courses) {
+    try {
+      const subject = course.subject;
+      if (!subject) {
+        results.failed.push({
+          subjectCode: course.subjectCode,
+          error: "Subject not found",
+        });
+        continue;
+      }
+
+      // Tạo classCode duy nhất
+      const classCode = `${subject.subjectCode}-${academicYear.replace("/", "")}-${semester}-${String(newGroupIndex).padStart(2, "0")}`;
+
+      // Kiểm tra classCode đã tồn tại chưa
+      const exists = await ClassSection.findOne({ classCode }).lean();
+      if (exists) {
+        results.failed.push({
+          classCode,
+          subjectCode: subject.subjectCode,
+          error: "Class code already exists",
+        });
+        continue;
+      }
+
+      const newClass = await repo.createClass({
+        classCode,
+        className: subject.subjectName,
+        subject: subject._id,
+        semester: Number(semester),
+        academicYear,
+        maxCapacity: 50,
+        status: "draft",
+        currentEnrollment: 0,
+        classGroup: newClassGroup,
+        groupIndex: newGroupIndex,
+        curriculum: curriculumId,
+        curriculumSemesterOrder: Number(curriculumSemesterOrder),
+        startDate: curriculumSemester.startDate || null,
+        endDate: curriculumSemester.endDate || null,
+        createdBy,
+      });
+
+      results.success.push({
+        classId: newClass._id,
+        classCode: newClass.classCode,
+        className: newClass.className,
+        subjectCode: subject.subjectCode,
+        classGroup: newClassGroup,
+      });
+    } catch (error) {
+      results.failed.push({
+        subjectCode: course.subjectCode,
+        error: error.message,
+      });
+    }
+  }
+
+  return {
+    ...results,
+    newClassGroup,
+    groupIndex: newGroupIndex,
+    totalCreated: results.success.length,
+    totalFailed: results.failed.length,
+  };
+}
+
+/**
+ * Bulk assign classGroup to multiple existing class sections
+ * @param {string[]} classIds - Array of class section IDs
+ * @param {string} classGroupPrefix - Prefix for the group (e.g., "SE1808")
+ * @param {string} academicYear - Academic year (e.g., "2025/2026")
+ * @param {number} semester - Semester number (1, 2, 3)
+ * @returns {object} Result with success/failed counts and assigned group name
+ */
+async function bulkAssignGroup(classIds, classGroupPrefix, academicYear, semester) {
+  const results = { success: [], failed: [] };
+
+  if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+    throw new Error("Danh sách ID lớp học không hợp lệ");
+  }
+
+  if (!classGroupPrefix || !academicYear || semester === undefined) {
+    throw new Error("Thiếu thông tin bắt buộc: classGroupPrefix, academicYear, semester");
+  }
+
+  // Tìm số nhóm lớn nhất hiện có với prefix này trong HK
+  const existingGroups = await ClassSection.find({
+    classGroup: { $regex: `^${classGroupPrefix}-`, $options: "i" },
+    academicYear,
+    semester: Number(semester),
+  })
+    .select("classGroup")
+    .lean();
+
+  let maxGroupIndex = 0;
+  for (const cls of existingGroups) {
+    const match = cls.classGroup?.match(/(\d+)$/);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      if (idx > maxGroupIndex) maxGroupIndex = idx;
+    }
+  }
+
+  // Nếu một số lớp đã có classGroup, dùng group lớn nhất trong đó
+  for (const id of classIds) {
+    const existing = await ClassSection.findById(id).select("classGroup academicYear semester").lean();
+    if (existing?.classGroup) {
+      const match = existing.classGroup.match(/(\d+)$/);
+      if (match) {
+        const idx = parseInt(match[1], 10);
+        if (idx > maxGroupIndex) maxGroupIndex = idx;
+      }
+    }
+  }
+
+  const newGroupIndex = maxGroupIndex + 1;
+  const newClassGroup = `${classGroupPrefix}-${String(newGroupIndex).padStart(2, "0")}`;
+
+  for (const classId of classIds) {
+    try {
+      const updated = await repo.updateClassById(classId, {
+        classGroup: newClassGroup,
+        groupIndex: newGroupIndex,
+      });
+
+      if (!updated) {
+        results.failed.push({ classId, error: "Lớp không tìm thấy" });
+        continue;
+      }
+
+      results.success.push({
+        classId,
+        classCode: updated.classCode,
+        className: updated.className,
+        classGroup: newClassGroup,
+      });
+    } catch (error) {
+      results.failed.push({ classId, error: error.message });
+    }
+  }
+
+  return {
+    ...results,
+    newClassGroup,
+    groupIndex: newGroupIndex,
+    totalAssigned: results.success.length,
+    totalFailed: results.failed.length,
+  };
+}
+
+/**
+ * Lấy danh sách distinct classGroups có trong DB
+ * @param {object} filters - { semester, academicYear, curriculumId }
+ * - academicYear trên ClassSection thường trùng khung CT (vd 2026-2030), không trùng niên học HK hệ thống (vd 2025-2026).
+ * - curriculumId: lọc thêm lớp gắn khung (lớp không có curriculum vẫn khớp nếu academicYear khớp).
+ */
+async function getDistinctClassGroups(filters = {}) {
+  const semester =
+    filters.semester != null && filters.semester !== ""
+      ? Number(filters.semester)
+      : null;
+  const academicYear =
+    filters.academicYear && String(filters.academicYear).trim() !== ""
+      ? String(filters.academicYear).trim()
+      : null;
+  const cid =
+    filters.curriculumId &&
+    mongoose.Types.ObjectId.isValid(String(filters.curriculumId))
+      ? new mongoose.Types.ObjectId(String(filters.curriculumId))
+      : null;
+
+  const noCurriculum = {
+    $or: [{ curriculum: null }, { curriculum: { $exists: false } }],
+  };
+
+  let query = {};
+  if (semester != null && !Number.isNaN(semester)) {
+    if (cid && academicYear) {
+      query = {
+        semester,
+        $or: [
+          { curriculum: cid },
+          { $and: [{ academicYear }, noCurriculum] },
+        ],
+      };
+    } else if (cid) {
+      query = { semester, curriculum: cid };
+    } else if (academicYear) {
+      query = { semester, academicYear };
+    } else {
+      query = { semester };
+    }
+  } else if (cid && academicYear) {
+    query = {
+      $or: [{ curriculum: cid }, { $and: [{ academicYear }, noCurriculum] }],
+    };
+  } else if (cid) {
+    query = { curriculum: cid };
+  } else if (academicYear) {
+    query = { academicYear };
+  }
+
+  const groups = await ClassSection.distinct("classGroup", query);
+  return groups
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
 // Export all functions
 module.exports = {
   listClasses,
@@ -986,5 +1251,7 @@ module.exports = {
   getClassListWithCapacity,
   getClassDetails,
   getClassRosterForStudent,
-  bulkCreateClassSections,
+  bulkCreateClassSectionsFromCurriculum,
+  bulkAssignGroup,
+  getDistinctClassGroups,
 };

@@ -9,6 +9,7 @@ import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
+import ScheduleScreen from '../screens/student/ScheduleScreen';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
 
@@ -64,9 +65,9 @@ export default function AppNavigator() {
 
     return [
       { key: 'home', icon: 'home', label: 'Trang chủ' },
-      { key: 'feedback', icon: 'star', label: 'Đánh giá' },
+      { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
-      { key: 'calendar', icon: 'calendar', label: 'Lịch học vụ' },
+      { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
       { key: 'profile', icon: 'person', label: 'Tài khoản' },
     ];
@@ -77,10 +78,11 @@ export default function AppNavigator() {
       return;
     }
 
+    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
-    if (!availableTabs.has(activeTab)) {
+    if (!availableTabs.has(activeTab) && !extraScreens.has(activeTab)) {
       setActiveTab(defaultTab);
     }
   }, [accessToken, activeTab, isAdminViewer, tabs]);
@@ -102,6 +104,9 @@ export default function AppNavigator() {
   if (activeTab === 'feedback') {
     screen = <FeedbackLecturerScreen onNavigate={setActiveTab} />;
   }
+  if (activeTab === 'schedule') {
+    screen = <ScheduleScreen />;
+  }
   if (activeTab === 'exam') {
     screen = <ExamScheduleScreen />;
   }
@@ -111,7 +116,7 @@ export default function AppNavigator() {
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;
   }
-  if (activeTab === 'calendar') {
+  if (activeTab === 'academicCalendar') {
     screen = <AcademicCalendarScreen />;
   }
   if (activeTab === 'profile') {

@@ -108,9 +108,20 @@ function formatDateVi(dateStr) {
   });
 }
 
+function minDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() <= b.getTime() ? a : b;
+}
+
+/** Ngày hợp lệ để điểm danh: ưu tiên danh sách từ API (cùng logic Schedule với báo cáo SV). */
 function getAllowedDateOptionsForClass(cls, now = new Date()) {
   if (!cls) return [];
-  const { start, end } = getThreeMonthBounds(now);
+  if (Array.isArray(cls.validAttendanceDates) && cls.validAttendanceDates.length > 0) {
+    return cls.validAttendanceDates;
+  }
+
+  const { start: winStart, end: winEnd } = getThreeMonthBounds(now);
 
   const dayCandidates = Array.isArray(cls.scheduleDays) && cls.scheduleDays.length > 0
     ? cls.scheduleDays
@@ -126,9 +137,13 @@ function getAllowedDateOptionsForClass(cls, now = new Date()) {
   const classStart = normalizeDateOnly(cls.startDate);
   const classEnd = normalizeDateOnly(cls.endDate);
 
+  // Bắt đầu từ đầu học kỳ (nếu có), không chỉ từ hôm nay — trùng với cách tính buổi của SV
+  const rangeStart = classStart ? minDate(classStart, winStart) : winStart;
+  const rangeEnd = minDate(classEnd || winEnd, winEnd);
+
   const results = [];
-  const cursor = new Date(start);
-  while (cursor <= end) {
+  const cursor = new Date(rangeStart);
+  while (cursor <= rangeEnd) {
     const day = toSystemDayOfWeek(cursor);
     const inAllowedDay = allowedDays.includes(day);
     const inClassRange =
@@ -216,10 +231,27 @@ export default function AttendancePage() {
       // Snapshot mode: không gọi API slots cũ (không có dữ liệu điểm danh trước đó)
       if (mode === 'snapshot') {
         setSlots([]);
-        const today = toYmd(new Date());
-        setNewSlotDate(today);
+        let merged = { ...cls };
+        if (cls.classSectionId) {
+          try {
+            const r = await attendanceService.getValidAttendanceDates(cls.classSectionId);
+            const dates = r.data?.data?.dates;
+            if (Array.isArray(dates) && dates.length > 0) {
+              merged = { ...merged, validAttendanceDates: dates };
+            }
+          } catch {
+            /* fallback getAllowedDateOptionsForClass phía dưới */
+          }
+        }
+        setSelectedClass(merged);
+        const allowed = getAllowedDateOptionsForClass(merged);
+        if (allowed.length > 0) {
+          const today = toYmd(new Date());
+          setNewSlotDate(allowed.includes(today) ? today : allowed[0]);
+        } else {
+          setNewSlotDate(toYmd(new Date()));
+        }
         setView('slots');
-        setIsLoading(false);
         return;
       }
 
@@ -326,6 +358,23 @@ export default function AttendancePage() {
 
   const allowedDateOptions = selectedClass ? getAllowedDateOptionsForClass(selectedClass) : [];
   const dateBounds = getThreeMonthBounds(new Date());
+  const pickerBounds =
+    selectedClass && allowedDateOptions.length > 0
+      ? {
+          min: allowedDateOptions[0],
+          max: allowedDateOptions[allowedDateOptions.length - 1],
+        }
+      : selectedClass
+        ? (() => {
+            const three = getThreeMonthBounds(new Date());
+            const cs = normalizeDateOnly(selectedClass.startDate);
+            const ce = normalizeDateOnly(selectedClass.endDate);
+            return {
+              min: toYmd(cs ? minDate(cs, three.start) : three.start),
+              max: toYmd(minDate(ce || three.end, three.end)),
+            };
+          })()
+        : { min: toYmd(dateBounds.start), max: toYmd(dateBounds.end) };
 
   // ── THAY ĐỔI TRẠNG THÁI ĐIỂM DANH 1 SINH VIÊN ────────────
   function handleStatusChange(studentId, newStatus) {
@@ -491,8 +540,8 @@ export default function AttendancePage() {
             newSlotDate={newSlotDate}
             onSlotDateChange={setNewSlotDate}
             allowedDateOptions={allowedDateOptions}
-            minDate={toYmd(dateBounds.start)}
-            maxDate={toYmd(dateBounds.end)}
+            minDate={pickerBounds.min}
+            maxDate={pickerBounds.max}
             onSelectSlot={loadAttendance}
             onNewSlot={handleNewSlot}
             onBack={() => {
@@ -876,7 +925,12 @@ function SlotListView({
         </p>
         {Array.isArray(allowedDateOptions) && allowedDateOptions.length > 0 && (
           <p className="mb-2 text-xs text-indigo-700">
-            Ngày hợp lệ 3 tháng tới: {allowedDateOptions.join(', ')}
+            Ngày hợp lệ theo lịch học (Schedule):{' '}
+            <span className="font-medium">
+              {allowedDateOptions.length} buổi — {formatDateVi(allowedDateOptions[0])} →{' '}
+              {formatDateVi(allowedDateOptions[allowedDateOptions.length - 1])}
+            </span>
+            <span className="block text-indigo-600/90">Chi tiết từng ngày nằm trong ô chọn bên dưới.</span>
           </p>
         )}
         <div className="flex items-center gap-3">

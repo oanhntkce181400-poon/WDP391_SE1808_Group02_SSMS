@@ -406,6 +406,85 @@ async function getClassRoster(req, res) {
   }
 }
 
+// Tạo nhiều lớp học phần từ curriculum với classGroup
+async function bulkCreateFromCurriculum(req, res) {
+  try {
+    const { curriculumId, curriculumSemesterOrder, academicYear, classGroupPrefix, semester } = req.body;
+
+    if (!curriculumId || !curriculumSemesterOrder || !academicYear || !classGroupPrefix || semester === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: curriculumId, curriculumSemesterOrder, academicYear, classGroupPrefix, semester',
+      });
+    }
+
+    const createdBy = req.auth?.sub || null;
+
+    const result = await service.bulkCreateClassSectionsFromCurriculum({
+      curriculumId,
+      curriculumSemesterOrder: Number(curriculumSemesterOrder),
+      academicYear,
+      classGroupPrefix,
+      semester: Number(semester),
+      createdBy,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Đã tạo ${result.totalCreated} lớp học phần cho nhóm ${result.newClassGroup}`,
+      data: result,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// Bulk assign classGroup to multiple existing class sections
+async function bulkAssignGroup(req, res) {
+  try {
+    const { classIds, classGroupPrefix, academicYear, semester } = req.body;
+
+    if (!classIds || !Array.isArray(classIds) || classIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Danh sách ID lớp học không hợp lệ",
+      });
+    }
+
+    if (!classGroupPrefix || !academicYear || semester === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu thông tin bắt buộc: classGroupPrefix, academicYear, semester",
+      });
+    }
+
+    const result = await service.bulkAssignGroup(classIds, classGroupPrefix, academicYear, Number(semester));
+
+    return res.json({
+      success: true,
+      message: `Đã gán ${result.totalAssigned} lớp học phần vào nhóm ${result.newClassGroup}`,
+      data: result,
+    });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+// Lấy danh sách distinct classGroups để filter trong auto-enrollment
+async function getDistinctClassGroups(req, res) {
+  try {
+    const { semester, academicYear, curriculumId } = req.query;
+    const groups = await service.getDistinctClassGroups({
+      semester: semester != null ? Number(semester) : undefined,
+      academicYear: academicYear || undefined,
+      curriculumId: curriculumId || undefined,
+    });
+    return res.json({ success: true, data: groups, total: groups.length });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getMyClasses,
@@ -417,6 +496,9 @@ module.exports = {
   enrollStudent,
   selfEnroll,
   bulkCreate,
+  bulkCreateFromCurriculum,
+  bulkAssignGroup,
+  getDistinctClassGroups,
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
