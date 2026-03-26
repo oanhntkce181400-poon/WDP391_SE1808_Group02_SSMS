@@ -186,10 +186,7 @@ export default function ViewGradesPage() {
                       CK
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      BT
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      QT
+                      PT
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Điểm
@@ -228,19 +225,21 @@ export default function ViewGradesPage() {
                       }`}>
                         {gradesService.formatScore(enrollment.finalScore)}
                       </td>
-                      <td className={`px-6 py-4 text-center text-sm ${
-                        enrollment.assignmentScore === null
-                          ? 'text-gray-500'
-                          : gradesService.getScoreColor(enrollment.assignmentScore)
-                      }`}>
-                        {gradesService.formatScore(enrollment.assignmentScore)}
-                      </td>
-                      <td className={`px-6 py-4 text-center text-sm ${
-                        enrollment.continuousScore === null
-                          ? 'text-gray-500'
-                          : gradesService.getScoreColor(enrollment.continuousScore)
-                      }`}>
-                        {gradesService.formatScore(enrollment.continuousScore)}
+                      <td className="px-6 py-4 text-center text-sm">
+                        {enrollment.ptScores && enrollment.ptScores.length > 0 ? (
+                          <div className="space-y-1">
+                            {enrollment.ptScores.map((pt) => (
+                              <div
+                                key={pt.type}
+                                className={gradesService.getScoreColor(pt.score)}
+                              >
+                                {pt.type}: {gradesService.formatScore(pt.score)}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
                       </td>
                       <td className={`px-6 py-4 text-center text-sm font-semibold ${
                         gradesService.getScoreColor(enrollment.grade)
@@ -289,22 +288,77 @@ export default function ViewGradesPage() {
 
       {/* Legend */}
       <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
-        <p className="text-sm font-semibold text-blue-900 mb-3">📝 Hướng dẫn cột dữ liệu:</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-blue-800">
-          <div>
-            <span className="font-semibold">GK:</span> Điểm giữa kỳ (30%)
+        <p className="text-sm font-semibold text-blue-900 mb-4">📝 Hướng dẫn đánh giá và công thức tính điểm:</p>
+        
+        {/* Detailed scoring guide */}
+        <div className="space-y-4 text-sm text-blue-800">
+          {/* Điểm GK */}
+          <div className="border-b border-blue-200 pb-3">
+            <p className="font-semibold text-blue-900">📌 GK - Điểm Giữa Kỳ</p>
+            <p className="text-gray-700 ml-4 mt-1">
+              • Đánh giá kiến thức nền tảng học sinh ở giữa học kỳ<br/>
+              • Hình thức: Kiểm tra viết hoặc kiểm tra trắc nghiệm<br/>
+              • Thang điểm: 0-10, được lưu lại để tính điểm tổng kết
+            </p>
           </div>
-          <div>
-            <span className="font-semibold">CK:</span> Điểm cuối kỳ (50%)
+
+          {/* Điểm CK */}
+          <div className="border-b border-blue-200 pb-3">
+            <p className="font-semibold text-blue-900">📌 CK - Điểm Cuối Kỳ</p>
+            <p className="text-gray-700 ml-4 mt-1">
+              • Đánh giá toàn bộ kiến thức học sinh trong suốt học kỳ<br/>
+              • Hình thức: Bài thi cuối kỳ (kiểm tra viết, thi thực hành, hoặc thi trắc nghiệm)<br/>
+              • Thang điểm: 0-10, là yếu tố quan trọng nhất ảnh hưởng tới điểm tổng kết
+            </p>
           </div>
-          <div>
-            <span className="font-semibold">BT:</span> Điểm bài tập/thực hành (20%)
+
+          {/* Điểm BT */}
+          <div className="border-b border-blue-200 pb-3">
+            <p className="font-semibold text-blue-900">📌 BT - Điểm Bài Tập/Thực Hành (Tùy chọn)</p>
+            <p className="text-gray-700 ml-4 mt-1">
+              • Đánh giá kỹ năng thực hành và khả năng hoàn thành bài tập của sinh viên<br/>
+              • Hình thức: Bài tập, báo cáo thực hành, hoặc dự án nhóm<br/>
+              • Thang điểm: 0-10<br/>
+              • Lưu ý: Nếu giáo viên chưa nhập BT, hệ thống sẽ chỉ tính dựa trên GK và CK
+            </p>
           </div>
-          <div>
-            <span className="font-semibold">QT:</span> Điểm quá trình (tùy chọn)
+
+          {/* Điểm PT */}
+          <div className="border-b border-blue-200 pb-3">
+            <p className="font-semibold text-blue-900">📌 PT - Điểm Kiểm Tra Thường Xuyên (Tùy chọn)</p>
+            <p className="text-gray-700 ml-4 mt-1">
+              • Đánh giá kiến thức học sinh qua các bài kiểm tra nhỏ trong kỳ<br/>
+              • Hình thức: Nhiều lần kiểm tra nhỏ (PT1, PT2, PT3, ...)<br/>
+              • Thang điểm: 0-10 cho mỗi lần kiểm tra - Hệ thống sẽ tính <strong>trung bình</strong> của tất cả PT<br/>
+              • Giá trị tham khảo: Giúp giáo viên đánh giá quá trình học tập của sinh viên
+            </p>
           </div>
-          <div className="md:col-span-2">
-            <span className="font-semibold">Điểm:</span> Điểm tổng kết = (GK×0.3 + CK×0.5 + BT×0.2)
+
+          {/* Công thức tính điểm */}
+          <div className="bg-white rounded p-3 border-l-4 border-blue-500">
+            <p className="font-semibold text-blue-900 mb-3">⚙️ Công thức tính Điểm Tổng Kết (Động):</p>
+            <div className="ml-4 space-y-2">
+              <p className="text-gray-700">
+                <strong>Trường hợp 1:</strong> Nếu có BT (Bài Tập)
+              </p>
+              <p className="text-gray-700 font-mono bg-gray-100 p-2 rounded">
+                Điểm = (GK × Trọng số GK%) + (CK × Trọng số CK%) + (BT × Trọng số BT%) + (PT_TB × Trọng số PT%)
+              </p>
+              <p className="text-gray-700 mt-2">
+                <strong>Trường hợp 2:</strong> Nếu chưa có BT
+              </p>
+              <p className="text-gray-700 font-mono bg-gray-100 p-2 rounded">
+                Điểm = (GK × Trọng số GK%) + (CK × Trọng số CK%) + (PT_TB × Trọng số PT%)
+              </p>
+              <p className="text-gray-700 text-xs mt-3">
+                📌 <strong>Lưu ý:</strong> Trọng số (%) <strong>tùy theo từng môn học</strong>. Mỗi môn học có thể có công thức tính điểm khác nhau được cấu hình bởi giáo viên. PT_TB = Trung bình của tất cả điểm PT.
+              </p>
+            </div>
+          </div>
+
+          {/* Thang điểm */}
+          <div className="text-xs text-gray-600 italic">
+            <p>💡 <strong>Thang điểm:</strong> Tất cả các điểm đều được tính trên thang điểm 0-10. Điểm tổng kết &gt;= 5.0 là điểm đạt, &lt; 5.0 là điểm không đạt.</p>
           </div>
         </div>
       </div>

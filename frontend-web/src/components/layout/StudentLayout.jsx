@@ -114,11 +114,7 @@ export default function StudentLayout() {
     { name: 'Giáo trình & Tài liệu', path: '/student/materials', icon: '📚' },
   ];
 
-  navItems.splice(4, 0, {
-    name: 'Đăng ký môn học',
-    path: '/student/registration',
-    icon: '📝',
-  });
+  // Removed duplicate /student/registration - already exists in menu above
 
   const handleLogout = async () => {
     try {

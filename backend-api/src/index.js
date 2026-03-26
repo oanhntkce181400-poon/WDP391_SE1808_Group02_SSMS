@@ -68,6 +68,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/subjects", require("./routes/subject.routes"));
+app.use("/api/score-components", require("./routes/scoreComponent.routes"));
 app.use("/api/curriculums", require("./routes/curriculum.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));

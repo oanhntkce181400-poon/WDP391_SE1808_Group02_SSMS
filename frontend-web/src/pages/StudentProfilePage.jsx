@@ -20,6 +20,10 @@ const StudentProfilePage = () => {
   const [gradesLoading, setGradesLoading] = useState(true);
 
   useEffect(() => {
+    // Clear cached GPA data
+    localStorage.removeItem('cached_gpa');
+    localStorage.removeItem('cached_grades');
+    
     fetchStudentProfile();
     fetchCumulativeGPA();
     fetchGradeDetails();
@@ -28,7 +32,8 @@ const StudentProfilePage = () => {
   const fetchGradeDetails = async () => {
     try {
       setGradesLoading(true);
-      const res = await gradesService.getMyGradeDetails({ status: 'completed' });
+      // Fetch all enrollments with grades (don't filter by status)
+      const res = await gradesService.getMyGradeDetails();
       if (res?.data?.success) {
         setGradeDetails(res.data.data);
       }
@@ -44,12 +49,18 @@ const StudentProfilePage = () => {
     try {
       setGpaLoading(true);
       const res = await gpaService.getMyGPA();
+      console.log('[StudentProfile] Full Response:', JSON.stringify(res, null, 2));
+      console.log('[StudentProfile] res.data:', JSON.stringify(res?.data, null, 2));
+      console.log('[StudentProfile] res.data.data:', JSON.stringify(res?.data?.data, null, 2));
+      
       if (res?.data?.success) {
-        setCumulativeGPA(res.data.data);
+        const gpaData = res.data.data;
+        console.log('[StudentProfile] GPA value:', gpaData?.gpa);
+        console.log('[StudentProfile] GPA full object:', JSON.stringify(gpaData, null, 2));
+        setCumulativeGPA(gpaData);
       }
     } catch (err) {
       console.error('Error fetching cumulative GPA:', err);
-      // Silently fail - GPA is optional
     } finally {
       setGpaLoading(false);
     }
@@ -391,7 +402,7 @@ const StudentProfilePage = () => {
 
                 {/* Grade Components */}
                 <div className="px-4 py-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {/* GK - Giữa kỳ */}
                     <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
                       <p className="text-xs text-blue-700 font-semibold mb-1">GK (30%)</p>
@@ -410,22 +421,19 @@ const StudentProfilePage = () => {
                       <p className="text-xs text-gray-500 mt-1">Cuối kỳ</p>
                     </div>
 
-                    {/* BT - Bài tập */}
-                    <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                      <p className="text-xs text-purple-700 font-semibold mb-1">BT (20%)</p>
-                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.BT)}`}>
-                        {gradesService.formatScore(enrollment.gradeComponents?.BT)}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">Bài tập</p>
-                    </div>
-
-                    {/* Quá trình */}
+                    {/* PT - Kiểm tra thường xuyên */}
                     <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-                      <p className="text-xs text-orange-700 font-semibold mb-1">Quá trình</p>
-                      <p className={`text-xl font-bold ${gradesService.getScoreColor(enrollment.gradeComponents?.['Quá trình'])}`}>
-                        {gradesService.formatScore(enrollment.gradeComponents?.['Quá trình'])}
+                      <p className="text-xs text-orange-700 font-semibold mb-1">PT (Trung bình)</p>
+                      <p className={`text-xl font-bold ${gradesService.getScoreColor(
+                        enrollment.ptScores && enrollment.ptScores.length > 0
+                          ? (enrollment.ptScores.reduce((sum, pt) => sum + pt.score, 0) / enrollment.ptScores.length)
+                          : null
+                      )}`}>
+                        {enrollment.ptScores && enrollment.ptScores.length > 0
+                          ? gradesService.formatScore(enrollment.ptScores.reduce((sum, pt) => sum + pt.score, 0) / enrollment.ptScores.length)
+                          : '—'}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">Thêm thông tin</p>
+                      <p className="text-xs text-gray-500 mt-1">Kiểm tra thường xuyên</p>
                     </div>
                   </div>
 

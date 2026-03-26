@@ -740,6 +740,7 @@ const getMyGPA = async (req, res) => {
 
     // Tính GPA
     const gpaResult = await gpaService.calculateStudentGPA(student._id);
+    
     const warnings = await gpaService.checkGPAWarning(student._id);
 
     return res.status(200).json({
