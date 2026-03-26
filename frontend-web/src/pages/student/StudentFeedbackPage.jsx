@@ -6,8 +6,8 @@ export default function StudentFeedbackPage() {
       <div className="mx-auto max-w-7xl">
         <LecturerFeedbackPortal
           mode="student"
-          title="\u0110\u00e1nh gi\u00e1 gi\u1ea3ng vi\u00ean"
-          description="Sinh vi\u00ean g\u1eedi, xem v\u00e0 c\u1eadp nh\u1eadt \u0111\u00e1nh gi\u00e1 tr\u00ean c\u00f9ng flow d\u1eef li\u1ec7u \u0111ang \u0111\u01b0\u1ee3c mobile app v\u00e0 web admin s\u1eed d\u1ee5ng."
+          title="Đánh giá giảng viên"
+          description="Sinh viên gửi, xem và cập nhật đánh giá trên cùng flow dữ liệu đang được mobile app và web admin sử dụng."
         />
       </div>
     </div>

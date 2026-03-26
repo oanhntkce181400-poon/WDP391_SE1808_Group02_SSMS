@@ -46,6 +46,26 @@ const classEnrollmentSchema = new mongoose.Schema(
       max: 10,
       default: null
     },
+    // PT scores - Điểm kiểm tra thường xuyên (Practice Test)
+    ptScores: [
+      {
+        type: {
+          type: String,
+          enum: ['PT1', 'PT2', 'PT3'],
+          required: true
+        },
+        score: {
+          type: Number,
+          min: 0,
+          max: 10,
+          required: true
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
     // Final grade calculated from components
     grade: { 
       type: Number,
