@@ -1,0 +1,47 @@
+@startuml
+title View Curriculums - Retrieve and Display Curriculums List
+
+hide footbox
+
+actor PrimaryActor as "User (Admin / Academic Staff)"
+participant Screen as "Screen"
+participant API as "API"
+participant Router as "Router"
+participant Controller as "Controller"
+participant Service as "Service"
+participant Model as "Model"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Open curriculums list
+activate Screen
+Screen -> API: (2) call GET
+activate API
+API -> Router: (3) forward GET
+activate Router
+Router -> Controller: (4) getCurriculums(queryParams)
+activate Controller
+Controller -> Service: (5) findCurriculums({ filters, pagination })
+activate Service
+Service -> Model: (6) find(query) -- with filters and populate semester
+activate Model
+Model -> DB: (7) db query
+activate DB
+DB --> Model: (8) rows[], totalCount
+deactivate DB
+Model --> Service: (9) curriculums data with semester info
+deactivate Model
+Service -> Service: (10) apply pagination and format response
+Service --> Controller: (11) paginated curriculums list
+deactivate Service
+Controller --> Router: (12) 200 OK { curriculums[], total, page, limit }
+deactivate Controller
+Router --> API: (13) 200 OK { curriculums[], total, page, limit }
+API --> Screen: (14) render curriculums table/list with semester details
+Screen --> PrimaryActor: (15) display results
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

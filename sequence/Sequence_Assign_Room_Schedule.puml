@@ -1,0 +1,201 @@
+@startuml Assign Room and Schedule
+title Assign Room and Schedule
+
+hide footbox
+
+actor PrimaryActor as "Academic Staff / Admin"
+participant Screen as "Screen (Class Section Management)"
+participant APIClient as "API Client (Frontend)"
+participant ClassRouter as "ClassRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant ScheduleController as "ScheduleController"
+participant ScheduleService as "ScheduleService"
+participant ClassSectionModel as "ClassSectionModel"
+participant RoomModel as "RoomModel"
+participant ScheduleModel as "ScheduleModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) navigate to Class Section Details
+activate Screen
+
+Screen -> APIClient: (2) GET /api/classes/:classId/schedules
+activate APIClient
+
+APIClient -> ClassRouter: (3) forward request
+activate ClassRouter
+
+ClassRouter -> AuthMiddleware: (4) verify JWT token
+activate AuthMiddleware
+
+alt invalid token
+  AuthMiddleware --> ClassRouter: (4.1.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  ClassRouter --> APIClient: (4.1.2) 401 response
+  APIClient --> Screen: (4.1.3) redirect to login
+  Screen --> PrimaryActor: (4.1.4) show login page
+else valid token
+  deactivate AuthMiddleware
+
+  ClassRouter -> RBACMiddleware: (4.2.1) check role (admin/staff)
+  activate RBACMiddleware
+end
+  
+    RBACMiddleware --> ClassRouter: (5) 403 Forbidden
+    
+    deactivate RBACMiddleware
+    alt insufficient permissions
+    ClassRouter --> APIClient: (5.1.1) 403 response
+    APIClient --> Screen: (5.1.2) show permission error
+    Screen --> PrimaryActor: (5.1.3) display error
+  else authorized
+    deactivate RBACMiddleware
+
+    ClassRouter -> ScheduleController: (5.2.1) getClassSchedules(req)
+    activate ScheduleController
+  
+end
+    ScheduleController -> ScheduleService: (6) getSchedulesByClassId(classId)
+    activate ScheduleService
+
+    ScheduleService -> ScheduleModel: (7) find({classSection})
+    activate ScheduleModel
+    ScheduleModel -> DB: (8) db find schedules
+    activate DB
+    DB --> ScheduleModel: (9) return schedules
+    deactivate DB
+    ScheduleModel --> ScheduleService: (10) return schedules
+    deactivate ScheduleModel
+
+    ScheduleService --> ScheduleController: (11) return schedules
+    deactivate ScheduleService
+
+    ScheduleController --> ClassRouter: (12) 200 OK
+    deactivate ScheduleController
+
+
+ClassRouter --> APIClient: (13) response
+deactivate ClassRouter
+
+APIClient --> Screen: (14) display schedules
+deactivate APIClient
+
+Screen --> PrimaryActor: (15) render schedule list
+deactivate Screen
+
+== ASSIGN ROOM & SCHEDULE ==
+
+PrimaryActor -> Screen: (16) click "Add Schedule" button
+activate Screen
+Screen --> PrimaryActor: (17) show schedule form (room, day, periods, dates)
+deactivate Screen
+
+PrimaryActor -> Screen: (18) fill schedule info + submit
+activate Screen
+
+Screen -> APIClient: (19) POST /api/classes/:classId/schedules\n{room_id, day_of_week, start_period, end_period, start_date, end_date}
+activate APIClient
+
+APIClient -> ClassRouter: (20) forward request
+activate ClassRouter
+
+ClassRouter -> AuthMiddleware: (21) verify JWT token
+activate AuthMiddleware
+
+alt invalid token
+  AuthMiddleware --> ClassRouter: (21.1.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  ClassRouter --> APIClient: (21.1.2) 401 response
+  APIClient --> Screen: (21.1.3) redirect to login
+else valid token
+  deactivate AuthMiddleware
+
+  ClassRouter -> RBACMiddleware: (21.2.1) check role
+  activate RBACMiddleware
+ end
+
+    RBACMiddleware --> ClassRouter: (22) 403 Forbidden
+    deactivate RBACMiddleware
+      alt insufficient permissions
+    ClassRouter --> APIClient: (22.1.1) 403 response
+  else authorized
+    deactivate RBACMiddleware
+
+    ClassRouter -> ScheduleController: (22.2.1) assignSchedule(req)
+    activate ScheduleController
+
+    ScheduleController -> ScheduleService: (22.2.2) assignScheduleToClass(classId, data)
+    activate ScheduleService
+      end
+    ScheduleService -> ClassSectionModel: (23) findById(classId)
+    activate ClassSectionModel
+    ClassSectionModel -> DB: (24) db find classSection
+    activate DB
+    DB --> ClassSectionModel: (25) return classSection
+    deactivate DB
+   ClassSectionModel --> ScheduleService: (26) return response
+   deactivate RoomModel
+   ScheduleService --> ScheduleService: (27) check null
+    activate ScheduleService
+    alt classSection not found
+    deactivate ScheduleService
+      ScheduleService --> ScheduleController: (27.1.1) throw error
+    else found
+      ScheduleService -> RoomModel: (27.1.2) findById(roomId)
+      activate RoomModel
+      
+    end
+      RoomModel -> DB: (28) db find room
+      activate DB
+      DB --> RoomModel: (29) return room
+      deactivate DB
+      
+RoomModel --> ScheduleService: (30) return response
+deactivate RoomModel
+ScheduleService --> ScheduleService: (31) check null
+    activate ScheduleService
+      alt room not found or insufficient capacity
+      deactivate ScheduleService
+        ScheduleService --> ScheduleController:(31.1.1) throw error
+      else valid
+        ScheduleService -> ScheduleModel: (31.2.1) create schedule
+        activate ScheduleModel
+          end
+        ScheduleModel -> DB: (32) db insert
+        activate DB
+        DB --> ScheduleModel: (33) return schedule
+        deactivate DB
+        ScheduleModel --> ScheduleService: (34) return schedule
+        deactivate ScheduleModel
+        
+ ScheduleService -> ClassSectionModel: (35) findByIdAndUpdate(status: "scheduled")
+          ClassSectionModel -> DB: (36) db update
+          activate DB
+          DB -->> ClassSectionModel: (37)return update result
+          deactivate DB
+          ClassSectionModel -->> ScheduleService: (38) ack updated status
+          deactivate ClassSectionModel
+        ScheduleService --> ScheduleController: (39) return schedule
+        deactivate ScheduleService
+    ScheduleController --> ClassRouter: (40) response
+    deactivate ScheduleController
+ClassRouter --> APIClient: (41) response
+deactivate ClassRouter
+
+APIClient --> Screen: (42) display result
+deactivate APIClient
+Screen --> Screen: (43) check response result
+    activate Screen
+alt success
+deactivate Screen
+  Screen --> PrimaryActor: (43.1.1) show success + update list
+else error
+  Screen --> PrimaryActor: (43.1.2) show error
+  deactivate Screen
+
+deactivate PrimaryActor
+end
+
+
+@enduml

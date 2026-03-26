@@ -56,6 +56,14 @@ function ExamCard({ exam }) {
         <MaterialCommunityIcons name="card-account-details-outline" size={18} color="#475569" />
         <Text style={styles.detailText}>SBD: {exam.sbd || '---'}</Text>
       </View>
+      <View style={styles.detailRow}>
+        <MaterialCommunityIcons name="file-certificate-outline" size={18} color="#475569" />
+        <Text style={styles.detailText}>Loại/Quy chế thi: {exam.examRules || 'Chưa cập nhật'}</Text>
+      </View>
+      <View style={styles.detailRow}>
+        <MaterialCommunityIcons name="note-text-outline" size={18} color="#475569" />
+        <Text style={styles.detailText}>Ghi chú: {exam.notes || 'Không có'}</Text>
+      </View>
     </View>
   );
 }

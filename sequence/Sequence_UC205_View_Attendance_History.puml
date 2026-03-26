@@ -1,0 +1,151 @@
+@startuml UC205 View Attendance History
+title UC205 - View Attendance History
+
+hide footbox
+
+actor Student as "Student"
+participant ReportScreen as "AttendanceReport Screen"
+participant APIClient as "API Client (Web/Mobile)"
+participant AttendanceRouter as "AttendanceRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant AttendanceController as "AttendanceController"
+participant AttendanceService as "AttendanceService"
+participant StudentModel as "StudentModel"
+participant EnrollmentModel as "ClassEnrollmentModel"
+participant ScheduleModel as "ScheduleModel"
+participant AttendanceModel as "AttendanceModel"
+database DB as "Database"
+
+activate Student
+Student -> ReportScreen: (1) open attendance report
+activate ReportScreen
+ReportScreen -> APIClient: (2) GET /api/attendance/my-attendance
+activate APIClient
+APIClient -> AttendanceRouter: (2.1) forward request
+activate AttendanceRouter
+
+AttendanceRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> AttendanceRouter: (2.2.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  AttendanceRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> ReportScreen: (2.2.1.2) show auth error
+  ReportScreen --> Student: (2.2.1.3) stop flow
+else valid token
+  AuthMiddleware --> AttendanceRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+
+  AttendanceRouter -> RBACMiddleware: (2.3) check role = student
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> AttendanceRouter: (2.3.1) 403 Forbidden
+    AttendanceRouter --> APIClient: (2.3.1.1) return 403
+    APIClient --> ReportScreen: (2.3.1.2) show permission error
+    ReportScreen --> Student: (2.3.1.3) stop flow
+  else authorized
+    RBACMiddleware --> AttendanceRouter: (2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    AttendanceRouter -> AttendanceController: (2.4) getMyAttendance(req)
+    activate AttendanceController
+    AttendanceController -> AttendanceService: (2.4.1) getMyAttendanceReport(userId, filters)
+    activate AttendanceService
+
+    AttendanceService --> AttendanceService: (2.4.2) validate classSectionId/subjectId ObjectId
+    activate AttendanceService
+    deactivate AttendanceService    
+    alt invalid filter id
+      AttendanceService --> AttendanceController: (2.4.2.1) throw 400 bad request
+      AttendanceController --> AttendanceRouter: (2.4.2.2) return 400
+      AttendanceRouter --> APIClient: (2.4.2.3) error response
+      APIClient --> ReportScreen: (2.4.2.4) show validation error
+      ReportScreen --> Student: (2.4.2.5) correct filter input
+    else valid filters
+      AttendanceService -> StudentModel: (2.4.3) resolveStudentByUser(userId)
+      activate StudentModel
+      StudentModel -> DB: (2.4.3.1) db query student
+      activate DB
+      DB --> StudentModel: (2.4.3.2) student row/null
+      deactivate DB
+      StudentModel --> AttendanceService: (2.4.3.3) return student/null
+      deactivate StudentModel
+      AttendanceService --> AttendanceService: (2.4.3.4) check student exists
+      activate AttendanceService
+        deactivate AttendanceService
+      alt student not found
+        AttendanceService --> AttendanceController: (2.4.3.4.1) throw 404 student not found
+        AttendanceController --> AttendanceRouter: (2.4.3.4.2) return 404
+        AttendanceRouter --> APIClient: (2.4.3.4.3) error response
+        APIClient --> ReportScreen: (2.4.3.4.4) show student error
+        ReportScreen --> Student: (2.4.3.4.5) no report available
+      else student found
+        AttendanceService -> EnrollmentModel: (2.4.4) find enrolled/completed class sections
+        activate EnrollmentModel
+        EnrollmentModel -> DB: (2.4.4.1) db query enrollments + class populate
+        activate DB
+        DB --> EnrollmentModel: (2.4.4.2) enrollment rows
+        deactivate DB
+        EnrollmentModel --> AttendanceService: (2.4.4.3) return rows
+        deactivate EnrollmentModel
+        AttendanceService --> AttendanceService: (2.4.4.4) check matched enrollments
+        activate AttendanceService  
+            deactivate AttendanceService
+        alt no matched enrollments
+          AttendanceService --> AttendanceController: (2.4.4.4.1) return summary=0 + items=[]
+          
+          AttendanceController --> AttendanceRouter: (2.4.4.4.2) 200 OK empty report
+          
+          AttendanceRouter --> APIClient: (2.4.4.4.3) success response
+          APIClient --> ReportScreen: (2.4.4.4.4) render empty state
+          ReportScreen --> Student: (2.4.4.4.5) no attendance data yet
+        else enrollments found
+          AttendanceService -> ScheduleModel: (2.4.5) find active schedules by class ids
+          activate ScheduleModel
+          ScheduleModel -> DB: (2.4.5.1) db query schedules
+          activate DB
+          DB --> ScheduleModel: (2.4.5.2) schedule rows
+          deactivate DB
+          ScheduleModel --> AttendanceService: (2.4.5.3) return schedules
+          deactivate ScheduleModel
+
+          AttendanceService -> AttendanceModel: (2.4.6) find attendance rows by student/class
+          activate AttendanceModel
+          AttendanceModel -> DB: (2.4.6.1) db query attendance marks
+          activate DB
+          DB --> AttendanceModel: (2.4.6.2) attendance rows
+          deactivate DB
+          AttendanceModel --> AttendanceService: (2.4.6.3) return attendance rows
+          deactivate AttendanceModel
+
+          AttendanceService --> AttendanceService: (2.4.7) derive to-date sessions from schedule rules
+          activate AttendanceService
+          deactivate AttendanceService
+          AttendanceService --> AttendanceService: (2.4.8) merge marks + synthesize Unmarked sessions
+          activate AttendanceService
+          deactivate AttendanceService
+          AttendanceService --> AttendanceService: (2.4.9) compute absent/attended/rates/attendanceScore
+          activate AttendanceService
+          deactivate AttendanceService
+          AttendanceService --> AttendanceService: (2.4.10) check summary consistency with detail set
+            activate AttendanceService
+          deactivate AttendanceService
+          AttendanceService --> AttendanceController: (2.4.11) return summary + items + details
+          deactivate AttendanceService
+          AttendanceController --> AttendanceRouter: (2.4.12) 200 OK report
+          deactivate AttendanceController
+          AttendanceRouter --> APIClient: (2.4.13) success response
+          APIClient --> ReportScreen: (2.4.14) render subject list -> sessions -> detail
+          ReportScreen --> Student: (2.4.15) user sees attendance report
+        end
+      end
+    end
+  end
+end
+
+deactivate AttendanceRouter
+deactivate APIClient
+deactivate ReportScreen
+
+@enduml

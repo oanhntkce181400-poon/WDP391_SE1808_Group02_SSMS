@@ -1,0 +1,299 @@
+@startuml UC201 Register Course Wishlist
+title UC201 - Register Course Wishlist
+
+hide footbox
+
+actor Student as "Student"
+participant Screen as "Screen (Course Wishlist Page)"
+participant APIClient as "API Client (Frontend)"
+participant WishlistRouter as "WishlistRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant WishlistController as "WishlistController"
+participant WishlistService as "WishlistService"
+participant UserModel as "UserModel"
+participant StudentModel as "StudentModel"
+participant SubjectModel as "SubjectModel"
+participant SemesterModel as "SemesterModel"
+participant ClassEnrollmentModel as "ClassEnrollmentModel"
+participant WishlistModel as "CourseWishlistModel"
+database DB as "Database"
+activate Student
+Student -> Screen: (1) open Student Wishlist page
+activate Screen
+
+Screen -> APIClient: (2) request semester breakdown
+activate APIClient
+APIClient -> WishlistRouter: (2.1) GET /api/wishlist/semester/:semesterId/breakdown
+activate WishlistRouter
+
+WishlistRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> WishlistRouter: (2.2.1) 401 Unauthorized
+  
+  WishlistRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> Screen: (2.2.1.2) show login required
+  Screen --> Student: (2.2.1.3) redirect to login page
+else valid token
+  AuthMiddleware --> WishlistRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+
+  WishlistRouter -> RBACMiddleware: (2.3) check role = student
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> WishlistRouter: (2.3.1) 403 Forbidden
+    
+    WishlistRouter --> APIClient: (2.3.1.1) return 403
+    APIClient --> Screen: (2.3.1.2) show permission error
+    Screen --> Student: (2.3.1.3) stop flow
+  else authorized
+    RBACMiddleware --> WishlistRouter: (2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    WishlistRouter -> WishlistController: (2.4) getMySemesterBreakdown(req)
+    activate WishlistController
+    WishlistController -> WishlistService: (2.4.1) getSemesterBreakdownForStudent(userId, semesterId, subjectId)
+    activate WishlistService
+
+    WishlistService -> UserModel: (2.4.2) findById(userId)
+    activate UserModel
+    UserModel -> DB: (2.4.2.1) db query user
+    activate DB
+    DB --> UserModel: (2.4.2.2) user row/null
+    deactivate DB
+    UserModel --> WishlistService: (2.4.2.3) return user/null
+    deactivate UserModel
+    
+    WishlistService --> WishlistService: (2.4.2.4) check user exists
+    activate WishlistService
+    deactivate WishlistService
+    alt user not found
+      WishlistService --> WishlistController: (2.4.2.4.1) throw 404 user not found
+      WishlistController --> WishlistRouter: (2.4.2.4.2) return 404
+      WishlistRouter --> APIClient: (2.4.2.4.3) error response
+      
+      APIClient --> Screen: (2.4.2.4.4) show error
+      Screen --> Student: (2.4.2.4.5) cannot load breakdown
+    else user found
+      WishlistService -> StudentModel: (2.4.3) findOne({userId/email})
+      activate StudentModel
+      StudentModel -> DB: (2.4.3.1) db query student
+      activate DB
+      DB --> StudentModel: (2.4.3.2) student row/null
+      deactivate DB
+      StudentModel --> WishlistService: (2.4.3.3) return student/null
+      deactivate StudentModel
+      WishlistService --> WishlistService: (2.4.3.4) check student eligibility
+      alt student missing/inactive/not enrolled
+        WishlistService --> WishlistController: (2.4.3.4.1) throw 404/400 eligibility error
+        WishlistController --> WishlistRouter: (2.4.3.4.2) return error
+        WishlistRouter --> APIClient: (2.4.3.4.3) error response
+        APIClient --> Screen: (2.4.3.4.4) show eligibility error
+        Screen --> Student: (2.4.3.4.5) stop flow
+      else student valid
+        WishlistService -> SemesterModel: (2.4.4) findById(semesterId)
+        activate SemesterModel
+        SemesterModel -> DB: (2.4.4.1) db query semester
+        activate DB
+        DB --> SemesterModel: (2.4.4.2) semester row/null
+        deactivate DB
+        SemesterModel --> WishlistService: (2.4.4.3) return semester/null
+        deactivate SemesterModel
+        WishlistService --> WishlistService: (2.4.4.4) check semester exists
+        alt semester not found
+          WishlistService --> WishlistController: (2.4.4.4.1) throw 404 semester not found
+          WishlistController --> WishlistRouter: (2.4.4.4.2) return 404
+          WishlistRouter --> APIClient: (2.4.4.4.3) error response
+          APIClient --> Screen: (2.4.4.4.4) show semester error
+          Screen --> Student: (2.4.4.4.5) stop flow
+        else semester found
+          WishlistService -> ClassEnrollmentModel: (2.4.5) compute assigned/planned subject set
+          activate ClassEnrollmentModel
+          ClassEnrollmentModel -> DB: (2.4.5.1) db query class enrollments
+          activate DB
+          DB --> ClassEnrollmentModel: (2.4.5.2) enrollment rows
+          deactivate DB
+          ClassEnrollmentModel --> WishlistService: (2.4.5.3) assigned/planned set
+          deactivate ClassEnrollmentModel
+
+          WishlistService -> WishlistModel: (2.4.6) compute wishlist subject set
+          activate WishlistModel
+          WishlistModel -> DB: (2.4.6.1) db query pending/approved wishlist
+          activate DB
+          DB --> WishlistModel: (2.4.6.2) wishlist rows
+          deactivate DB
+          WishlistModel --> WishlistService: (2.4.6.3) wishlist set
+          deactivate WishlistModel
+
+          WishlistService --> WishlistController: (2.4.7) return breakdown DTO
+          deactivate WishlistService
+          WishlistController --> WishlistRouter: (2.4.8) 200 OK breakdown
+          deactivate WishlistController
+          WishlistRouter --> APIClient: (2.4.9) success response
+          APIClient --> Screen: (2.4.10) render semester breakdown
+          Screen --> Student: (2.4.11) user sees current counts
+        end
+      end
+    end
+  end
+end
+
+deactivate WishlistRouter
+deactivate APIClient
+
+== CREATE WISHLIST ==
+
+Student -> Screen: (20) submit subject + semester + reason
+Screen -> APIClient: (20.1) POST /api/wishlist
+activate APIClient
+APIClient -> WishlistRouter: (20.1.1) forward request
+activate WishlistRouter
+
+WishlistRouter -> AuthMiddleware: (20.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> WishlistRouter: (20.2.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  WishlistRouter --> APIClient: (20.2.1.1) return 401
+  APIClient --> Screen: (20.2.1.2) show login required
+  Screen --> Student: (20.2.1.3) redirect to login
+else valid token
+  AuthMiddleware --> WishlistRouter: (20.2.2) token valid
+  deactivate AuthMiddleware
+
+  WishlistRouter -> RBACMiddleware: (20.2.3) check role = student
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> WishlistRouter: (20.2.3.1) 403 Forbidden
+    deactivate RBACMiddleware
+    WishlistRouter --> APIClient: (20.2.3.1.1) return 403
+    APIClient --> Screen: (20.2.3.1.2) show permission error
+    Screen --> Student: (20.2.3.1.3) stop flow
+  else authorized
+    RBACMiddleware --> WishlistRouter: (20.2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    WishlistRouter -> WishlistController: (20.2.4) createWishlist(req)
+    activate WishlistController
+    WishlistController -> WishlistService: (20.2.5) createWishlist(userId, payload)
+    activate WishlistService
+
+    WishlistService --> WishlistService: (20.2.6) check required payload (subjectId, semesterId)
+    alt missing payload
+      WishlistService --> WishlistController: (20.2.6.1) throw 400 bad request
+      WishlistController --> WishlistRouter: (20.2.6.2) return 400
+      WishlistRouter --> APIClient: (20.2.6.3) error response
+      APIClient --> Screen: (20.2.6.4) show payload error
+      Screen --> Student: (20.2.6.5) request rejected
+    else payload valid
+      WishlistService -> SubjectModel: (20.2.7) findById(subjectId)
+      activate SubjectModel
+      SubjectModel -> DB: (20.2.7.1) db query subject
+      activate DB
+      DB --> SubjectModel: (20.2.7.2) subject row/null
+      deactivate DB
+      SubjectModel --> WishlistService: (20.2.7.3) return subject/null
+      deactivate SubjectModel
+      WishlistService --> WishlistService: (20.2.7.4) check subject exists
+      alt subject not found
+        WishlistService --> WishlistController: (20.2.7.4.1) throw 404 subject not found
+        WishlistController --> WishlistRouter: (20.2.7.4.2) return 404
+        WishlistRouter --> APIClient: (20.2.7.4.3) error response
+        APIClient --> Screen: (20.2.7.4.4) show subject not found
+        Screen --> Student: (20.2.7.4.5) stop flow
+      else subject found
+        WishlistService -> SemesterModel: (20.2.8) findById(semesterId)
+        activate SemesterModel
+        SemesterModel -> DB: (20.2.8.1) db query semester
+        activate DB
+        DB --> SemesterModel: (20.2.8.2) semester row/null
+        deactivate DB
+        SemesterModel --> WishlistService: (20.2.8.3) return semester/null
+        deactivate SemesterModel
+        WishlistService --> WishlistService: (20.2.8.4) check semester exists
+        alt semester not found
+          WishlistService --> WishlistController: (20.2.8.4.1) throw 404 semester not found
+          WishlistController --> WishlistRouter: (20.2.8.4.2) return 404
+          WishlistRouter --> APIClient: (20.2.8.4.3) error response
+          APIClient --> Screen: (20.2.8.4.4) show semester not found
+          Screen --> Student: (20.2.8.4.5) stop flow
+        else semester found
+          WishlistService -> WishlistModel: (20.2.9) find duplicate pending/approved wishlist
+          activate WishlistModel
+          WishlistModel -> DB: (20.2.9.1) db query duplicate
+          activate DB
+          DB --> WishlistModel: (20.2.9.2) duplicate/null
+          deactivate DB
+          WishlistModel --> WishlistService: (20.2.9.3) duplicate/null
+          deactivate WishlistModel
+          WishlistService --> WishlistService: (20.2.9.4) check duplicate
+          alt duplicate exists
+            WishlistService --> WishlistController: (20.2.9.4.1) throw 409 duplicate
+            WishlistController --> WishlistRouter: (20.2.9.4.2) return 409
+            WishlistRouter --> APIClient: (20.2.9.4.3) error response
+            APIClient --> Screen: (20.2.9.4.4) show duplicate warning
+            Screen --> Student: (20.2.9.4.5) request rejected
+          else no duplicate
+            WishlistService -> ClassEnrollmentModel: (20.2.10) validate passed-subject rule
+            activate ClassEnrollmentModel
+            ClassEnrollmentModel -> DB: (20.2.10.1) db query completed enrollments
+            activate DB
+            DB --> ClassEnrollmentModel: (20.2.10.2) completed rows
+            deactivate DB
+            ClassEnrollmentModel --> WishlistService: (20.2.10.3) pass/fail status
+            deactivate ClassEnrollmentModel
+            WishlistService --> WishlistService: (20.2.10.4) check already passed condition
+            alt subject already passed
+              WishlistService --> WishlistController: (20.2.10.4.1) throw 400 subject not eligible
+              WishlistController --> WishlistRouter: (20.2.10.4.2) return 400
+              WishlistRouter --> APIClient: (20.2.10.4.3) error response
+              APIClient --> Screen: (20.2.10.4.4) show passed-subject message
+              Screen --> Student: (20.2.10.4.5) request rejected
+            else subject eligible
+              WishlistService -> ClassEnrollmentModel: (20.2.11) validate max 7 distinct subjects rule
+              activate ClassEnrollmentModel
+              ClassEnrollmentModel -> DB: (20.2.11.1) db query assigned/planned counts
+              activate DB
+              DB --> ClassEnrollmentModel: (20.2.11.2) count result
+              deactivate DB
+              ClassEnrollmentModel --> WishlistService: (20.2.11.3) max-subject validation result
+              deactivate ClassEnrollmentModel
+              WishlistService --> WishlistService: (20.2.11.4) check subject cap condition
+              alt subject cap exceeded
+                WishlistService --> WishlistController: (20.2.11.4.1) throw 400 subject cap exceeded
+                WishlistController --> WishlistRouter: (20.2.11.4.2) return 400
+                WishlistRouter --> APIClient: (20.2.11.4.3) error response
+                APIClient --> Screen: (20.2.11.4.4) show max-subject warning
+                Screen --> Student: (20.2.11.4.5) request rejected
+              else allowed to create
+                WishlistService -> WishlistModel: (20.2.12) create wishlist(status=pending)
+                activate WishlistModel
+                WishlistModel -> DB: (20.2.12.1) db insert wishlist
+                activate DB
+                DB --> WishlistModel: (20.2.12.2) created row
+                deactivate DB
+                WishlistModel --> WishlistService: (20.2.12.3) return created wishlist
+                deactivate WishlistModel
+
+                WishlistService --> WishlistController: (20.2.13) return created wishlist
+                deactivate WishlistService
+                WishlistController --> WishlistRouter: (20.2.14) 201 Created
+                deactivate WishlistController
+                WishlistRouter --> APIClient: (20.2.14.1) success response
+                APIClient --> Screen: (20.2.14.2) reload my-wishlist
+                Screen --> Student: (20.2.14.2.1) show success toast + updated list
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+deactivate WishlistRouter
+deactivate APIClient
+deactivate Screen
+
+@enduml

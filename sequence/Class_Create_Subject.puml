@@ -1,0 +1,57 @@
+@startuml
+hide footbox
+title Class Diagram - Create Subject
+
+' Controller
+class SubjectController {
+  +createSubject(dto: CreateSubjectDto, userId: int): Subject
+}
+
+' Service / Business logic
+class SubjectService {
+  +createSubject(dto: CreateSubjectDto, userId: int): Subject
+  -ensureUniqueSubjectCode(code: string): void
+}
+
+' Repository / Model
+class SubjectRepository {
+  +findByCode(code: string): Subject?
+  +create(data: SubjectCreatePayload): Subject
+}
+
+' DTOs / Payloads
+class CreateSubjectDto {
+  +subject_code: string
+  +name: string
+  +credit_hours: int
+  +description?: string
+}
+class Subject {
+  -subject_id: int
+  -subject_code: string
+  -name: string
+  -credit_hours: int
+  -description: string
+  -created_by: int
+  -created_at: Date
+}
+
+' Relationships
+class SubjectRouter {
+  +routes: /api/subjects
+}
+
+SubjectRouter --> SubjectController : routes to
+SubjectController --> SubjectService : uses
+SubjectService --> SubjectRepository : uses
+SubjectRepository --> Subject : persists
+SubjectController ..> CreateSubjectDto : accepts
+
+' Notes / Business rules
+note right of SubjectService
+ BR1: Subject code must be unique (checked in service + DB unique index)
+ BR2: credit_hours > 0 (validated by validation middleware)
+end note
+
+@enduml
+

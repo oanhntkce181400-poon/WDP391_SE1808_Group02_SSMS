@@ -1,0 +1,212 @@
+@startuml UC206 Manage Assigned Classes Lecturer UI
+title UC206 - Manage Assigned Classes (Lecturer UI)
+
+hide footbox
+
+actor Lecturer as "Lecturer"
+participant HomeScreen as "LecturerHomePage"
+participant ClassScreen as "LecturerClassStudentsPage"
+participant APIClient as "API Client (Frontend)"
+participant TeachingScheduleRouter as "TeachingScheduleRouter"
+participant GradesRouter as "GradesRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant TeachingScheduleController as "TeachingScheduleController"
+participant TeachingScheduleService as "TeachingScheduleService"
+participant GradesController as "GradesController"
+participant GradesService as "GradesService"
+participant TeacherModel as "TeacherModel"
+participant ClassSectionModel as "ClassSectionModel"
+participant ScheduleModel as "ScheduleModel"
+participant EnrollmentModel as "ClassEnrollmentModel"
+database DB as "Database"
+
+activate Lecturer
+Lecturer -> HomeScreen: (1) open lecturer home
+activate HomeScreen
+HomeScreen -> APIClient: (2) GET /api/lecturer/teaching-schedule?includeAllClasses=true
+activate APIClient
+APIClient -> TeachingScheduleRouter: (2.1) forward request
+activate TeachingScheduleRouter
+
+TeachingScheduleRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> TeachingScheduleRouter: (2.2.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  TeachingScheduleRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> HomeScreen: (2.2.1.2) show auth error
+  HomeScreen --> Lecturer: (2.2.1.3) stop flow
+else valid token
+  AuthMiddleware --> TeachingScheduleRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+
+  TeachingScheduleRouter -> RBACMiddleware: (2.3) check role (staff/admin/lecturer)
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> TeachingScheduleRouter: (2.3.1) 403 Forbidden
+    
+    TeachingScheduleRouter --> APIClient: (2.3.1.1) return 403
+    APIClient --> HomeScreen: (2.3.1.2) show permission error
+    HomeScreen --> Lecturer: (2.3.1.3) stop flow
+  else authorized
+    RBACMiddleware --> TeachingScheduleRouter: (2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    TeachingScheduleRouter -> TeachingScheduleController: (2.4) getTeachingSchedule(req)
+    activate TeachingScheduleController
+    TeachingScheduleController -> TeachingScheduleService: (2.4.1) getTeachingSchedule(userId, filters)
+    activate TeachingScheduleService
+
+    TeachingScheduleService -> TeacherModel: (2.4.2) resolve teacher by userId/email/fallback
+    activate TeacherModel
+    TeacherModel -> DB: (2.4.2.1) db query teacher profile
+    activate DB
+    DB --> TeacherModel: (2.4.2.2) teacher row/null
+    deactivate DB
+    TeacherModel --> TeachingScheduleService: (2.4.2.3) return teacher/null
+    deactivate TeacherModel
+    TeachingScheduleService --> TeachingScheduleService: (2.4.2.4) check teacher exists
+    activate TeachingScheduleService
+    deactivate TeachingScheduleService
+    alt teacher not found
+      TeachingScheduleService --> TeachingScheduleController: (2.4.2.4.1) throw 404
+      TeachingScheduleController --> TeachingScheduleRouter: (2.4.2.4.2) return 404
+      TeachingScheduleRouter --> APIClient: (2.4.2.4.3) error response
+      APIClient --> HomeScreen: (2.4.2.4.4) show "select lecturer" hint
+      HomeScreen --> Lecturer: (2.4.2.4.5) no assigned classes displayed
+    else teacher found
+      TeachingScheduleService -> ClassSectionModel: (2.4.3) find assigned non-cancelled classes
+      activate ClassSectionModel
+      ClassSectionModel -> DB: (2.4.3.1) db query class sections + subject/room/timeslot
+      activate DB
+      DB --> ClassSectionModel: (2.4.3.2) class rows
+      deactivate DB
+      ClassSectionModel --> TeachingScheduleService: (2.4.3.3) return class rows
+      deactivate ClassSectionModel
+
+      TeachingScheduleService -> ScheduleModel: (2.4.4) find active schedules by class ids
+      activate ScheduleModel
+      ScheduleModel -> DB: (2.4.4.1) db query schedules
+      activate DB
+      DB --> ScheduleModel: (2.4.4.2) schedule rows
+      deactivate DB
+      ScheduleModel --> TeachingScheduleService: (2.4.4.3) return schedules
+      deactivate ScheduleModel
+
+      TeachingScheduleService --> TeachingScheduleService: (2.4.5) check class list empty/non-empty
+      activate TeachingScheduleService
+    deactivate TeachingScheduleService
+      alt no assigned classes
+        TeachingScheduleService --> TeachingScheduleController: (2.4.5.1) return empty classes
+        
+        TeachingScheduleController --> TeachingScheduleRouter: (2.4.5.2) 200 OK empty
+        
+        TeachingScheduleRouter --> APIClient: (2.4.5.3) success response
+        APIClient --> HomeScreen: (2.4.5.4) render empty assigned-class state
+        HomeScreen --> Lecturer: (2.4.5.5) show "no class assigned"
+      else classes available
+        TeachingScheduleService --> TeachingScheduleController: (2.4.6) return teacher + classes DTO
+        deactivate TeachingScheduleService
+        TeachingScheduleController --> TeachingScheduleRouter: (2.4.7) 200 OK
+        deactivate TeachingScheduleController
+        TeachingScheduleRouter --> APIClient: (2.4.8) success response
+        APIClient --> HomeScreen: (2.4.9) render class table + stats
+        HomeScreen --> Lecturer: (2.4.10) user sees assigned classes
+      end
+    end
+  end
+end
+
+deactivate TeachingScheduleRouter
+deactivate APIClient
+
+== OPEN CLASS STUDENTS ==
+
+Lecturer -> HomeScreen: (20) click "View Students"
+HomeScreen -> ClassScreen: (20.1) navigate /lecturer/classes/:classSectionId
+activate ClassScreen
+ClassScreen -> APIClient: (20.2) GET /api/grades/class/:classSectionId/enrollments
+activate APIClient
+APIClient -> GradesRouter: (20.2.1) forward request
+activate GradesRouter
+
+GradesRouter -> AuthMiddleware: (20.2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> GradesRouter: (20.2.2.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  GradesRouter --> APIClient: (20.2.2.1.1) return 401
+  APIClient --> ClassScreen: (20.2.2.1.2) show auth error
+  ClassScreen --> Lecturer: (20.2.2.1.3) stop detail flow
+else valid token
+  AuthMiddleware --> GradesRouter: (20.2.2.2) token valid
+  deactivate AuthMiddleware
+
+  GradesRouter -> RBACMiddleware: (20.2.3) check role = lecturer
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> GradesRouter: (20.2.3.1) 403 Forbidden
+    deactivate RBACMiddleware
+    GradesRouter --> APIClient: (20.2.3.1.1) return 403
+    APIClient --> ClassScreen: (20.2.3.1.2) show permission error
+    ClassScreen --> Lecturer: (20.2.3.1.3) stop detail flow
+  else authorized
+    RBACMiddleware --> GradesRouter: (20.2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    GradesRouter -> GradesController: (20.2.4) getClassEnrollmentsForGrading(req)
+    activate GradesController
+    GradesController -> GradesService: (20.2.5) getClassEnrollmentsForGrading(classSectionId, requester)
+    activate GradesService
+
+    GradesService --> GradesService: (20.2.6) checkLecturerPermission(requester, classSectionId)
+    activate GradesService
+    deactivate GradesService
+    alt permission denied
+      GradesService --> GradesController: (20.2.6.1) throw 403 unauthorized class
+      
+      GradesController --> GradesRouter: (20.2.6.2) return 403
+      
+      GradesRouter --> APIClient: (20.2.6.3) error response
+      APIClient --> ClassScreen: (20.2.6.4) show unauthorized-class message
+      ClassScreen --> Lecturer: (20.2.6.5) class access denied
+    else permission granted
+      GradesService -> EnrollmentModel: (20.2.7) find enrolled/completed enrollments
+      activate EnrollmentModel
+      EnrollmentModel -> DB: (20.2.7.1) db query enrollments + student/class/subject
+      activate DB
+      DB --> EnrollmentModel: (20.2.7.2) enrollment rows
+      deactivate DB
+      EnrollmentModel --> GradesService: (20.2.7.3) return enrollments
+      deactivate EnrollmentModel
+      GradesService --> GradesService: (20.2.7.4) check enrollment list empty/non-empty
+      activate GradesService
+    deactivate GradesService
+      alt no students enrolled
+        GradesService --> GradesController: (20.2.7.4.1) return empty list + message
+        
+        GradesController --> GradesRouter: (20.2.7.4.2) 200 OK empty
+        
+        GradesRouter --> APIClient: (20.2.7.4.3) success response
+        APIClient --> ClassScreen: (20.2.7.4.4) render "no students" state
+        ClassScreen --> Lecturer: (20.2.7.4.5) no student data
+      else students found
+        GradesService --> GradesController: (20.2.8) return enrollments + classInfo
+        deactivate GradesService
+        GradesController --> GradesRouter: (20.2.9) 200 OK
+        deactivate GradesController
+        GradesRouter --> APIClient: (20.2.10) success response
+        APIClient --> ClassScreen: (20.2.11) render student list + search
+        ClassScreen --> Lecturer: (20.2.12) user manages assigned class students
+      end
+    end
+  end
+end
+
+deactivate GradesRouter
+deactivate APIClient
+deactivate ClassScreen
+deactivate HomeScreen
+
+@enduml
