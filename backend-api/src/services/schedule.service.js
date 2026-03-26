@@ -15,6 +15,7 @@ const Curriculum = require('../models/curriculum.model');
 const CurriculumSemester = require('../models/curriculumSemester.model');
 const CurriculumCourse = require('../models/curriculumCourse.model');
 const scheduleGenerator = require('../modules/schedule/scheduleGenerator.service');
+const paymentValidation = require('./paymentValidation.service');
 
 function getMondayOfWeek(dateInput) {
   const date = new Date(dateInput);
@@ -246,6 +247,132 @@ function buildItemFromSchedule(scheduleDoc, cls, timeslotHint = null) {
     academicYear: cls.academicYear,
     semester: cls.semester,
   };
+}
+
+const TuitionBill = require('../models/tuitionBill.model');
+
+/**
+ * Chặn xem TKB khi chưa đóng học phí kỳ khung — cùng nguồn với trang /student/payment (Payment + deadline).
+ * Khác với checkTuitionBlock (chỉ TuitionBill), tránh SV vẫn thấy lịch dù chưa thanh toán kỳ curriculum.
+ */
+async function checkCurriculumScheduleBlock(student) {
+  try {
+    const semPay = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+    if (!semPay.mustPay) {
+      return { blocked: false };
+    }
+    const overdueMsg =
+      'Bạn đã không thanh toán học phí đúng hạn nên hiện không được xếp lớp. Vui lòng kiểm tra và theo dõi kỳ đăng ký mới được mở để đăng ký học lại.';
+    const pendingMsg =
+      'Bạn chưa thanh toán học phí kỳ hiện tại. Vui lòng thanh toán để xem thời khóa biểu và được xếp lớp chính thức.';
+    return {
+      blocked: true,
+      message: semPay.isOverdue ? overdueMsg : pendingMsg,
+      outstandingAmount: Math.max(0, Number(semPay.tuitionFee?.finalTuitionFee) || 0),
+    };
+  } catch (e) {
+    console.warn('[checkCurriculumScheduleBlock]', e.message);
+    return { blocked: false };
+  }
+}
+
+/**
+ * Kiểm tra sinh viên có bị chặn lịch học do chưa thanh toán học phí không.
+ *
+ * Chặn khi còn nợ (totalAmount > paidAmount) và một trong các điều kiện:
+ * - Hạn thanh toán trên hóa đơn đã quá (dueDate) — đồng bộ trang học phí
+ * - Đã qua mốc “1 tuần trước ngày khai giảng” kỳ (học phí phải đóng trước mốc đó)
+ * - Kỳ đã bắt đầu hơn 7 ngày mà vẫn còn nợ (dự phòng)
+ *
+ * @param {Object} student - student document (lean)
+ * @returns {Object} { blocked, message, outstandingAmount, semesterStartDate }
+ */
+async function checkTuitionBlock(student) {
+  try {
+    const unpaidBills = await TuitionBill.find({
+      student: student._id,
+      status: { $ne: 'cancelled' },
+      $expr: { $gt: ['$totalAmount', '$paidAmount'] },
+    })
+      .populate('semester', 'startDate name')
+      .lean();
+
+    if (!unpaidBills.length) {
+      return { blocked: false };
+    }
+
+    const now = new Date();
+    const currentSemester = await Semester.findOne({ isCurrent: true }).lean();
+
+    const msg =
+      'Bạn chưa thanh toán học phí nên không thể xem lịch học. Vui lòng thanh toán sớm nhất có thể.';
+
+    for (const bill of unpaidBills) {
+      const outstandingAmount = bill.totalAmount - bill.paidAmount;
+      if (outstandingAmount <= 0) continue;
+
+      const semesterStart =
+        bill.semester?.startDate != null
+          ? new Date(bill.semester.startDate)
+          : currentSemester?.startDate
+            ? new Date(currentSemester.startDate)
+            : null;
+
+      const dueFuture = bill.dueDate && now <= new Date(bill.dueDate);
+
+      // 1) Quá hạn theo hạn trên hóa đơn (đồng bộ “Đã quá hạn” trên UI học phí)
+      if (bill.dueDate && now > new Date(bill.dueDate)) {
+        return {
+          blocked: true,
+          message: msg,
+          outstandingAmount,
+          semesterName: bill.semester?.name || currentSemester?.name,
+          semesterStartDate: semesterStart || undefined,
+          dueDate: new Date(bill.dueDate),
+        };
+      }
+
+      if (semesterStart) {
+        const daysSinceStart = Math.floor(
+          (now - semesterStart) / (1000 * 60 * 60 * 24),
+        );
+
+        // 2) Phải đóng trước mốc 1 tuần trước ngày khai giảng (không áp khi hạn trên bill còn trong tương lai)
+        const preSemesterDeadline = new Date(semesterStart);
+        preSemesterDeadline.setDate(preSemesterDeadline.getDate() - 7);
+        preSemesterDeadline.setHours(0, 0, 0, 0);
+        const nowDay = new Date(now);
+        nowDay.setHours(0, 0, 0, 0);
+        if (!dueFuture && nowDay > preSemesterDeadline) {
+          return {
+            blocked: true,
+            message: msg,
+            outstandingAmount,
+            semesterName: bill.semester?.name || currentSemester?.name,
+            semesterStartDate: semesterStart,
+            daysOverdue: daysSinceStart,
+          };
+        }
+
+        // 3) Kỳ đã bắt đầu hơn 7 ngày (chỉ khi không còn hạn tương lai trên hóa đơn)
+        if (!dueFuture && daysSinceStart > 7) {
+          return {
+            blocked: true,
+            message: msg,
+            outstandingAmount,
+            semesterName: bill.semester?.name || currentSemester?.name,
+            semesterStartDate: semesterStart,
+            daysOverdue: daysSinceStart,
+          };
+        }
+      }
+    }
+
+    return { blocked: false };
+  } catch (err) {
+    console.warn('[checkTuitionBlock] Lỗi:', err.message);
+    return { blocked: false };
+  }
 }
 
 function buildItemFromCurriculumCourse(course, dayOfWeek, slot) {
@@ -695,6 +822,38 @@ async function getMyWeekSchedule(userId, weekStart) {
   weekEndDate.setHours(23, 59, 59, 999);
 
   const { student } = await findStudentByUser(userId);
+
+  const curriculumBlock = await checkCurriculumScheduleBlock(student);
+  if (curriculumBlock.blocked) {
+    return {
+      weekStart: formatDateYmd(weekStartDate),
+      weekEnd: formatDateYmd(weekEndDate),
+      schedules: [],
+      paymentRequired: true,
+      tuitionBlock: {
+        message: curriculumBlock.message,
+        outstandingAmount: curriculumBlock.outstandingAmount,
+      },
+    };
+  }
+
+  // ── Chặn lịch học nếu chưa thanh toán học phí sau 7 ngày kể từ khi kỳ bắt đầu (TuitionBill) ──
+  const tuitionBlock = await checkTuitionBlock(student);
+  if (tuitionBlock.blocked) {
+    return {
+      weekStart: formatDateYmd(weekStartDate),
+      weekEnd: formatDateYmd(weekEndDate),
+      schedules: [],
+      paymentRequired: true,
+      tuitionBlock: {
+        message: tuitionBlock.message,
+        outstandingAmount: tuitionBlock.outstandingAmount,
+        semesterName: tuitionBlock.semesterName,
+        semesterStartDate: tuitionBlock.semesterStartDate,
+        daysOverdue: tuitionBlock.daysOverdue,
+      },
+    };
+  }
 
   try {
     await ensureAutoProvisionedEnrollmentForStudent(student);

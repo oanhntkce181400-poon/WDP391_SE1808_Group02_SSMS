@@ -202,6 +202,10 @@ export default function PaymentPage() {
       toast.warning('Bạn đã thanh toán học phí kỳ này rồi!');
       return;
     }
+    if (curriculumPaymentStatus.isOverdue) {
+      toast.error('Bạn đã quá hạn để thanh toán.');
+      return;
+    }
 
     setIsCreatingPayment(true);
     try {
@@ -409,29 +413,46 @@ export default function PaymentPage() {
                     )}
                   </p>
                 )}
+
+                {curriculumPaymentStatus.isOverdue && (
+                  <p className="mt-3 rounded-lg border border-red-200 bg-red-100/90 px-3 py-2.5 text-sm font-medium text-red-800">
+                    Bạn đã quá hạn để thanh toán học phí kỳ này. Hiện không thể thanh toán trực tuyến; vui lòng
+                    theo dõi kỳ đăng ký mới hoặc liên hệ phòng Đào tạo để được hướng dẫn.
+                  </p>
+                )}
                 
-                {/* Nút thanh toán */}
-                <button
-                  onClick={handleCurriculumPayment}
-                  disabled={isCreatingPayment}
-                  className={`mt-4 flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium text-white ${
-                    curriculumPaymentStatus.isNewStudent 
-                      ? 'bg-red-600 hover:bg-red-700' 
-                      : 'bg-yellow-600 hover:bg-yellow-700'
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                {/* Nút thanh toán — vô hiệu + làm mờ khi quá hạn */}
+                <div
+                  className={`mt-4 inline-block ${curriculumPaymentStatus.isOverdue ? 'opacity-50 saturate-0' : ''}`}
                 >
-                  {isCreatingPayment ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Đang tạo thanh toán...
-                    </>
-                  ) : (
-                    <>
-                      <span>💳</span>
-                      Thanh toán ngay
-                    </>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleCurriculumPayment}
+                    disabled={isCreatingPayment || curriculumPaymentStatus.isOverdue}
+                    title={
+                      curriculumPaymentStatus.isOverdue
+                        ? 'Đã quá hạn thanh toán'
+                        : undefined
+                    }
+                    className={`flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium text-white transition ${
+                      curriculumPaymentStatus.isNewStudent
+                        ? 'bg-red-600 enabled:hover:bg-red-700'
+                        : 'bg-yellow-600 enabled:hover:bg-yellow-700'
+                    } disabled:cursor-not-allowed disabled:opacity-40 disabled:blur-[0.5px]`}
+                  >
+                    {isCreatingPayment ? (
+                      <>
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                        Đang tạo thanh toán...
+                      </>
+                    ) : (
+                      <>
+                        <span aria-hidden>💳</span>
+                        Thanh toán ngay
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

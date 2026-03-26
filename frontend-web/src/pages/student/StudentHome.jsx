@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExamScheduleSummary from '../../components/features/ExamScheduleSummary';
+import CountdownWidget from '../../components/features/CountdownWidget';
 import announcementService from '../../services/announcementService';
 
 // Data arrays - procedures, lookupItems, reportItems, regulationItems
@@ -217,6 +218,11 @@ export default function StudentHome() {
               </span>
             </div>
           )}
+
+          {/* Countdown Widget */}
+          <div className="mt-4">
+            <CountdownWidget />
+          </div>
         </div>
 
         {/* Main content */}
