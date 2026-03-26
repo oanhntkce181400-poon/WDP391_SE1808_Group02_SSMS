@@ -30,27 +30,53 @@ function normalizeEmail(email) {
 }
 
 async function ensureTeacherUserAccount(teacher, actorId) {
+  const normalizedEmail = normalizeEmail(teacher.email);
   const syncedUserFields = {
-    role: normalizeRole('lecturer'),
+    role: normalizeRole("lecturer"),
     fullName: teacher.fullName,
     status: teacher.isActive === false ? "inactive" : "active",
     isActive: teacher.isActive !== false,
-    avatarUrl: teacher.avatarUrl || undefined,
-    updatedBy: actorId || undefined,
   };
+  if (normalizedEmail) syncedUserFields.email = normalizedEmail;
+  if (teacher.avatarUrl) syncedUserFields.avatarUrl = teacher.avatarUrl;
+  if (actorId) syncedUserFields.updatedBy = actorId;
 
-  if (teacher.userId) {
-    await repo.updateUserById(teacher.userId, syncedUserFields);
-    return { created: false, userId: teacher.userId };
+  let user = teacher.userId ? await repo.findUserById(teacher.userId) : null;
+  const emailUser = normalizedEmail ? await repo.findUserByEmail(normalizedEmail) : null;
+
+  if (emailUser && normalizeRole(emailUser.role) !== "lecturer") {
+    throw new Error("Email already registered to another user account");
   }
 
-  const normalizedEmail = normalizeEmail(teacher.email);
-  if (!normalizedEmail) {
-    return { created: false, userId: null };
+  if (user && emailUser && String(user._id) !== String(emailUser._id)) {
+    const linkedTeacher = await repo.findTeacherByUserId(emailUser._id, {
+      excludeTeacherId: teacher._id,
+    });
+    if (linkedTeacher) {
+      throw new Error("User account already exists for another lecturer profile");
+    }
+
+    user = emailUser;
+    teacher.userId = emailUser._id;
   }
 
-  let user = await repo.findUserByEmail(normalizedEmail);
+  if (!user && emailUser) {
+    const linkedTeacher = await repo.findTeacherByUserId(emailUser._id, {
+      excludeTeacherId: teacher._id,
+    });
+    if (linkedTeacher) {
+      throw new Error("User account already exists for another lecturer profile");
+    }
+
+    user = emailUser;
+    teacher.userId = emailUser._id;
+  }
+
   if (!user) {
+    if (!normalizedEmail) {
+      return { created: false, userId: null };
+    }
+
     const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
     user = await repo.createUser({
       email: normalizedEmail,
@@ -66,6 +92,10 @@ async function ensureTeacherUserAccount(teacher, actorId) {
     });
     teacher.userId = user._id;
     return { created: true, userId: user._id };
+  }
+
+  if (normalizeRole(user.role) !== "lecturer") {
+    throw new Error("Email already registered to another user account");
   }
 
   await repo.updateUserById(user._id, syncedUserFields);
@@ -144,7 +174,16 @@ async function createLecturer(body, file, auth) {
   const existingTeacherEmail = await repo.findTeacherByEmail(normalizedEmail);
   if (existingTeacherEmail)
     throw new Error("Email already exists in teacher profiles");
-  if (existingUser) throw new Error("Email already registered as a user");
+  if (existingUser && normalizeRole(existingUser.role) !== "lecturer") {
+    throw new Error("Email already registered to another user account");
+  }
+
+  if (existingUser) {
+    const linkedTeacher = await repo.findTeacherByUserId(existingUser._id);
+    if (linkedTeacher) {
+      throw new Error("User account already exists for another lecturer profile");
+    }
+  }
 
   // Upload avatar if provided
   let avatarUrl = null;
@@ -156,25 +195,42 @@ async function createLecturer(body, file, auth) {
     avatarUrl = result.secure_url;
   }
 
-  const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
-
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const user = await repo.createUser(
-      {
-        email: normalizedEmail,
-        password: hashedPassword,
+    let userId = existingUser?._id || null;
+    let shouldShowDefaultPasswordHint = false;
+
+    if (!existingUser) {
+      const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+      const user = await repo.createUser(
+        {
+          email: normalizedEmail,
+          password: hashedPassword,
+          fullName,
+          authProvider: "local",
+          role: "lecturer",
+          status: "active",
+          mustChangePassword: true,
+          avatarUrl,
+          createdBy: auth?.sub || auth?.id,
+        },
+        session,
+      );
+      userId = user._id;
+      shouldShowDefaultPasswordHint = true;
+    } else {
+      const linkedUserUpdate = {
         fullName,
-        authProvider: "local",
         role: "lecturer",
         status: "active",
-        mustChangePassword: true,
-        avatarUrl,
-        createdBy: auth?.sub || auth?.id,
-      },
-      session,
-    );
+        isActive: true,
+      };
+      if (avatarUrl) linkedUserUpdate.avatarUrl = avatarUrl;
+      if (auth?.sub || auth?.id) linkedUserUpdate.updatedBy = auth?.sub || auth?.id;
+
+      await repo.updateUserById(existingUser._id, linkedUserUpdate, session);
+    }
 
     const teacher = await repo.createTeacher(
       {
@@ -187,7 +243,7 @@ async function createLecturer(body, file, auth) {
         degree: degree || "bachelors",
         gender: gender || undefined,
         avatarUrl,
-        userId: user._id,
+        userId,
         isActive: true,
       },
       session,
@@ -198,7 +254,11 @@ async function createLecturer(body, file, auth) {
     const populated = await repo.findLecturerById(teacher._id);
     return {
       ...formatLecturer(populated),
-      _defaultPasswordHint: `Default password: ${DEFAULT_PASSWORD} (must change on first login)`,
+      ...(shouldShowDefaultPasswordHint
+        ? {
+            _defaultPasswordHint: `Default password: ${DEFAULT_PASSWORD} (must change on first login)`,
+          }
+        : {}),
     };
   } catch (err) {
     await session.abortTransaction();

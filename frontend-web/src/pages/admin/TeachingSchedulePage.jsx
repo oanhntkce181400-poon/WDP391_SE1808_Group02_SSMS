@@ -50,6 +50,7 @@ function formatDateRange(startDate, endDate) {
 
 export default function TeachingSchedulePage() {
   const [userRole, setUserRole] = useState('');
+  const [roleResolved, setRoleResolved] = useState(false);
   const isAdminOrStaff = userRole === 'admin' || userRole === 'staff';
 
   const [loading, setLoading] = useState(false);
@@ -132,7 +133,7 @@ export default function TeachingSchedulePage() {
         className: cls.className,
         subject: cls.subject,
         room: schedule.room || cls.room,
-        timeslot: cls.timeslot,
+        timeslot: schedule.timeslot || cls.timeslot,
         dayOfWeek: schedule.dayOfWeek,
         startDate: schedule.startDate,
         endDate: schedule.endDate,
@@ -146,17 +147,21 @@ export default function TeachingSchedulePage() {
     // Gom các timeslot unique từ toàn bộ classes của giảng viên,
     // để render ra các hàng "CA1, CA2..." trên bảng lịch.
     const slotMap = new Map();
-    teachingClasses.forEach((cls) => {
-      if (!cls?.timeslot?._id) return;
-      slotMap.set(String(cls.timeslot._id), cls.timeslot);
+    scheduleEntries.forEach((entry) => {
+      if (!entry?.timeslot?._id) return;
+      slotMap.set(String(entry.timeslot._id), entry.timeslot);
     });
 
     return Array.from(slotMap.values()).sort((a, b) => {
+      const byStartPeriod = Number(a?.startPeriod || 0) - Number(b?.startPeriod || 0);
+      if (byStartPeriod !== 0) return byStartPeriod;
+      const byEndPeriod = Number(a?.endPeriod || 0) - Number(b?.endPeriod || 0);
+      if (byEndPeriod !== 0) return byEndPeriod;
       const byStart = String(a?.startTime || '').localeCompare(String(b?.startTime || ''));
       if (byStart !== 0) return byStart;
       return String(a?.groupName || '').localeCompare(String(b?.groupName || ''));
     });
-  }, [teachingClasses]);
+  }, [scheduleEntries]);
 
   const classesWithoutSchedules = useMemo(
     () => teachingClasses.filter((cls) => !Array.isArray(cls.schedules) || cls.schedules.length === 0),
@@ -181,6 +186,13 @@ export default function TeachingSchedulePage() {
   }, [teachingClasses, scheduleEntries]);
 
   const fetchSchedule = async (teacherId = '') => {
+    if (isAdminOrStaff && !teacherId) {
+      setError('');
+      setData(null);
+      setHint('Chọn giảng viên để xem lịch giảng dạy.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setHint('');
@@ -229,6 +241,8 @@ export default function TeachingSchedulePage() {
       setUserRole(role);
     } catch {
       setUserRole('');
+    } finally {
+      setRoleResolved(true);
     }
 
     const loadLecturers = async () => {
@@ -244,17 +258,37 @@ export default function TeachingSchedulePage() {
     };
 
     loadLecturers();
+  }, []);
+
+  useEffect(() => {
+    if (!roleResolved) return;
+
     if (isAdminOrStaff) {
       loadGeneratorMasterData();
       fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear, '');
+      setData(null);
+      setError('');
+      setHint('Chọn giảng viên để xem lịch giảng dạy.');
+      return;
     }
+
     fetchSchedule('');
-  }, [isAdminOrStaff]);
+  }, [roleResolved, isAdminOrStaff]);
 
   useEffect(() => {
-    if (!selectedTeacherId) return;
+    if (!roleResolved) return;
+
+    if (!selectedTeacherId) {
+      if (isAdminOrStaff) {
+        setData(null);
+        setError('');
+        setHint('Chọn giảng viên để xem lịch giảng dạy.');
+      }
+      return;
+    }
+
     fetchSchedule(selectedTeacherId);
-  }, [selectedTeacherId]);
+  }, [selectedTeacherId, roleResolved, isAdminOrStaff]);
 
   const toggleSubject = (subjectId) => {
     setSelectedSubjectIds((prev) =>
@@ -628,7 +662,7 @@ export default function TeachingSchedulePage() {
                 onChange={(event) => setSelectedTeacherId(event.target.value)}
                 disabled={loadingLecturers}
               >
-                <option value="">Tài khoản hiện tại</option>
+                <option value="">{isAdminOrStaff ? 'Chon giang vien' : 'Tai khoan hien tai'}</option>
                 {lecturers.map((lecturer) => (
                   <option key={lecturer.id} value={lecturer.id}>
                     {lecturer.label}
@@ -639,13 +673,15 @@ export default function TeachingSchedulePage() {
                 type="button"
                 className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                 onClick={() => fetchSchedule(selectedTeacherId)}
-                disabled={loading}
+                disabled={loading || (isAdminOrStaff && !selectedTeacherId)}
               >
-                {loading ? 'Đang tải...' : 'Xem lịch'}
+                {loading ? 'Dang tai...' : 'Xem lich'}
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Nếu đang đăng nhập bằng tài khoản giảng viên, bạn có thể để trống bộ lọc này.
+              {isAdminOrStaff
+                ? 'Chon mot giang vien cu the de xem dung lich day theo hoc ky hien tai.'
+                : 'Neu dang dang nhap bang tai khoan giang vien, ban co the de trong bo loc nay.'}
             </p>
           </div>
         </div>

@@ -2,6 +2,9 @@ const Student = require('../models/student.model');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Semester = require('../models/semester.model');
+const { filterClassesBySemesterContext } = require('../utils/semesterMatch.util');
+
+const DASHBOARD_CLASS_STATUSES = ['draft', 'scheduled', 'published', 'locked', 'completed'];
 
 /**
  * Dashboard cards should prefer the current semester when one is configured.
@@ -19,6 +22,22 @@ async function resolveCurrentSemester() {
     .lean();
 }
 
+async function loadDashboardClasses(semester) {
+  const classQuery = {
+    status: { $in: DASHBOARD_CLASS_STATUSES },
+  };
+
+  if (semester?.semesterNum != null) {
+    classQuery.semester = Number(semester.semesterNum);
+  }
+
+  const classes = await ClassSection.find(classQuery)
+    .select('_id maxCapacity currentEnrollment semester academicYear startDate endDate')
+    .lean();
+
+  return semester ? filterClassesBySemesterContext(classes, semester) : classes;
+}
+
 /**
  * Computes the compact analytics payload used by the admin dashboard.
  *
@@ -33,20 +52,10 @@ async function resolveCurrentSemester() {
  */
 async function getDashboardStats() {
   const semester = await resolveCurrentSemester();
-  const classQuery = {
-    status: { $in: ['draft', 'scheduled', 'published', 'locked', 'completed'] },
-  };
-
-  if (semester) {
-    classQuery.semester = semester.semesterNum;
-    classQuery.academicYear = semester.academicYear;
-  }
 
   const [totalStudents, classes] = await Promise.all([
     Student.countDocuments({ isActive: true }),
-    ClassSection.find(classQuery)
-      .select('_id maxCapacity currentEnrollment semester academicYear')
-      .lean(),
+    loadDashboardClasses(semester),
   ]);
 
   const classIds = classes.map((item) => item._id);

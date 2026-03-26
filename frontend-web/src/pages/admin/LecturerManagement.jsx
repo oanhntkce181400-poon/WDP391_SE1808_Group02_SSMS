@@ -14,7 +14,7 @@ import {
   UserCog,
 } from "lucide-react";
 import lecturerService from "../../services/lecturerService";
-import majorService from "../../services/majorService";
+import facultyService from "../../services/facultyService";
 
 /* ───── Constants ───── */
 const DEGREE_LABELS = {
@@ -82,6 +82,38 @@ function SpecializationBadge({ value }) {
       <span className="truncate">{value}</span>
     </span>
   );
+}
+
+function normalizeDepartmentCode(value, faculties = []) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const exactCode = faculties.find(
+    (faculty) => String(faculty.facultyCode || "").trim() === raw,
+  );
+  if (exactCode) return raw;
+
+  const lowered = raw.toLowerCase();
+  const byName = faculties.find((faculty) => {
+    const facultyName = String(faculty.facultyName || "").trim().toLowerCase();
+    const shortName = String(faculty.shortName || "").trim().toLowerCase();
+    return facultyName === lowered || shortName === lowered;
+  });
+
+  return byName?.facultyCode || raw;
+}
+
+function formatDepartmentLabel(value, faculties = []) {
+  const code = normalizeDepartmentCode(value, faculties);
+  if (!code) return "";
+
+  const faculty = faculties.find(
+    (item) => String(item.facultyCode || "").trim() === code,
+  );
+  if (!faculty) return code;
+
+  const facultyName = String(faculty.facultyName || "").trim();
+  return facultyName ? `${facultyName} (${code})` : code;
 }
 
 /* ───── Helpers ───── */
@@ -241,8 +273,8 @@ export default function LecturerManagement() {
   }, [fetchLecturers]);
 
   useEffect(() => {
-    majorService
-      .getMajors({ isActive: true, limit: 200 })
+    facultyService
+      .getFaculties({ isActive: true })
       .then((res) => {
         const list = res?.data?.data || res?.data || [];
         setDepartments(Array.isArray(list) ? list : []);
@@ -299,7 +331,7 @@ export default function LecturerManagement() {
       teacherCode: lec.teacherCode || "",
       fullName: lec.fullName || "",
       email: lec.email || "",
-      department: lec.department || "",
+      department: normalizeDepartmentCode(lec.department, departments),
       phone: lec.phone || "",
       specialization: lec.specialization || "",
       degree: lec.degree || "bachelors",
@@ -498,7 +530,7 @@ export default function LecturerManagement() {
                 </p>
                 <div className="flex flex-wrap gap-1 mt-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-                    {lec.department}
+                    {formatDepartmentLabel(lec.department, departments)}
                   </span>
                   {lec.degree && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
@@ -786,8 +818,8 @@ function LecturerFormModal({
               >
                 <option value="">-- Chọn bộ môn --</option>
                 {departments.map((d) => (
-                  <option key={d._id} value={d.majorName}>
-                    {d.majorName} ({d.majorCode})
+                  <option key={d._id} value={d.facultyCode}>
+                    {d.facultyName} ({d.facultyCode})
                   </option>
                 ))}
               </select>
@@ -955,8 +987,8 @@ function FilterSidebar({ filters, onApply, onClose, departments = [] }) {
             >
               <option value="">Tất cả</option>
               {departments.map((d) => (
-                <option key={d._id} value={d.majorName}>
-                  {d.majorName} ({d.majorCode})
+                <option key={d._id} value={d.facultyCode}>
+                  {d.facultyName} ({d.facultyCode})
                 </option>
               ))}
             </select>

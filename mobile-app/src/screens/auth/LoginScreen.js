@@ -14,7 +14,7 @@ import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, setItem } from '../../utils/storage';
 
-export default function LoginScreen() {
+export default function LoginScreen({ onForgotPassword }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -99,6 +99,13 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Đăng nhập</Text>
           )}
         </Pressable>
+        <Pressable
+          onPress={onForgotPassword}
+          style={styles.linkButton}
+          disabled={loading || typeof onForgotPassword !== 'function'}
+        >
+          <Text style={styles.linkText}>Forgot password?</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -151,5 +158,14 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#ffffff',
     fontWeight: '700',
+  },
+  linkButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  linkText: {
+    color: '#2563eb',
+    fontWeight: '600',
   },
 });

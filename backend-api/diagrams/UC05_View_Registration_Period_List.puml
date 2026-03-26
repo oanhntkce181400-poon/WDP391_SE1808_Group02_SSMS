@@ -1,20 +1,19 @@
-@startuml
+﻿@startuml
 title UC05 - View Registration Period List - Display Registration Periods
 
-hide footbox
-
-actor PrimaryActor as "Admin / Staff"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant RegPeriodRouter as "RegistrationPeriodRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant RBACMiddleware as "RBACMiddleware"
-participant RegPeriodController as "RegistrationPeriodController"
-participant RegPeriodService as "RegistrationPeriodService"
-participant RegPeriodModel as "RegistrationPeriodModel"
-participant UserModel as "UserModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Staff" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "RegistrationPeriodRouter" as RegPeriodRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "RBACMiddleware" as RBACMiddleware <<control>>
+participant "RegistrationPeriodController" as RegPeriodController <<control>>
+participant "RegistrationPeriodService" as RegPeriodService <<control>>
+participant "RegistrationPeriodModel" as RegPeriodModel <<entity>>
+participant "UserModel" as UserModel <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) navigate to Registration Period page
 activate Screen
@@ -51,9 +50,9 @@ deactivate RegPeriodModel
 RegPeriodService -> RegPeriodService: (11.1) auto-update status based on dates
 note right
   For each period:
-  - If now < startDate → status = 'upcoming'
-  - If startDate <= now <= endDate → status = 'active'
-  - If now > endDate → status = 'closed'
+  - If now < startDate 竊・status = 'upcoming'
+  - If startDate <= now <= endDate 竊・status = 'active'
+  - If now > endDate 竊・status = 'closed'
 end note
 
 RegPeriodService -> UserModel: (11.2) populate createdBy field

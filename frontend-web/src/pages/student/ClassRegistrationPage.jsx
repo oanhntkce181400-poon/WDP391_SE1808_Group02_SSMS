@@ -188,7 +188,6 @@ export default function ClassRegistrationPage() {
 
   const creditInfo = eligibility?.limits?.credit;
   const overloadInfo = eligibility?.limits?.overload;
-  const cohortInfo = eligibility?.limits?.cohortAccess;
 
   // Progress bar "x/y tín chỉ" dùng currentCredits và maxCredits từ BE.
   const creditPercent = useMemo(() => {
@@ -301,22 +300,20 @@ export default function ClassRegistrationPage() {
     }
   };
 
-  const isCohortBlocked = cohortInfo && !cohortInfo.allowed;
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-gray-900">Course Registration</h1>
-          <p className="text-gray-600">Search and register class sections.</p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">Đăng ký học lại / học vượt</h1>
+          <p className="text-gray-600">Tìm lớp phù hợp và đăng ký theo đợt repeat hoặc overload đang mở.</p>
         </div>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Search className="h-4 w-4" />
-              Search classes
-            </div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <Search className="h-4 w-4" />
+                Tìm lớp
+              </div>
             <input
               type="text"
               placeholder="Class code, class name"
@@ -368,12 +365,6 @@ export default function ClassRegistrationPage() {
           </div>
         </div>
 
-        {isCohortBlocked && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {cohortInfo?.message || 'Your cohort is not allowed in current registration period'}
-          </div>
-        )}
-
         {loading ? (
           <div className="py-12 text-center text-slate-600">Loading classes...</div>
         ) : (
@@ -390,7 +381,6 @@ export default function ClassRegistrationPage() {
                 // - validation backend trả class không đủ điều kiện
                 const cannotRegister =
                   cls.isFull ||
-                  isCohortBlocked ||
                   (validation ? !validation.isEligible : false);
 
                 return (
@@ -455,7 +445,7 @@ export default function ClassRegistrationPage() {
                         <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
                           <div className="flex items-center gap-1 font-semibold">
                             <CheckCircle className="h-4 w-4" />
-                            Eligible to register
+                            Đủ điều kiện đăng ký
                           </div>
                         </div>
                       )}
@@ -464,7 +454,7 @@ export default function ClassRegistrationPage() {
                         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                           <div className="mb-1 flex items-center gap-1 font-semibold">
                             <XCircle className="h-4 w-4" />
-                            Registration blocked
+                            Bị chặn đăng ký
                           </div>
                           <ul className="space-y-1">
                             {validationErrors.slice(0, 2).map((err) => (
@@ -520,7 +510,7 @@ export default function ClassRegistrationPage() {
                           disabled={cannotRegister}
                           className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
-                          Register
+                          Đăng ký
                         </button>
                       </div>
                     </div>
