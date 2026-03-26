@@ -2,6 +2,7 @@ const Feedback = require('../models/feedback.model');
 const ClassSection = require('../models/classSection.model');
 const StudentEnrollment = require('../models/classEnrollment.model');
 const Student = require('../models/student.model');
+const feedbackTemplateService = require('./feedbackTemplate.service');
 
 /**
  * A shared populate definition keeps every feedback response consistent between
@@ -55,6 +56,29 @@ class FeedbackService {
     }
   }
 
+  async getFeedbackAvailability() {
+    try {
+      return await feedbackTemplateService.getTeacherFeedbackAvailability();
+    } catch (error) {
+      console.error('Error fetching feedback availability:', error);
+      throw error;
+    }
+  }
+
+  async assertFeedbackWindowOpen() {
+    const availability = await this.getFeedbackAvailability();
+
+    if (availability?.isOpen) {
+      return availability;
+    }
+
+    const error = new Error(
+      availability?.message || 'Hiện chưa có đợt đánh giá giảng viên nào đang mở.',
+    );
+    error.code = 'FEEDBACK_WINDOW_CLOSED';
+    throw error;
+  }
+
   /**
    * Creates one feedback record for one student in one class.
    *
@@ -70,6 +94,8 @@ class FeedbackService {
     try {
       const { classSection, rating, comment, criteria, isAnonymous } = data;
       const student = await this.getStudentRecordByUserId(userId);
+
+      await this.assertFeedbackWindowOpen();
 
       const classExists = await ClassSection.findById(classSection);
       if (!classExists) {
@@ -432,18 +458,9 @@ class FeedbackService {
     }
   }
 
-  /**
-   * The mobile screen still calls this endpoint to decide whether the current
-   * user may edit the selected feedback.
-   *
-   * Instead of exposing template-window status, we now answer the more useful
-   * question for this UI: "is the authenticated caller allowed to edit this
-   * feedback?" Admin/staff can inspect any record, while students may only
-   * inspect their own feedback metadata.
-   */
   async getFeedbackWindowInfo(feedbackId, userId, role = '') {
     try {
-      const feedback = await Feedback.findById(feedbackId).select('submittedBy');
+      const feedback = await Feedback.findById(feedbackId).select('submittedBy classSection');
 
       if (!feedback) {
         throw new Error('Feedback not found');
@@ -459,14 +476,23 @@ class FeedbackService {
         throw new Error('You do not have permission to view this feedback');
       }
 
+      const availability = await this.getFeedbackAvailability();
+
       return {
-        isValid: true,
-        error: null,
+        isValid: availability?.isOpen === true,
+        error: availability?.isOpen ? null : availability?.message || 'Chưa đến thời gian đánh giá.',
         remainingMs: null,
         remainingMinutes: null,
         remainingHours: null,
         remainingDays: null,
-        mode: 'owner-edit',
+        mode: availability?.isOpen ? 'feedback-open' : 'feedback-closed',
+        state: availability?.state || 'closed',
+        startsAt: availability?.startsAt || null,
+        endsAt: availability?.endsAt || null,
+        startsAtLabel: availability?.startsAtLabel || null,
+        endsAtLabel: availability?.endsAtLabel || null,
+        templateId: availability?.templateId || null,
+        templateName: availability?.templateName || null,
       };
     } catch (error) {
       return {

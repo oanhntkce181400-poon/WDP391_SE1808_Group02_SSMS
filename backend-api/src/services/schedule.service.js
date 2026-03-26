@@ -42,8 +42,11 @@ function formatDateYmd(date) {
   return `${y}-${m}-${d}`;
 }
 
-/** Lớp đã công bố lịch cho SV (đồng bộ ClassManagement: Đã công bố / Đã khóa) */
-const PUBLISHED_CLASS_STATUSES = ['published', 'locked'];
+/**
+ * Lịch học của sinh viên cần hiển thị cả lớp đã được xếp lịch (`scheduled`)
+ * vì luồng auto-enrollment đang gắn sinh viên vào các lớp này trước khi admin publish.
+ */
+const PUBLISHED_CLASS_STATUSES = ['scheduled', 'published', 'locked'];
 
 function normalizeAcademicYearKey(ay) {
   return String(ay ?? '')
@@ -127,7 +130,23 @@ function resolveTimeslotForSchedule(sch, activeSlots) {
     (t) => Number(t.startPeriod) === sp && Number(t.endPeriod) === ep,
   );
   if (exact) return exact;
-  return activeSlots.find((t) => Number(t.startPeriod) === sp);
+
+  const byStart = activeSlots.find((t) => Number(t.startPeriod) === sp);
+  const byEnd =
+    activeSlots.find((t) => Number(t.endPeriod) === ep) ||
+    activeSlots.find((t) => Number(t.startPeriod) === ep);
+
+  if (!byStart && !byEnd) return null;
+
+  return {
+    groupName: byStart?.groupName || byEnd?.groupName || null,
+    startPeriod: Number.isFinite(sp) ? sp : Number(byStart?.startPeriod || 0),
+    endPeriod: Number.isFinite(ep)
+      ? ep
+      : Number(byEnd?.endPeriod || byStart?.endPeriod || 0),
+    startTime: byStart?.startTime || byEnd?.startTime || '',
+    endTime: byEnd?.endTime || byStart?.endTime || '',
+  };
 }
 
 async function findStudentByUser(userId) {
@@ -209,8 +228,11 @@ function buildItemFromLegacyClass(cls) {
     classCode: cls.classCode,
     className: cls.className,
     dayOfWeek: cls.dayOfWeek,
+    startPeriod: cls.timeslot?.startPeriod || null,
+    endPeriod: cls.timeslot?.endPeriod || null,
     startTime: cls.timeslot?.startTime || '',
     endTime: cls.timeslot?.endTime || '',
+    timeslotName: cls.timeslot?.groupName || null,
     subject: {
       subjectCode: cls.subject?.subjectCode || 'N/A',
       subjectName: cls.subject?.subjectName || 'Chưa có tên',
@@ -232,8 +254,11 @@ function buildItemFromSchedule(scheduleDoc, cls, timeslotHint = null) {
     classCode: cls.classCode,
     className: cls.className,
     dayOfWeek: scheduleDoc.dayOfWeek,
+    startPeriod: scheduleDoc.startPeriod || ts?.startPeriod || null,
+    endPeriod: scheduleDoc.endPeriod || ts?.endPeriod || null,
     startTime: ts?.startTime || `P${scheduleDoc.startPeriod}`,
     endTime: ts?.endTime || `P${scheduleDoc.endPeriod}`,
+    timeslotName: ts?.groupName || null,
     subject: {
       subjectCode: cls.subject?.subjectCode || 'N/A',
       subjectName: cls.subject?.subjectName || 'Chưa có tên',
@@ -257,8 +282,11 @@ function buildItemFromCurriculumCourse(course, dayOfWeek, slot) {
     classCode: `CURR-${subjectCode}`,
     className: `${subjectName} (Theo khung chương trình)`,
     dayOfWeek,
+    startPeriod: slot?.startPeriod || null,
+    endPeriod: slot?.endPeriod || null,
     startTime: slot?.startTime || '',
     endTime: slot?.endTime || '',
+    timeslotName: slot?.groupName || null,
     subject: {
       subjectCode,
       subjectName,
@@ -717,7 +745,7 @@ async function getMyWeekSchedule(userId, weekStart) {
         { path: 'subject', select: 'subjectCode subjectName' },
         { path: 'room', select: 'roomCode roomName' },
         { path: 'teacher', select: 'fullName' },
-        { path: 'timeslot', select: 'startTime endTime groupName' },
+        { path: 'timeslot', select: 'startTime endTime startPeriod endPeriod groupName' },
       ],
     })
     .lean();
@@ -729,6 +757,12 @@ async function getMyWeekSchedule(userId, weekStart) {
     return {
       weekStart: formatDateYmd(weekStartDate),
       weekEnd: formatDateYmd(weekEndDate),
+      currentTerm: {
+        semesterNum: semCtx?.semesterNum || null,
+        academicYear: semCtx?.academicYear || null,
+        startDate: semCtx?.startDate || null,
+        endDate: semCtx?.endDate || null,
+      },
       schedules: [],
     };
   }
@@ -780,6 +814,12 @@ async function getMyWeekSchedule(userId, weekStart) {
   return {
     weekStart: formatDateYmd(weekStartDate),
     weekEnd: formatDateYmd(weekEndDate),
+    currentTerm: {
+      semesterNum: semCtx?.semesterNum || null,
+      academicYear: semCtx?.academicYear || null,
+      startDate: semCtx?.startDate || null,
+      endDate: semCtx?.endDate || null,
+    },
     schedules: itemsWithAttendance,
   };
 }

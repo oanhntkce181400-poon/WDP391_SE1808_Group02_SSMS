@@ -9,6 +9,7 @@ const User = require('../models/user.model');
 const GradeChangeLog = require('../models/gradeChangeLog.model');
 const mailer = require('../external/mailer');
 const scoreComponentService = require('./scoreComponent.service');
+const emailTemplateService = require('./emailTemplate.service');
 
 class GradesService {
   /**
@@ -288,56 +289,19 @@ class GradesService {
   }
 
   buildGradePublishedEmail({ studentName, classCode, subjectName, grade, teacherName, scoreComponents = {} }) {
-    const { gk, ck, pt, bt, qt, ptAverage } = scoreComponents;
-    
-    let componentHTML = '';
-    
-    // Display score components if available
-    if (gk !== undefined && gk !== null) {
-      componentHTML += `<li>Giua ky (GK - 30%): <strong>${gk}</strong></li>`;
-    }
-    if (ck !== undefined && ck !== null) {
-      componentHTML += `<li>Cuoi ky (CK - 50%): <strong>${ck}</strong></li>`;
-    }
-    if (pt !== undefined && pt !== null) {
-      componentHTML += `<li>Kiem tra thuong xuyen (PT - 20%): <strong>${pt}</strong></li>`;
-      if (ptAverage !== undefined && ptAverage !== null) {
-        componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Trung binh PT: ${ptAverage}</li>`;
-      }
-    }
-    if (bt !== undefined && bt !== null) {
-      componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Bai tap (BT): ${bt}</li>`;
-    }
-    if (qt !== undefined && qt !== null) {
-      componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Qua trinh (QT): ${qt}</li>`;
-    }
-    
-    return `
-      <div style="font-family: Inter, sans-serif; background: #f8fafc; padding: 24px;">
-        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
-          <div style="background: #1A237E; padding: 18px 24px; color: #ffffff;">
-            <h2 style="margin: 0; font-size: 18px;">SSMS - Cong bo diem chinh thuc</h2>
-          </div>
-          <div style="padding: 24px; color: #334155;">
-            <p style="margin-top: 0;">Xin chao <strong>${studentName || 'Sinh vien'}</strong>,</p>
-            <p>Diem chinh thuc cua ban da duoc cong bo:</p>
-            <ul style="line-height: 1.8; padding-left: 18px;">
-              <li>Lop: <strong>${classCode || 'N/A'}</strong></li>
-              <li>Mon hoc: <strong>${subjectName || 'N/A'}</strong></li>
-              <li>Giang vien: <strong>${teacherName || 'N/A'}</strong></li>
-            </ul>
-            <div style="margin-top: 12px; padding: 12px; background: #f1f5f9; border-left: 4px solid #0ea5e9; border-radius: 4px;">
-              <p style="margin: 0 0 8px 0; font-weight: 600; color: #0c4a6e;">Chi tiet thanh phan diem:</p>
-              <ul style="line-height: 1.8; padding-left: 18px; margin: 0;">
-                ${componentHTML}
-                <li style="margin-top: 8px; border-top: 1px solid #cbd5e1; padding-top: 8px;">Diem tong ket: <strong style="color: #0ea5e9; font-size: 16px;">${grade ?? 'N/A'}</strong></li>
-              </ul>
-            </div>
-            <p style="margin-bottom: 0; margin-top: 12px; color: #64748b; font-size: 13px;">Vui long dang nhap he thong de xem chi tiet ca nhan va lich su diem.</p>
-          </div>
-        </div>
-      </div>
-    `;
+    return emailTemplateService.renderSystemTemplateFallback('GRADE_PUBLISHED', {
+      studentName: studentName || 'Sinh vien',
+      classCode: classCode || 'N/A',
+      subjectName: subjectName || 'N/A',
+      grade: grade ?? 'N/A',
+      teacherName: teacherName || 'N/A',
+      gk: scoreComponents.gk ?? '',
+      ck: scoreComponents.ck ?? '',
+      pt: scoreComponents.pt ?? '',
+      bt: scoreComponents.bt ?? '',
+      qt: scoreComponents.qt ?? '',
+      ptAverage: scoreComponents.ptAverage ?? '',
+    }).html;
   }
 
   /**
@@ -1307,7 +1271,7 @@ class GradesService {
           
           await enrollment.save();
 
-          const studentName = enrollment.student?.fullName || 'Sinh vien';
+          const studentName = enrollment.student?.fullName || 'Sinh viên';
           const studentEmail = enrollment.student?.email;
           const studentUserId = enrollment.student?.userId;
           const classCode = enrollment.classSection?.classCode || 'N/A';
@@ -1316,8 +1280,8 @@ class GradesService {
           if (studentUserId && io && typeof io.sendToUser === 'function') {
             io.sendToUser(String(studentUserId), 'grade-finalized', {
               type: 'grade-finalized',
-              title: 'Cong bo diem chinh thuc',
-              message: `${subjectName} (${classCode}) da duoc cong bo diem`,
+              title: 'Công bố điểm chính thức',
+              message: `${subjectName} (${classCode}) đã được công bố điểm`,
               classSectionId,
               grade: finalGrade,
               studentCode: enrollment.student?.studentCode,
@@ -1327,27 +1291,41 @@ class GradesService {
           }
 
           if (studentEmail) {
-            const emailHtml = this.buildGradePublishedEmail({
+            const templateVariables = {
               studentName,
               classCode,
               subjectName,
               grade: finalGrade,
-              teacherName: requester.role || 'Giang vien',
+              teacherName: requester.fullName || requester.role || 'Giang vien',
               scoreComponents: {
                 gk,
                 ck,
                 pt: enrollment.ptScores && enrollment.ptScores.length > 0 ? enrollment.ptScores.length + ' lan' : null,
                 bt,
                 qt,
-                ptAverage
-              }
-            });
+                ptAverage,
+              },
+            };
+
+            let renderedEmail;
+            try {
+              renderedEmail = await emailTemplateService.renderTemplateByCode(
+                'GRADE_PUBLISHED',
+                templateVariables,
+              );
+            } catch (_error) {
+              renderedEmail = {
+                subject: `[SSMS] Cong bo diem ${subjectName}`,
+                text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
+                html: this.buildGradePublishedEmail(templateVariables),
+              };
+            }
 
             const emailResult = await mailer.sendMail({
               to: studentEmail,
-              subject: `[SSMS] Cong bo diem ${subjectName}`,
-              text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}): GK=${gk}, CK=${ck}, Diem tong ket=${finalGrade}.`,
-              html: emailHtml,
+              subject: renderedEmail.subject,
+              text: renderedEmail.text,
+              html: renderedEmail.html,
             });
 
             if (emailResult?.sent) {

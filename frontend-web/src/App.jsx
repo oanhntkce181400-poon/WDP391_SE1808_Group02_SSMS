@@ -57,6 +57,7 @@ import EnrollmentSnapshotsPage from "./pages/admin/EnrollmentSnapshotsPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
 import AcademicCalendarManagementPage from "./pages/admin/AcademicCalendarManagementPage";
+import EmailTemplateManagementPage from "./pages/admin/EmailTemplateManagementPage";
 import ViewGradesPage from "./pages/student/ViewGradesPage";
 import AttendanceReportPage from "./pages/student/AttendanceReportPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
@@ -64,6 +65,8 @@ import LecturerAcademicCalendarPage from "./pages/lecturer/LecturerAcademicCalen
 import LecturerHomePage from "./pages/lecturer/LecturerHomePage";
 import LecturerClassStudentsPage from "./pages/lecturer/LecturerClassStudentsPage";
 import LecturerExamSchedulePage from "./pages/lecturer/LecturerExamSchedulePage";
+import ClassPerformancePage from "./pages/admin/ClassPerformancePage";
+import LecturerClassPerformancePage from "./pages/lecturer/LecturerClassPerformancePage";
 export default function App() {
   return (
     <>
@@ -114,6 +117,7 @@ export default function App() {
           />
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="attendance" element={<AttendancePage />} />
+          <Route path="class-performance" element={<ClassPerformancePage />} />
           <Route path="classes" element={<ClassManagement />} />
           <Route path="lecturers" element={<LecturerManagement />} />
           <Route path="students" element={<StudentManagementPage />} />
@@ -135,6 +139,10 @@ export default function App() {
           <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
           <Route path="transactions" element={<AdminTransactionsPage />} />
           <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
+          <Route
+            path="email-templates"
+            element={<EmailTemplateManagementPage />}
+          />
         </Route>
 
         {/* Student routes with layout */}
@@ -179,6 +187,10 @@ export default function App() {
           <Route index element={<LecturerHomePage />} />
           <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
           <Route path="attendance" element={<AttendancePage />} />
+          <Route
+            path="class-performance"
+            element={<LecturerClassPerformancePage />}
+          />
           <Route path="exams" element={<LecturerExamSchedulePage />} />
           <Route
             path="classes/:classSectionId"

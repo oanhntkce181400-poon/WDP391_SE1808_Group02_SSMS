@@ -1,6 +1,49 @@
 const feedbackTemplateService = require('../services/feedbackTemplate.service');
+const DATETIME_LOCAL_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+function parseFeedbackDateInput(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === 'string' && DATETIME_LOCAL_PATTERN.test(value)) {
+    return new Date(`${value}:00+07:00`);
+  }
+
+  return new Date(value);
+}
 
 class FeedbackTemplateController {
+  async syncDefaultTemplates(req, res) {
+    try {
+      const userId = req.auth?.sub;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User ID not found in token',
+        });
+      }
+
+      const result = await feedbackTemplateService.syncDefaultTemplates(userId);
+
+      return res.json({
+        success: true,
+        message: 'Đã đồng bộ các mẫu đánh giá mặc định.',
+        data: result,
+      });
+    } catch (error) {
+      console.error('Error syncing default feedback templates:', error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error',
+      });
+    }
+  }
   /**
    * POST /api/feedback-templates
    * Tạo mẫu đánh giá mới
@@ -28,8 +71,8 @@ class FeedbackTemplateController {
       }
 
       // Parse and validate dates
-      const startDate = new Date(feedbackStartDate);
-      const endDate = new Date(feedbackEndDate);
+      const startDate = parseFeedbackDateInput(feedbackStartDate);
+      const endDate = parseFeedbackDateInput(feedbackEndDate);
 
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         return res.status(400).json({
@@ -166,8 +209,8 @@ class FeedbackTemplateController {
       // Parse and validate dates if provided
       if (feedbackStartDate || feedbackEndDate) {
         if (feedbackStartDate && feedbackEndDate) {
-          const startDate = new Date(feedbackStartDate);
-          const endDate = new Date(feedbackEndDate);
+          const startDate = parseFeedbackDateInput(feedbackStartDate);
+          const endDate = parseFeedbackDateInput(feedbackEndDate);
 
           if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
             return res.status(400).json({
