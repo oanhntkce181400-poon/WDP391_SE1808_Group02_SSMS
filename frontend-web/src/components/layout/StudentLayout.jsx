@@ -1,7 +1,20 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import authService from '../../services/authService';
 import gpaService from '../../services/gpaService';
+import useStudentRealtimeNotifications from '../../hooks/useStudentRealtimeNotifications';
+
+function getNotificationBadgeClass(type) {
+  const badgeClasses = {
+    hoc_vu: 'bg-blue-100 text-blue-700',
+    tai_chinh: 'bg-emerald-100 text-emerald-700',
+    su_kien: 'bg-violet-100 text-violet-700',
+    khac: 'bg-slate-100 text-slate-700',
+    'registration-period': 'bg-amber-100 text-amber-700',
+  };
+
+  return badgeClasses[type] || 'bg-slate-100 text-slate-700';
+}
 
 export default function StudentLayout() {
   const location = useLocation();
@@ -19,6 +32,14 @@ export default function StudentLayout() {
   const [selectedSemester, setSelectedSemester] = useState(null);
   const [semesterGPA, setSemesterGPA] = useState(null);
   const [semesterGPALoading, setSemesterGPALoading] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef(null);
+  const {
+    notifications,
+    unreadCount,
+    markAllAsRead,
+    removeNotification,
+  } = useStudentRealtimeNotifications();
 
   // Refresh user info from server on mount
   useEffect(() => {
@@ -96,12 +117,26 @@ export default function StudentLayout() {
     fetchSemesterGPA();
   }, [selectedSemester]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
     { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
     { name: 'Thông báo', path: '/student/announcements', icon: '📢' },
     { name: 'Khung chương trình của tôi', path: '/student/curriculum', icon: '📖' },
-    { name: 'Đăng ký tín chỉ', path: '/student/registration', icon: '📝' },
+    { name: 'Đăng ký học lại/học vượt', path: '/student/registration', icon: '📝' },
     { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Báo cáo điểm danh', path: '/student/attendance-report', icon: '✅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📄' },
@@ -115,7 +150,6 @@ export default function StudentLayout() {
   ];
 
   // Removed duplicate /student/registration - already exists in menu above
-
   const handleLogout = async () => {
     try {
       // Try to logout on server
@@ -306,22 +340,93 @@ export default function StudentLayout() {
               )}
 
               {/* Notifications */}
-              <button className="relative rounded-lg p-2 hover:bg-slate-100">
-                <svg
-                  className="h-5 w-5 text-slate-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div ref={notificationRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNotificationOpen((prev) => !prev);
+                    if (!isNotificationOpen) {
+                      markAllAsRead();
+                    }
+                  }}
+                  className="relative rounded-lg p-2 hover:bg-slate-100"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500"></span>
-              </button>
+                  <svg
+                    className="h-5 w-5 text-slate-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                    />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {isNotificationOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                      <p className="text-sm font-semibold text-slate-800">Thông báo</p>
+                      <button
+                        type="button"
+                        onClick={markAllAsRead}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        Đã đọc
+                      </button>
+                    </div>
+
+                    <div className="max-h-[360px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-6 text-sm text-slate-500">
+                          Chưa có thông báo nào.
+                        </div>
+                      ) : (
+                        notifications.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`border-b border-slate-100 px-4 py-3 last:border-b-0 ${
+                              item.isRead ? 'bg-white' : 'bg-blue-50/50'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${getNotificationBadgeClass(item.type)}`}
+                                >
+                                  {item.typeLabel || 'Thông báo'}
+                                </span>
+                                <p className="mt-2 text-sm font-semibold text-slate-800">{item.title}</p>
+                                {item.message && (
+                                  <p className="mt-1 text-sm text-slate-600">{item.message}</p>
+                                )}
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {new Date(item.timestamp).toLocaleString('vi-VN')}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeNotification(item.id)}
+                                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-600"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* User Menu */}
               <div className="relative group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-1.5">

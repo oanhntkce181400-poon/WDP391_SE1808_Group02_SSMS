@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import requestService from '../../services/requestService';
 import registrationPeriodService from '../../services/registrationPeriodService';
 import { useSocket } from '../../contexts/SocketContext';
+import { STUDENT_LOCAL_NOTIFICATION_EVENT } from '../../hooks/useStudentRealtimeNotifications';
 
 const REQUEST_TYPES = [
   'Xin nghỉ học có phép',
@@ -10,10 +11,26 @@ const REQUEST_TYPES = [
   'Xin bảo lưu kết quả học tập',
   'Xin xác nhận sinh viên',
   'Xin cấp bảng điểm',
+  'Đăng ký học lại',
+  'Đăng ký học vượt',
   'Xin chuyển lớp',
+  'Xin hủy môn',
+  'Đổi chéo sinh viên',
+  'Học môn học tại nước ngoài',
+  'Đăng ký môn tự chọn',
+  'Đăng ký bảo hiểm y tế',
   'Xin gia hạn học phí',
   'Khác',
 ];
+
+const PERIOD_TO_REQUEST_TYPE_MAP = {
+  change_class: 'Xin chuyển lớp',
+  drop: 'Xin hủy môn',
+  cross_student_exchange: 'Đổi chéo sinh viên',
+  overseas_study: 'Học môn học tại nước ngoài',
+  elective_course_registration: 'Đăng ký môn tự chọn',
+  health_insurance_registration: 'Đăng ký bảo hiểm y tế',
+};
 
 const REQUEST_TYPES_NEED_DATE_RANGE = new Set([
   'Xin nghỉ học có phép',
@@ -49,10 +66,12 @@ const EMPTY_FORM = {
 
 const PERIOD_TYPE_LABELS = {
   all: 'Tất cả loại đơn',
-  repeat: 'Học lại',
-  overload: 'Học vượt',
   change_class: 'Chuyển lớp',
   drop: 'Hủy môn',
+  cross_student_exchange: 'Đổi chéo sinh viên',
+  overseas_study: 'Học môn học tại nước ngoài',
+  elective_course_registration: 'Đăng ký môn tự chọn',
+  health_insurance_registration: 'Đăng ký bảo hiểm y tế',
 };
 
 function formatDateTime(dateStr) {
@@ -62,6 +81,7 @@ function formatDateTime(dateStr) {
 
 export default function StudentRequestsPage() {
   const { socket } = useSocket();
+  const [nowTs, setNowTs] = useState(() => Date.now());
 
   const [requests, setRequests] = useState([]);
 
@@ -101,6 +121,16 @@ export default function StudentRequestsPage() {
     checkRequestPeriodStatus();
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
   // Lắng nghe realtime event đợt đăng ký được cập nhật
   useEffect(() => {
     if (!socket) return;
@@ -120,6 +150,33 @@ export default function StudentRequestsPage() {
 
     return () => {
       socket.off('registration-period-updated', handleRegistrationPeriodUpdated);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRequestStatusUpdated = (eventData) => {
+      if (!eventData?.request?._id) return;
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item._id === eventData.request._id
+            ? {
+                ...item,
+                status: eventData.request.status,
+                staffNote: eventData.request.staffNote || '',
+                updatedAt: eventData.request.updatedAt,
+              }
+            : item,
+        ),
+      );
+    };
+
+    socket.on('student-request-status-updated', handleRequestStatusUpdated);
+
+    return () => {
+      socket.off('student-request-status-updated', handleRequestStatusUpdated);
     };
   }, [socket]);
 
@@ -171,6 +228,19 @@ export default function StudentRequestsPage() {
     return period.requestType === selectedOpenType;
   });
 
+  const hasAnyClickablePeriod = filteredOpenPeriods.some((period) => {
+    if (!period?.endDate) return true;
+    const endTime = new Date(period.endDate).getTime();
+    return Number.isNaN(endTime) || nowTs < endTime;
+  });
+
+  function isPeriodExpired(period) {
+    if (!period?.endDate) return false;
+    const endTime = new Date(period.endDate).getTime();
+    if (Number.isNaN(endTime)) return false;
+    return nowTs >= endTime;
+  }
+
   // Hàm tải danh sách đơn từ backend
   async function loadRequests() {
     setIsLoadingList(true);
@@ -213,6 +283,32 @@ export default function StudentRequestsPage() {
     setForm(EMPTY_FORM);
     setFormError('');
     setEditingId(null);
+    setView('create');
+  }
+
+  function openCreateFormForPeriod(period) {
+    if (!requestPeriodNotice.isOpen) {
+      setFormError('Đợt đăng ký đơn hiện chưa mở, bạn chưa thể tạo yêu cầu mới.');
+      return;
+    }
+
+    if (isPeriodExpired(period)) {
+      return;
+    }
+
+    const mappedRequestType = PERIOD_TO_REQUEST_TYPE_MAP[period?.requestType] || '';
+
+    setForm({
+      ...EMPTY_FORM,
+      requestType: mappedRequestType,
+      reason: period?.periodName
+        ? `Đăng ký theo đợt: ${period.periodName}`
+        : '',
+    });
+    setFormError('');
+    setEditingId(null);
+    setIsOpenPeriodsVisible(false);
+    setIsOpenTypeMenuOpen(false);
     setView('create');
   }
 
@@ -270,7 +366,26 @@ export default function StudentRequestsPage() {
     setFormError('');
 
     try {
-      await requestService.createRequest(form);
+      const response = await requestService.createRequest(form);
+      const createdRequest = response?.data?.data;
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent(STUDENT_LOCAL_NOTIFICATION_EVENT, {
+            detail: {
+              id: `request-created-${createdRequest?._id || Date.now()}`,
+              type: 'request-created',
+              typeLabel: 'Đơn từ',
+              title: form.requestType,
+              message: 'Đơn mới đã được gửi thành công.',
+              timestamp: createdRequest?.createdAt || new Date().toISOString(),
+              request: createdRequest || null,
+              sourceType: 'request',
+              sourceId: createdRequest?._id || null,
+            },
+          }),
+        );
+      }
       showSuccess('Gửi yêu cầu thành công!');
       setView('list');
       loadRequests();
@@ -411,7 +526,13 @@ export default function StudentRequestsPage() {
 
           <div className="mt-3 space-y-3">
             {filteredOpenPeriods.map((period) => (
-              <div key={period._id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <button
+                key={period._id}
+                type="button"
+                onClick={() => openCreateFormForPeriod(period)}
+                disabled={isPeriodExpired(period)}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-sm disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none"
+              >
                 <div className="grid grid-cols-1 gap-2 text-sm text-slate-700 sm:grid-cols-2">
                   <div>
                     <span className="font-medium">Tên đợt:</span> {period.periodName || '-'}
@@ -437,7 +558,12 @@ export default function StudentRequestsPage() {
                       : 'Tất cả khóa'}
                   </div>
                 </div>
-              </div>
+                {isPeriodExpired(period) ? (
+                  <p className="mt-3 text-xs font-semibold text-red-600">Hết hạn</p>
+                ) : (
+                  <p className="mt-3 text-xs font-semibold text-blue-700">Nhấn để mở form đăng ký theo đợt này</p>
+                )}
+              </button>
             ))}
           </div>
         </div>
@@ -454,7 +580,7 @@ export default function StudentRequestsPage() {
             </div>
             <button
               onClick={openCreateForm}
-              disabled={!requestPeriodNotice.isOpen}
+              disabled={!requestPeriodNotice.isOpen || !hasAnyClickablePeriod}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 transition-colors"
             >
               <span>＋</span> Tạo yêu cầu mới
@@ -463,7 +589,7 @@ export default function StudentRequestsPage() {
 
           {/* Đang tải */}
           {isLoadingList && (
-            <div className="flex items-center justify-center py-16 text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-white py-10 text-center">
               <span>Đang tải...</span>
             </div>
           )}

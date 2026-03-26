@@ -286,10 +286,12 @@ async function reassignClass(req, res) {
 
 async function searchClasses(req, res) {
   try {
-    const { subject_id, semester, keyword, page, limit, sortBy, sortOrder } = req.query;
+    const { subject_id, semester, semesterId, academicYear, keyword, page, limit, sortBy, sortOrder } = req.query;
     const result = await service.searchAvailableClasses({
       subject_id,
       semester,
+      semesterId,
+      academicYear,
       keyword,
       page,
       limit,

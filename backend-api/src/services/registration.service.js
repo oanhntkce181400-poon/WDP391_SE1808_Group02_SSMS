@@ -36,6 +36,13 @@ async function resolveSemester(semesterId, classSection) {
     if (matchedSemester) return matchedSemester;
   }
 
+  // Nếu không có class cụ thể, ưu tiên học kỳ được gắn trong đợt đăng ký đang mở.
+  const currentPeriod = await registrationPeriodService.getCurrentActivePeriod();
+  if (currentPeriod?.semester) {
+    const periodSemester = await Semester.findById(currentPeriod.semester).lean();
+    if (periodSemester) return periodSemester;
+  }
+
   return Semester.findOne({ isCurrent: true }).lean();
 }
 
@@ -255,7 +262,7 @@ const validateWallet = async (studentId, classId) => {
  * BR2: So sánh theo dayOfWeek, startTime, endTime
  * BR3: Phải validate trước khi confirm đăng ký
  */
-const checkScheduleConflict = async (studentId, classSectionId) => {
+const checkScheduleConflict = async (studentId, classSectionId, semesterId = null) => {
   const selectedClass = await ClassSection.findById(classSectionId)
     .populate('timeslot', 'startTime endTime groupName')
     .populate('subject', 'subjectCode subjectName')
@@ -276,9 +283,13 @@ const checkScheduleConflict = async (studentId, classSectionId) => {
 
   if (!selectedDay || !selectedStart || !selectedEnd) {
     return {
-      valid: false,
-      hasConflict: true,
-      message: 'Selected class section schedule is missing or invalid',
+      valid: true,
+      hasConflict: false,
+      message: 'Selected class section has no schedule yet. Conflict check skipped.',
+      selectedClass: {
+        classId: selectedClass._id,
+        classCode: selectedClass.classCode,
+      },
       conflicts: [],
     };
   }
@@ -287,14 +298,18 @@ const checkScheduleConflict = async (studentId, classSectionId) => {
   const selectedEndMin = timeToMinutes(selectedEnd);
   if (selectedStartMin == null || selectedEndMin == null) {
     return {
-      valid: false,
-      hasConflict: true,
-      message: 'Selected class section time is invalid',
+      valid: true,
+      hasConflict: false,
+      message: 'Selected class section time is invalid. Conflict check skipped.',
+      selectedClass: {
+        classId: selectedClass._id,
+        classCode: selectedClass.classCode,
+      },
       conflicts: [],
     };
   }
 
-  const semester = await resolveSemester(null, selectedClass);
+  const semester = await resolveSemester(semesterId, selectedClass);
   const semesterEnrollments = await getSemesterEnrollments(studentId, semester);
 
   if (!Array.isArray(semesterEnrollments)) {
@@ -470,7 +485,7 @@ async function checkCreditLimit(studentId, semesterId, newCredits = 0, maxCredit
   };
 }
 
-async function getStudentEligibilitySummary(studentId, classId = null) {
+async function getStudentEligibilitySummary(studentId, classId = null, semesterId = null) {
   // Đây là API backend cho khối "Your limits" trên FE.
   // Nó gom 3 nhóm rule chính về một payload:
   // - overload
@@ -493,7 +508,7 @@ async function getStudentEligibilitySummary(studentId, classId = null) {
     ? await ClassSection.findById(classId).populate('subject', 'credits').lean()
     : null;
 
-  const semester = await resolveSemester(null, classSection);
+  const semester = await resolveSemester(semesterId, classSection);
   const overload = await checkOverloadLimit(studentId, semester?._id, classId);
   const credit = await checkCreditLimit(
     studentId,

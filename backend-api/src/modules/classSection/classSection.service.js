@@ -6,6 +6,7 @@ const Schedule = require("../../models/schedule.model");
 const Student = require("../../models/student.model");
 const User = require("../../models/user.model");
 const Teacher = require("../../models/teacher.model");
+const Semester = require("../../models/semester.model");
 const registrationService = require("../../services/registration.service");
 
 const REQUIRED_CLASS_FIELDS = [
@@ -673,6 +674,8 @@ async function searchAvailableClasses(criteria = {}) {
   const {
     subject_id,
     semester,
+    semesterId,
+    academicYear,
     keyword,
     page = 1,
     limit = 20,
@@ -689,7 +692,31 @@ async function searchAvailableClasses(criteria = {}) {
   };
 
   if (subject_id) filter.subject = subject_id;
-  if (semester) filter.semester = parseInt(semester, 10);
+
+  // Ưu tiên lọc theo semesterId (từ module học kỳ) để đảm bảo đúng kỳ + năm học.
+  if (semesterId) {
+    const selectedSemester = await Semester.findById(semesterId)
+      .select('semesterNum academicYear')
+      .lean();
+
+    if (!selectedSemester) {
+      return {
+        classes: [],
+        pagination: {
+          total: 0,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: 0,
+        },
+      };
+    }
+
+    filter.semester = Number(selectedSemester.semesterNum);
+    filter.academicYear = selectedSemester.academicYear;
+  } else {
+    if (semester) filter.semester = parseInt(semester, 10);
+    if (academicYear) filter.academicYear = academicYear;
+  }
 
   // Keyword search
   if (keyword) {

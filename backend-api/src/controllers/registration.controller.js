@@ -112,7 +112,7 @@ const validateWallet = async (req, res) => {
 
 const validateScheduleConflict = async (req, res) => {
   try {
-    const { classId } = req.body;
+    const { classId, semesterId } = req.body;
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -128,7 +128,7 @@ const validateScheduleConflict = async (req, res) => {
       });
     }
 
-    const result = await registrationService.checkScheduleConflict(student._id, classId);
+    const result = await registrationService.checkScheduleConflict(student._id, classId, semesterId || null);
 
     if (!result.valid) {
       return res.status(400).json({
@@ -154,7 +154,7 @@ const validateScheduleConflict = async (req, res) => {
 
 const validateAll = async (req, res) => {
   try {
-    const { classId } = req.body;
+    const { classId, semesterId } = req.body;
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -174,8 +174,8 @@ const validateAll = async (req, res) => {
       registrationService.validatePrerequisites(student._id, classId),
       registrationService.validateClassCapacity(classId),
       registrationService.validateWallet(student._id, classId),
-      registrationService.checkScheduleConflict(student._id, classId),
-      registrationService.getStudentEligibilitySummary(student._id, classId),
+      registrationService.checkScheduleConflict(student._id, classId, semesterId || null),
+      registrationService.getStudentEligibilitySummary(student._id, classId, semesterId || null),
     ]);
 
     const isEligible =
@@ -232,6 +232,7 @@ const getEligibilitySummary = async (req, res) => {
     const data = await registrationService.getStudentEligibilitySummary(
       student._id,
       req.query.classId || null,
+      req.query.semesterId || null,
     );
 
     return res.status(200).json({

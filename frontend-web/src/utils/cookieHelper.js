@@ -18,6 +18,13 @@ export function getCookie(name) {
  * @returns {string|null}
  */
 export function getAccessToken() {
+  // Access token is also stored in localStorage after login.
+  // This keeps Socket.IO auth working even when cookie 'at' is httpOnly.
+  if (typeof window !== 'undefined') {
+    const tokenFromStorage = localStorage.getItem('access_token');
+    if (tokenFromStorage) return tokenFromStorage;
+  }
+
   return getCookie('at');
 }
 
