@@ -6,6 +6,7 @@ const studentService = require('../services/student.service');
 const curriculumService = require('../services/curriculum.service');
 const gpaService = require('../services/gpa.service');
 const paymentValidation = require('../services/paymentValidation.service');
+const EnrollmentSnapshot = require('../models/enrollmentSnapshot.model');
 
 /*
  * List and export endpoints intentionally share one query-normalization helper.
@@ -315,16 +316,48 @@ const getStudentCurriculum = async (req, res) => {
       });
     }
 
-    const intakeYear =
-      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
-
     const { curriculum } = await curriculumService.resolveCurriculumForStudentRecord(student);
 
     const Semester = require('../models/semester.model');
     const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
-    const currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
-      currentSystemSemester: activeSystemSemester,
-    });
+
+    // Ưu tiên 1: Lấy curriculum semester từ enrollment snapshot mới nhất
+    let currentSemester = null;
+    if (activeSystemSemester) {
+      const latestSnapshot = await EnrollmentSnapshot.findOne({
+        semesterId: activeSystemSemester._id,
+        "logs.studentId": student._id,
+      })
+        .sort({ createdAt: -1 })
+        .select("logs curriculumSemester")
+        .lean();
+
+      if (latestSnapshot) {
+        const studentLog = latestSnapshot.logs?.find(
+          (l) => String(l.studentId) === String(student._id),
+        );
+        if (studentLog?.curriculumSemesterOrder != null) {
+          currentSemester = studentLog.curriculumSemesterOrder;
+        } else if (latestSnapshot.curriculumSemester != null) {
+          currentSemester = latestSnapshot.curriculumSemester;
+        }
+      }
+    }
+
+    // Ưu tiên 2: student.currentCurriculumSemester (admin set)
+    if (currentSemester == null) {
+      currentSemester = student.currentCurriculumSemester ?? null;
+    }
+
+    // Ưu tiên 3: Tính từ enrollmentYear + system semester
+    if (currentSemester == null && activeSystemSemester) {
+      currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
+        currentSystemSemester: activeSystemSemester,
+      });
+    }
+
+    const intakeYear =
+      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
 
     let currentCurriculumSemester = null;
     if (intakeYear) {
@@ -393,16 +426,48 @@ const getMyCurriculum = async (req, res) => {
       });
     }
 
-    const intakeYear =
-      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
-
     const { curriculum } = await curriculumService.resolveCurriculumForStudentRecord(student);
 
     const Semester = require('../models/semester.model');
     const activeSystemSemester = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
-    const currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
-      currentSystemSemester: activeSystemSemester,
-    });
+
+    // Ưu tiên 1: Lấy curriculum semester từ enrollment snapshot mới nhất
+    let currentSemester = null;
+    if (activeSystemSemester) {
+      const latestSnapshot = await EnrollmentSnapshot.findOne({
+        semesterId: activeSystemSemester._id,
+        "logs.studentId": student._id,
+      })
+        .sort({ createdAt: -1 })
+        .select("logs curriculumSemester")
+        .lean();
+
+      if (latestSnapshot) {
+        const studentLog = latestSnapshot.logs?.find(
+          (l) => String(l.studentId) === String(student._id),
+        );
+        if (studentLog?.curriculumSemesterOrder != null) {
+          currentSemester = studentLog.curriculumSemesterOrder;
+        } else if (latestSnapshot.curriculumSemester != null) {
+          currentSemester = latestSnapshot.curriculumSemester;
+        }
+      }
+    }
+
+    // Ưu tiên 2: student.currentCurriculumSemester (admin set)
+    if (currentSemester == null) {
+      currentSemester = student.currentCurriculumSemester ?? null;
+    }
+
+    // Ưu tiên 3: Tính từ enrollmentYear + system semester
+    if (currentSemester == null && activeSystemSemester) {
+      currentSemester = await paymentValidation.resolveDisplayedCurriculumSemester(student, {
+        currentSystemSemester: activeSystemSemester,
+      });
+    }
+
+    const intakeYear =
+      student.enrollmentYear ?? curriculumService.resolveStudentEnrollmentYear(student);
 
     let currentCurriculumSemester = null;
     if (intakeYear) {

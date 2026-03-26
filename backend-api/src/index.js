@@ -32,7 +32,7 @@ function parseCorsOrigins() {
 function isLocalDevOrigin(origin) {
   try {
     const parsed = new URL(origin);
-    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
   } catch {
     return false;
   }
@@ -85,7 +85,10 @@ app.use("/api/classes", require("./modules/classSection/classSection.routes"));
 app.use("/api/class-sections", require("./routes/classSectionRoster.routes"));
 app.use("/api/waitlist", require("./modules/waitlist/waitlist.routes"));
 app.use("/api/wishlist", require("./modules/wishlist/wishlist.routes"));
-app.use("/api/academic-calendar", require("./modules/academicCalendar/academicCalendar.routes"));
+app.use(
+  "/api/academic-calendar",
+  require("./modules/academicCalendar/academicCalendar.routes"),
+);
 app.use("/api/classes", require("./modules/schedule/schedule.routes"));
 app.use("/api/semesters", require("./modules/semester/semester.routes"));
 app.use("/api/lecturers", require("./modules/lecturer/lecturer.routes"));
@@ -117,7 +120,14 @@ app.use(
   require("./routes/registrationPeriod.routes"),
 );
 app.use("/api/registrations", require("./routes/registration.routes"));
-app.use("/api/auto-enrollment", require("./modules/autoEnrollment/autoEnrollment.routes"));
+app.use(
+  "/api/auto-enrollment",
+  require("./modules/autoEnrollment/autoEnrollment.routes"),
+);
+app.use(
+  "/api/enrollment-snapshots",
+  require("./modules/enrollmentSnapshot/enrollmentSnapshot.routes"),
+);
 app.use("/api/lecturer", require("./modules/lecturer/teachingSchedule.routes"));
 
 // Health check endpoint
@@ -146,10 +156,10 @@ async function startServer() {
     return new Promise((resolve, reject) => {
       const server = httpServer.listen(PORT, () => {
         const io = initializeSocketIO(httpServer);
-        app.set('io', io);
+        app.set("io", io);
 
         console.log(`🚀 Server is running on http://localhost:${PORT}`);
-        console.log('✅ Socket server is attached');
+        console.log("✅ Socket server is attached");
         console.log("✅ Server startup complete");
         resolve();
       });

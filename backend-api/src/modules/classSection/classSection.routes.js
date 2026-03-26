@@ -26,6 +26,9 @@ router.get(
 
 // ─── Admin Routes ────────────────────
 
+// Get distinct classGroups for filtering
+router.get("/groups", authMiddleware, ADMIN_STAFF, ctrl.getDistinctClassGroups);
+
 // Bulk update status - PHẢI ĐẶT TRƯỚC /:classId
 router.patch(
   "/bulk-status",
@@ -91,5 +94,11 @@ router.delete("/:classId", authMiddleware, ADMIN_STAFF, ctrl.remove);
 
 // Bulk create class sections from curriculum
 router.post("/bulk-create", authMiddleware, ADMIN_STAFF, ctrl.bulkCreate);
+
+// Bulk create class sections from curriculum with classGroup
+router.post("/bulk-create-from-curriculum", authMiddleware, ADMIN_STAFF, ctrl.bulkCreateFromCurriculum);
+
+// Bulk assign classGroup to multiple existing class sections
+router.post("/bulk-assign-group", authMiddleware, ADMIN_STAFF, ctrl.bulkAssignGroup);
 
 module.exports = router;

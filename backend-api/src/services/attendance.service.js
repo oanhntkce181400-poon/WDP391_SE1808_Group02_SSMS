@@ -265,12 +265,31 @@ function toDateKey(date) {
   return `${y}-${m}-${day}`;
 }
 
+/** Khóa lịch theo UTC — trùng với cách Mongo lưu Date thường gặp, tránh lệch ngày khi server TZ khác VN. */
+function toDateKeyUTC(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function parseDateKeyToDate(dateKey) {
   const [y, m, d] = String(dateKey).split('-').map(Number);
   if (!y || !m || !d) return null;
   const date = new Date(y, m - 1, d);
   if (Number.isNaN(date.getTime())) return null;
   return toStartOfDay(date);
+}
+
+/** slotId dạng YYYY-MM-DD = ngày dương lịch; lưu slotDate cố định UTC noon để không lệch ngày theo TZ server. */
+function dateFromYmdSlotId(ymd) {
+  const raw = String(ymd || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 }
 
 function normalizeSlotKey(slotId, slotDate) {
@@ -281,6 +300,52 @@ function normalizeSlotKey(slotId, slotDate) {
 
   if (!slotDate) return null;
   return toDateKey(slotDate);
+}
+
+/** Mọi khóa lịch có thể dùng để ghép Attendance với ngày buổi học (tránh lệch TZ / slotId–slotDate). */
+function calendarKeysForAttendanceRecord(record) {
+  const keys = new Set();
+  const slotDateNorm = record.slotDate ? toStartOfDay(record.slotDate) : null;
+  const fromNormalize = normalizeSlotKey(record.slotId, slotDateNorm);
+  if (fromNormalize) keys.add(fromNormalize);
+  if (slotDateNorm) {
+    const dk = toDateKey(slotDateNorm);
+    if (dk) keys.add(dk);
+    const dkUtc = toDateKeyUTC(record.slotDate);
+    if (dkUtc) keys.add(dkUtc);
+  }
+  const rawId = String(record.slotId || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawId)) keys.add(rawId);
+  return keys;
+}
+
+function buildAttendanceLookupByDateKey(rows) {
+  const map = new Map();
+  for (const record of rows) {
+    const slotDate = record.slotDate ? toStartOfDay(record.slotDate) : null;
+    const slotKey = normalizeSlotKey(record.slotId, slotDate);
+    const detail = {
+      slotId: record.slotId,
+      slotDate,
+      slotKey,
+      status: record.status || 'Absent',
+      note: record.note || '',
+    };
+    for (const k of calendarKeysForAttendanceRecord(record)) {
+      if (k && !map.has(k)) map.set(k, detail);
+    }
+  }
+  return map;
+}
+
+function putDetailWithDateAliases(detailMap, row, scheduleDateKey) {
+  const keys = new Set([scheduleDateKey, ...calendarKeysForAttendanceRecord({
+    slotId: row.slotId,
+    slotDate: row.slotDate,
+  })]);
+  for (const k of keys) {
+    if (k && !detailMap.has(k)) detailMap.set(k, row);
+  }
 }
 
 function listSessionDatesFromRules(rules, untilDate = null) {
@@ -323,6 +388,38 @@ function listSessionDatesFromRules(rules, untilDate = null) {
     .map((key) => parseDateKeyToDate(key))
     .filter(Boolean)
     .sort((a, b) => a.getTime() - b.getTime());
+}
+
+/** Cùng logic buổi học với báo cáo SV (Schedule + fallback ClassSection). */
+function listValidSlotDateKeysForClass(classSection, scheduleRows = []) {
+  const rules = buildScheduleRules(classSection, scheduleRows);
+  if (!rules.length) return [];
+  const dates = listSessionDatesFromRules(rules, null);
+  const keys = dates.map((d) => toDateKey(d));
+  keys.sort();
+  return keys;
+}
+
+async function getValidAttendanceDateKeysForClassSection(classId) {
+  const cls = await ClassSection.findById(classId)
+    .select('classCode startDate endDate dayOfWeek')
+    .lean();
+  if (!cls) return null;
+  const scheduleRows = await Schedule.find({ classSection: classId, status: 'active' })
+    .select('dayOfWeek startDate endDate')
+    .lean();
+  return listValidSlotDateKeysForClass(cls, scheduleRows);
+}
+
+async function getValidAttendanceDatesForLecturer(classId, userId) {
+  await ensureLecturerCanAccessClass(classId, userId);
+  const dates = await getValidAttendanceDateKeysForClassSection(classId);
+  if (!dates) {
+    const err = new Error('Khong tim thay lop hoc');
+    err.statusCode = 404;
+    throw err;
+  }
+  return dates;
 }
 
 async function getMyAttendanceReport(userId, filters = {}) {
@@ -429,7 +526,9 @@ async function getMyAttendanceReport(userId, filters = {}) {
       const classSchedules = scheduleMap.get(classId) || [];
       const rules = buildScheduleRules(classSection, classSchedules);
 
-      const rawAttendanceDetails = (attendanceMap.get(classId) || []).map((record) => {
+      const classAttendanceRows = attendanceMap.get(classId) || [];
+      const attendanceByDateKey = buildAttendanceLookupByDateKey(classAttendanceRows);
+      const rawAttendanceDetails = classAttendanceRows.map((record) => {
         const slotDate = record.slotDate ? toStartOfDay(record.slotDate) : null;
         const slotKey = normalizeSlotKey(record.slotId, slotDate);
         return {
@@ -441,23 +540,18 @@ async function getMyAttendanceReport(userId, filters = {}) {
         };
       });
 
-      const attendanceByDateKey = new Map();
-      rawAttendanceDetails.forEach((record) => {
-        if (!record.slotKey) return;
-        if (!attendanceByDateKey.has(record.slotKey)) {
-          attendanceByDateKey.set(record.slotKey, record);
-        }
-      });
-
       const scheduledDatesToDate = listSessionDatesFromRules(rules, today);
       const detailByDateKey = new Map();
 
       scheduledDatesToDate.forEach((sessionDate) => {
         const dateKey = toDateKey(sessionDate);
-        const existing = attendanceByDateKey.get(dateKey);
+        const dateKeyUtc = toDateKeyUTC(sessionDate);
+        const existing =
+          attendanceByDateKey.get(dateKey)
+          || (dateKeyUtc ? attendanceByDateKey.get(dateKeyUtc) : null);
 
         if (existing) {
-          detailByDateKey.set(dateKey, {
+          const row = {
             slotId: existing.slotId || dateKey,
             slotDate: existing.slotDate || sessionDate,
             status: existing.status,
@@ -466,11 +560,15 @@ async function getMyAttendanceReport(userId, filters = {}) {
             isParticipated: ATTENDED_STATUSES.has(existing.status),
             isMarked: true,
             isToDate: true,
-          });
+          };
+          putDetailWithDateAliases(detailByDateKey, row, dateKey);
+          if (dateKeyUtc && dateKeyUtc !== dateKey) {
+            putDetailWithDateAliases(detailByDateKey, row, dateKeyUtc);
+          }
           return;
         }
 
-        detailByDateKey.set(dateKey, {
+        const unmarkedRow = {
           slotId: dateKey,
           slotDate: sessionDate,
           status: 'Unmarked',
@@ -479,31 +577,48 @@ async function getMyAttendanceReport(userId, filters = {}) {
           isParticipated: false,
           isMarked: false,
           isToDate: true,
-        });
+        };
+        if (!detailByDateKey.has(dateKey)) detailByDateKey.set(dateKey, unmarkedRow);
+        if (dateKeyUtc && dateKeyUtc !== dateKey && !detailByDateKey.has(dateKeyUtc)) {
+          detailByDateKey.set(dateKeyUtc, unmarkedRow);
+        }
       });
 
-      rawAttendanceDetails.forEach((record) => {
-        if (!record.slotDate || record.slotDate > today || !record.slotKey) {
-          return;
-        }
+      // Gộp mọi bản ghi Attendance còn thiếu (lệch TZ, GV điểm danh trước ngày "hôm nay",
+      // hoặc slotDate null nhưng slotId dạng YYYY-MM-DD). Không loại "tương lai" — nếu DB có thì SV phải thấy.
+      classAttendanceRows.forEach((record) => {
+        const aliasKeys = calendarKeysForAttendanceRecord(record);
+        if (aliasKeys.size === 0) return;
 
-        if (detailByDateKey.has(record.slotKey)) {
-          return;
-        }
+        const alreadyMerged = [...aliasKeys].some((k) => {
+          const d = detailByDateKey.get(k);
+          return d && d.isMarked;
+        });
+        if (alreadyMerged) return;
 
-        detailByDateKey.set(record.slotKey, {
-          slotId: record.slotId || record.slotKey,
-          slotDate: record.slotDate,
-          status: record.status,
-          note: record.note,
-          isAbsent: record.status === 'Absent',
-          isParticipated: ATTENDED_STATUSES.has(record.status),
+        const slotDateNorm = record.slotDate ? toStartOfDay(record.slotDate) : null;
+        const primaryKey = normalizeSlotKey(record.slotId, slotDateNorm) || [...aliasKeys][0];
+        const row = {
+          slotId: record.slotId || primaryKey,
+          slotDate: slotDateNorm || parseDateKeyToDate(primaryKey),
+          status: record.status || 'Absent',
+          note: record.note || '',
+          isAbsent: (record.status || '') === 'Absent',
+          isParticipated: ATTENDED_STATUSES.has(record.status || ''),
           isMarked: true,
           isToDate: true,
-        });
+        };
+        putDetailWithDateAliases(detailByDateKey, row, primaryKey);
       });
 
-      const detailsToDate = Array.from(detailByDateKey.values()).sort((a, b) => {
+      const seenDetailRows = new Set();
+      const detailsToDate = [];
+      for (const v of detailByDateKey.values()) {
+        if (seenDetailRows.has(v)) continue;
+        seenDetailRows.add(v);
+        detailsToDate.push(v);
+      }
+      detailsToDate.sort((a, b) => {
         const ad = new Date(a.slotDate || 0).getTime();
         const bd = new Date(b.slotDate || 0).getTime();
         return bd - ad;
@@ -757,6 +872,20 @@ async function getTeachingClasses(userId) {
     { $group: { _id: '$classSection', days: { $addToSet: '$dayOfWeek' } } },
   ]);
 
+  const scheduleDocs = await Schedule.find({
+    classSection: { $in: classIds },
+    status: 'active',
+  })
+    .select('classSection dayOfWeek startDate endDate')
+    .lean();
+
+  const schedulesByClassId = new Map();
+  scheduleDocs.forEach((sch) => {
+    const id = String(sch.classSection);
+    if (!schedulesByClassId.has(id)) schedulesByClassId.set(id, []);
+    schedulesByClassId.get(id).push(sch);
+  });
+
   const enrollmentMap = new Map(enrollmentCounts.map((x) => [String(x._id), x.count]));
   const scheduleMap = new Map(scheduleCounts.map((x) => [String(x._id), x.count]));
   const scheduleDaysMap = new Map(
@@ -777,6 +906,8 @@ async function getTeachingClasses(userId) {
       const scheduleDays = scheduleDaysMap.get(String(cls._id)) ||
         (Number.isInteger(Number(cls.dayOfWeek)) ? [Number(cls.dayOfWeek)] : []);
       const totalSessions = estimateTotalSessions(cls, weeklyScheduleCount);
+      const schedulesForClass = schedulesByClassId.get(String(cls._id)) || [];
+      const validAttendanceDates = listValidSlotDateKeysForClass(cls, schedulesForClass);
 
       return {
         _id: cls._id,
@@ -789,7 +920,10 @@ async function getTeachingClasses(userId) {
         semester: cls.semester,
         academicYear: cls.academicYear,
         dayOfWeek: cls.dayOfWeek,
+        startDate: cls.startDate || null,
+        endDate: cls.endDate || null,
         scheduleDays,
+        validAttendanceDates,
         enrollmentCount,
         taughtSlots,
         totalSessions,
@@ -912,7 +1046,17 @@ async function bulkSave(payload, userId) {
     }
   }
 
-  const sessionDate = slotDate ? new Date(slotDate) : new Date();
+  const rawSlot = String(slotId || '').trim();
+  let sessionDate = dateFromYmdSlotId(rawSlot);
+
+  if (!sessionDate && slotDate) {
+    const parsed = new Date(slotDate);
+    sessionDate = Number.isNaN(parsed.getTime()) ? toStartOfDay(new Date()) : toStartOfDay(parsed);
+  }
+
+  if (!sessionDate) {
+    sessionDate = toStartOfDay(new Date());
+  }
 
   // Đồng bộ lịch học và điểm danh theo Schedule thật: ngày điểm danh phải đúng thứ có lịch học.
   const allowedWeekdays = await getAllowedClassWeekdays(classId, classSection);
@@ -984,4 +1128,5 @@ module.exports = {
   bulkSave,
   computeAvgRate,
   getMyAttendanceReport,
+  getValidAttendanceDatesForLecturer,
 };

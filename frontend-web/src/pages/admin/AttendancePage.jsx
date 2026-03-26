@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import attendanceService from '../../services/attendanceService';
+import enrollmentSnapshotService from '../../services/enrollmentSnapshotService';
 
 const STATUS_STYLES = {
   Present: 'bg-green-100 text-green-800 border border-green-200',
@@ -107,9 +108,20 @@ function formatDateVi(dateStr) {
   });
 }
 
+function minDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a.getTime() <= b.getTime() ? a : b;
+}
+
+/** Ngày hợp lệ để điểm danh: ưu tiên danh sách từ API (cùng logic Schedule với báo cáo SV). */
 function getAllowedDateOptionsForClass(cls, now = new Date()) {
   if (!cls) return [];
-  const { start, end } = getThreeMonthBounds(now);
+  if (Array.isArray(cls.validAttendanceDates) && cls.validAttendanceDates.length > 0) {
+    return cls.validAttendanceDates;
+  }
+
+  const { start: winStart, end: winEnd } = getThreeMonthBounds(now);
 
   const dayCandidates = Array.isArray(cls.scheduleDays) && cls.scheduleDays.length > 0
     ? cls.scheduleDays
@@ -125,9 +137,13 @@ function getAllowedDateOptionsForClass(cls, now = new Date()) {
   const classStart = normalizeDateOnly(cls.startDate);
   const classEnd = normalizeDateOnly(cls.endDate);
 
+  // Bắt đầu từ đầu học kỳ (nếu có), không chỉ từ hôm nay — trùng với cách tính buổi của SV
+  const rangeStart = classStart ? minDate(classStart, winStart) : winStart;
+  const rangeEnd = minDate(classEnd || winEnd, winEnd);
+
   const results = [];
-  const cursor = new Date(start);
-  while (cursor <= end) {
+  const cursor = new Date(rangeStart);
+  while (cursor <= rangeEnd) {
     const day = toSystemDayOfWeek(cursor);
     const inAllowedDay = allowedDays.includes(day);
     const inClassRange =
@@ -149,7 +165,7 @@ function getAllowedDateOptionsForClass(cls, now = new Date()) {
 // ─────────────────────────────────────────────────────────────
 export default function AttendancePage() {
   // ── STATE ĐIỀU HƯỚNG ──────────────────────────────────────
-  // view = 'classes' | 'slots' | 'attendance'
+  // view = 'classes' | 'snapshot-classes' | 'slots' | 'attendance'
   const [view, setView] = useState('classes');
 
   // Lớp đang chọn
@@ -158,15 +174,27 @@ export default function AttendancePage() {
   // Buổi học đang chọn
   const [selectedSlot, setSelectedSlot] = useState(null);
 
+  // ── STATE CHẾ ĐỘ SNAPSHOT ────────────────────────────────
+  // 'enrollment' = dùng ClassEnrollment như hiện tại
+  // 'snapshot'    = dùng snapshot logs
+  const [mode, setMode] = useState('enrollment');
+
+  // Bản snapshot đang chọn (khi mode === 'snapshot')
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
+
+  // Danh sách lớp (classSection) lấy từ snapshot logs
+  const [snapshotClassSections, setSnapshotClassSections] = useState([]);
+
   // ── STATE DỮ LIỆU ─────────────────────────────────────────
   const [classes, setClasses]     = useState([]);
   const [slots, setSlots]         = useState([]);
   const [students, setStudents]   = useState([]); // Bảng điểm danh
 
   // ── STATE UI ──────────────────────────────────────────────
-  const [isLoading, setIsLoading]       = useState(false);
-  const [loadError, setLoadError]       = useState('');
-  const [isSaving, setIsSaving]         = useState(false);
+  const [isLoading, setIsLoading]         = useState(false);
+  const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
+  const [loadError, setLoadError]         = useState('');
+  const [isSaving, setIsSaving]           = useState(false);
   const [successMsg, setSuccessMsg]     = useState('');
   const [saveWarning, setSaveWarning]   = useState('');
   const [validationMsg, setValidationMsg] = useState('');
@@ -200,6 +228,34 @@ export default function AttendancePage() {
     setIsLoading(true);
     setLoadError('');
     try {
+      // Snapshot mode: không gọi API slots cũ (không có dữ liệu điểm danh trước đó)
+      if (mode === 'snapshot') {
+        setSlots([]);
+        let merged = { ...cls };
+        if (cls.classSectionId) {
+          try {
+            const r = await attendanceService.getValidAttendanceDates(cls.classSectionId);
+            const dates = r.data?.data?.dates;
+            if (Array.isArray(dates) && dates.length > 0) {
+              merged = { ...merged, validAttendanceDates: dates };
+            }
+          } catch {
+            /* fallback getAllowedDateOptionsForClass phía dưới */
+          }
+        }
+        setSelectedClass(merged);
+        const allowed = getAllowedDateOptionsForClass(merged);
+        if (allowed.length > 0) {
+          const today = toYmd(new Date());
+          setNewSlotDate(allowed.includes(today) ? today : allowed[0]);
+        } else {
+          setNewSlotDate(toYmd(new Date()));
+        }
+        setView('slots');
+        return;
+      }
+
+      // Enrollment mode: gọi API slots bình thường
       const res = await attendanceService.getClassSlots(cls._id);
       setSlots(res.data.data || []);
       const allowed = getAllowedDateOptionsForClass(cls);
@@ -215,17 +271,49 @@ export default function AttendancePage() {
     }
   }
 
+  // ── TẢI DANH SÁCH LỚP TỪ SNAPSHOT KHI CHỌN SNAPSHOT ────
+  async function loadClassSectionsFromSnapshot(snapshot) {
+    setSelectedSnapshot(snapshot);
+    setIsLoading(true);
+    setIsLoadingSnapshots(true);
+    setLoadError('');
+    try {
+      const res = await enrollmentSnapshotService.getClassSections(snapshot._id);
+      setSnapshotClassSections(res.data.data || []);
+      setView('snapshot-classes');
+    } catch (err) {
+      setLoadError(err.response?.data?.message || 'Không tải được danh sách lớp từ snapshot');
+    } finally {
+      setIsLoading(false);
+      setIsLoadingSnapshots(false);
+    }
+  }
+
   // ── TẢI BẢNG ĐIỂM DANH KHI CHỌN BUỔI ────────────────────
   async function loadAttendance(slot) {
     setSelectedSlot(slot);
     setIsLoading(true);
     setLoadError('');
     try {
-      const res = await attendanceService.getSlotAttendance(
-        selectedClass._id,
-        slot.slotId,
-      );
-      setStudents(res.data.data || []);
+      let res;
+
+      if (mode === 'snapshot' && selectedSnapshot && selectedClass) {
+        // Lấy roster từ snapshot logs
+        res = await enrollmentSnapshotService.getRoster(
+          selectedSnapshot._id,
+          selectedClass.classSectionId,
+          slot.slotId,
+        );
+        setStudents(res.data.data || []);
+      } else {
+        // Luồng enrollment thông thường
+        res = await attendanceService.getSlotAttendance(
+          selectedClass._id,
+          slot.slotId,
+        );
+        setStudents(res.data.data || []);
+      }
+
       setValidationMsg('');
       setView('attendance');
     } catch (err) {
@@ -239,17 +327,20 @@ export default function AttendancePage() {
   async function handleNewSlot() {
     if (!newSlotDate) return;
 
-    const allowedDates = getAllowedDateOptionsForClass(selectedClass);
-    if (allowedDates.length > 0 && !allowedDates.includes(newSlotDate)) {
-      setValidationMsg(`Ngay diem danh khong hop le. Vui long chon mot trong cac ngay: ${allowedDates.join(', ')}`);
-      return;
-    }
+    if (mode !== 'snapshot') {
+      // Luồng enrollment: validate ngày theo thứ học
+      const allowedDates = getAllowedDateOptionsForClass(selectedClass);
+      if (allowedDates.length > 0 && !allowedDates.includes(newSlotDate)) {
+        setValidationMsg(`Ngay diem danh khong hop le. Vui long chon mot trong cac ngay: ${allowedDates.join(', ')}`);
+        return;
+      }
 
-    // Kiểm tra buổi ngày đó đã có chưa
-    const exists = slots.some((s) => s.slotId === newSlotDate);
-    if (exists) {
-      alert('Buổi học ngày này đã tồn tại! Hãy chọn ngày khác.');
-      return;
+      // Kiểm tra buổi ngày đó đã có chưa
+      const exists = slots.some((s) => s.slotId === newSlotDate);
+      if (exists) {
+        alert('Buổi học ngày này đã tồn tại! Hãy chọn ngày khác.');
+        return;
+      }
     }
 
     // Tải bảng điểm danh với slotId = ngày mới (sẽ rỗng - tất cả Present mặc định)
@@ -267,6 +358,23 @@ export default function AttendancePage() {
 
   const allowedDateOptions = selectedClass ? getAllowedDateOptionsForClass(selectedClass) : [];
   const dateBounds = getThreeMonthBounds(new Date());
+  const pickerBounds =
+    selectedClass && allowedDateOptions.length > 0
+      ? {
+          min: allowedDateOptions[0],
+          max: allowedDateOptions[allowedDateOptions.length - 1],
+        }
+      : selectedClass
+        ? (() => {
+            const three = getThreeMonthBounds(new Date());
+            const cs = normalizeDateOnly(selectedClass.startDate);
+            const ce = normalizeDateOnly(selectedClass.endDate);
+            return {
+              min: toYmd(cs ? minDate(cs, three.start) : three.start),
+              max: toYmd(minDate(ce || three.end, three.end)),
+            };
+          })()
+        : { min: toYmd(dateBounds.start), max: toYmd(dateBounds.end) };
 
   // ── THAY ĐỔI TRẠNG THÁI ĐIỂM DANH 1 SINH VIÊN ────────────
   function handleStatusChange(studentId, newStatus) {
@@ -308,11 +416,17 @@ export default function AttendancePage() {
     setIsSaving(true);
     setSaveWarning('');
     try {
+      // Snapshot mode: selectedClass là SnapshotClassSection → dùng classSectionId
+      // Enrollment mode: selectedClass là ClassSection → dùng _id
+      const classId =
+        mode === 'snapshot'
+          ? selectedClass.classSectionId
+          : selectedClass._id;
+
       const payload = {
-        classId: selectedClass._id,
+        classId,
         slotId: selectedSlot.slotId,
         slotDate: selectedSlot.slotDate || selectedSlot.slotId,
-        // records: AttendanceRecord[] - BulkAttendancePayload
         records: students.map((s) => ({
           studentId: s.studentId,
           status: s.status,
@@ -323,7 +437,6 @@ export default function AttendancePage() {
       const res = await attendanceService.markAttendance(payload);
       const result = res.data.data;
 
-      // Hiện cảnh báo nếu tỷ lệ vắng > 15%
       if (result.warningTriggered) {
         setSaveWarning(
           `⚠️ Cảnh báo: Buổi này có ${result.absentCount}/${result.saved} sinh viên vắng (> 15%)!`,
@@ -332,9 +445,13 @@ export default function AttendancePage() {
 
       showSuccess('Lưu điểm danh thành công!');
 
-      // Quay về danh sách buổi học và tải lại
-      setView('slots');
-      loadSlots(selectedClass);
+      if (mode === 'snapshot') {
+        setView('snapshot-classes');
+        loadClassSectionsFromSnapshot(selectedSnapshot);
+      } else {
+        setView('slots');
+        loadSlots(selectedClass);
+      }
     } catch (err) {
       const msg = err.response?.data?.message || 'Lưu thất bại, thử lại sau';
       setValidationMsg(msg);
@@ -374,7 +491,7 @@ export default function AttendancePage() {
         )}
 
         {/* ════════════════════════════════════════════════════
-            VIEW 1: DANH SÁCH LỚP HỌC (dạng thẻ)
+            VIEW 1: CHỌN CHẾ ĐỘ
         ════════════════════════════════════════════════════ */}
         {view === 'classes' && (
           <ClassListView
@@ -383,11 +500,36 @@ export default function AttendancePage() {
             loadError={loadError}
             onSelectClass={loadSlots}
             onRetry={loadClasses}
+            mode={mode}
+            onModeChange={setMode}
+            onSelectSnapshot={loadClassSectionsFromSnapshot}
+            isLoadingSnapshots={isLoadingSnapshots}
           />
         )}
 
         {/* ════════════════════════════════════════════════════
-            VIEW 2: DANH SÁCH BUỔI HỌC CỦA LỚP
+            VIEW 2: DANH SÁCH LỚP TRONG SNAPSHOT
+        ════════════════════════════════════════════════════ */}
+        {view === 'snapshot-classes' && (
+          <SnapshotClassListView
+            snapshot={selectedSnapshot}
+            classSections={snapshotClassSections}
+            isLoading={isLoading}
+            loadError={loadError}
+            onSelectClassSection={(cs) => {
+              setSelectedClass(cs);
+              setView('slots');
+            }}
+            onBack={() => {
+              setView('classes');
+              setSelectedSnapshot(null);
+              setSnapshotClassSections([]);
+            }}
+          />
+        )}
+
+        {/* ════════════════════════════════════════════════════
+            VIEW 3: DANH SÁCH BUỔI HỌC CỦA LỚP
         ════════════════════════════════════════════════════ */}
         {view === 'slots' && selectedClass && (
           <SlotListView
@@ -398,16 +540,24 @@ export default function AttendancePage() {
             newSlotDate={newSlotDate}
             onSlotDateChange={setNewSlotDate}
             allowedDateOptions={allowedDateOptions}
-            minDate={toYmd(dateBounds.start)}
-            maxDate={toYmd(dateBounds.end)}
+            minDate={pickerBounds.min}
+            maxDate={pickerBounds.max}
             onSelectSlot={loadAttendance}
             onNewSlot={handleNewSlot}
-            onBack={() => setView('classes')}
+            onBack={() => {
+              if (mode === 'snapshot') {
+                setView('snapshot-classes');
+              } else {
+                setView('classes');
+              }
+            }}
+            mode={mode}
+            selectedSnapshot={selectedSnapshot}
           />
         )}
 
         {/* ════════════════════════════════════════════════════
-            VIEW 3: BẢNG ĐIỂM DANH
+            VIEW 4: BẢNG ĐIỂM DANH
         ════════════════════════════════════════════════════ */}
         {view === 'attendance' && selectedClass && selectedSlot && (
           <AttendanceTableView
@@ -420,7 +570,15 @@ export default function AttendancePage() {
             onNoteChange={handleNoteChange}
             onMarkAllPresent={handleMarkAllPresent}
             onSave={handleSave}
-            onBack={() => { setView('slots'); loadSlots(selectedClass); }}
+            onBack={() => {
+              if (mode === 'snapshot') {
+                setView('snapshot-classes');
+                loadClassSectionsFromSnapshot(selectedSnapshot);
+              } else {
+                setView('slots');
+                loadSlots(selectedClass);
+              }
+            }}
           />
         )}
       </div>
@@ -429,9 +587,38 @@ export default function AttendancePage() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// COMPONENT: VIEW 1 - Danh sách lớp học (thẻ)
+// COMPONENT: VIEW 1 - Chọn chế độ & danh sách lớp
 // ─────────────────────────────────────────────────────────────
-function ClassListView({ classes, isLoading, loadError, onSelectClass, onRetry }) {
+function ClassListView({
+  classes,
+  isLoading,
+  loadError,
+  onSelectClass,
+  onRetry,
+  mode,
+  onModeChange,
+  onSelectSnapshot,
+  isLoadingSnapshots,
+}) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+
+  // Tải danh sách snapshot khi chuyển sang mode snapshot
+  useEffect(() => {
+    if (mode === 'snapshot') {
+      setLoadingSnapshots(true);
+      enrollmentSnapshotService
+        .list({ limit: 50 })
+        .then((res) => {
+          // Chỉ lấy các bản không phải dryRun
+          const live = (res.data.data || []).filter((s) => !s.dryRun);
+          setSnapshots(live);
+        })
+        .catch(() => setSnapshots([]))
+        .finally(() => setLoadingSnapshots(false));
+    }
+  }, [mode]);
+
   return (
     <div>
       {/* Tiêu đề */}
@@ -442,44 +629,116 @@ function ClassListView({ classes, isLoading, loadError, onSelectClass, onRetry }
         </p>
       </div>
 
-      {/* Đang tải */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-16 text-slate-400">
-          Đang tải danh sách lớp...
-        </div>
-      )}
+      {/* Toggle chế độ */}
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={() => onModeChange('enrollment')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+            mode === 'enrollment'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          📋 Theo lớp Enrollment
+          <span className="text-xs opacity-75">hiện tại</span>
+        </button>
+        <button
+          onClick={() => onModeChange('snapshot')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+            mode === 'snapshot'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          📸 Theo Snapshot xếp lớp
+          <span className="text-xs opacity-75">lịch sử</span>
+        </button>
+      </div>
 
-      {/* Lỗi */}
-      {!isLoading && loadError && (
-        <div className="rounded-xl bg-white border border-slate-200 py-12 text-center">
-          <p className="text-red-500 text-sm">{loadError}</p>
-          <button
-            onClick={onRetry}
-            className="mt-3 rounded-md bg-slate-100 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200"
-          >
-            Thử lại
-          </button>
-        </div>
-      )}
+      {/* Nội dung theo chế độ */}
+      {mode === 'enrollment' ? (
+        /* ── ENROLLMENT MODE ── */
+        <>
+          {/* Đang tải */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-16 text-slate-400">
+              Đang tải danh sách lớp...
+            </div>
+          )}
 
-      {/* Trống */}
-      {!isLoading && !loadError && classes.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
-          <p className="text-4xl">🏫</p>
-          <p className="mt-2 font-medium text-slate-600">Không có lớp học nào</p>
-          <p className="mt-1 text-sm text-slate-400">
-            Chưa có lớp học phần nào đang hoạt động trong hệ thống.
-          </p>
-        </div>
-      )}
+          {/* Lỗi */}
+          {!isLoading && loadError && (
+            <div className="rounded-xl bg-white border border-slate-200 py-12 text-center">
+              <p className="text-red-500 text-sm">{loadError}</p>
+              <button
+                onClick={onRetry}
+                className="mt-3 rounded-md bg-slate-100 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
 
-      {/* Lưới thẻ lớp học */}
-      {!isLoading && !loadError && classes.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {classes.map((cls) => (
-            <ClassCard key={cls._id} cls={cls} onSelect={() => onSelectClass(cls)} />
-          ))}
-        </div>
+          {/* Trống */}
+          {!isLoading && !loadError && classes.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
+              <p className="text-4xl">🏫</p>
+              <p className="mt-2 font-medium text-slate-600">Không có lớp học nào</p>
+              <p className="mt-1 text-sm text-slate-400">
+                Chưa có lớp học phần nào đang hoạt động trong hệ thống.
+              </p>
+            </div>
+          )}
+
+          {/* Lưới thẻ lớp học */}
+          {!isLoading && !loadError && classes.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {classes.map((cls) => (
+                <ClassCard key={cls._id} cls={cls} onSelect={() => onSelectClass(cls)} />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        /* ── SNAPSHOT MODE ── */
+        <>
+          {/* Thông tin */}
+          <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">
+            Chọn một bản snapshot để điểm danh đúng danh sách sinh viên tại thời điểm bản đó được lưu.
+          </div>
+
+          {/* Đang tải danh sách snapshot */}
+          {loadingSnapshots && (
+            <div className="flex items-center justify-center py-16 text-slate-400">
+              Đang tải danh sách snapshot...
+            </div>
+          )}
+
+          {/* Trống */}
+          {!loadingSnapshots && snapshots.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
+              <p className="text-4xl">📸</p>
+              <p className="mt-2 font-medium text-slate-600">Không có bản snapshot nào</p>
+              <p className="mt-1 text-sm text-slate-400">
+                Chưa có bản lưu xếp lớp nào được tạo (không phải dry-run).
+              </p>
+            </div>
+          )}
+
+          {/* Danh sách snapshot */}
+          {!loadingSnapshots && snapshots.length > 0 && (
+            <div className="space-y-3">
+              {snapshots.map((snap) => (
+                <SnapshotCard
+                  key={snap._id}
+                  snapshot={snap}
+                  onSelect={() => onSelectSnapshot(snap)}
+                  isLoading={isLoadingSnapshots}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -591,17 +850,22 @@ function SlotListView({
   onSelectSlot,
   onNewSlot,
   onBack,
+  mode,
+  selectedSnapshot,
 }) {
+  const isSnapshotMode = mode === 'snapshot';
+
   return (
     <div>
       {/* Breadcrumb */}
       <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
         <button onClick={onBack} className="hover:text-indigo-600 hover:underline">
-          Danh sách lớp
+          {isSnapshotMode ? '📸 Snapshot' : 'Danh sách lớp'}
         </button>
         <span>›</span>
         <span className="font-medium text-slate-700">
-          {selectedClass.classCode} — {selectedClass.subject?.subjectName}
+          {selectedClass.classCode || selectedClass.subjectCode || selectedClass.subjectName} —
+          {' '}{selectedClass.subjectName || selectedClass.subject?.subjectName || '—'}
         </span>
       </div>
 
@@ -609,36 +873,64 @@ function SlotListView({
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap gap-4 items-center">
         <div>
           <p className="text-xs text-slate-400">Lớp học phần</p>
-          <p className="font-bold text-slate-800">{selectedClass.classCode}</p>
+          <p className="font-bold text-slate-800">
+            {selectedClass.classCode || selectedClass.subjectCode || '—'}
+          </p>
         </div>
         <div>
           <p className="text-xs text-slate-400">Môn học</p>
-          <p className="font-medium text-slate-700">{selectedClass.subject?.subjectName || '—'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">Sĩ số</p>
-          <p className="font-medium text-slate-700">{selectedClass.enrollmentCount} SV</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">Đã dạy</p>
           <p className="font-medium text-slate-700">
-            {selectedClass.taughtSlots}/{selectedClass.totalSessions || '?'} buổi
+            {selectedClass.subjectName || selectedClass.subject?.subjectName || '—'}
           </p>
         </div>
-        <div>
-          <p className="text-xs text-slate-400">Chuyên cần TB</p>
-          <p className={`font-bold ${getRateColor(selectedClass.avgAttendanceRate)}`}>
-            {selectedClass.taughtSlots > 0 ? `${selectedClass.avgAttendanceRate}%` : '—'}
-          </p>
-        </div>
+        {isSnapshotMode ? (
+          <>
+            <div>
+              <p className="text-xs text-slate-400">Sĩ số snapshot</p>
+              <p className="font-medium text-slate-700">{selectedClass.studentCount} SV</p>
+            </div>
+            {selectedSnapshot && (
+              <div>
+                <p className="text-xs text-slate-400">Nguồn snapshot</p>
+                <p className="font-medium text-indigo-700">{selectedSnapshot.title}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-xs text-slate-400">Sĩ số</p>
+              <p className="font-medium text-slate-700">{selectedClass.enrollmentCount} SV</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Đã dạy</p>
+              <p className="font-medium text-slate-700">
+                {selectedClass.taughtSlots}/{selectedClass.totalSessions || '?'} buổi
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Chuyên cần TB</p>
+              <p className={`font-bold ${getRateColor(selectedClass.avgAttendanceRate)}`}>
+                {selectedClass.taughtSlots > 0 ? `${selectedClass.avgAttendanceRate}%` : '—'}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Tạo buổi điểm danh mới */}
       <div className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-        <p className="mb-2 text-sm font-semibold text-indigo-800">📅 Tạo buổi điểm danh mới</p>
+        <p className="mb-2 text-sm font-semibold text-indigo-800">
+          {isSnapshotMode ? '📅 Chọn ngày điểm danh (snapshot)' : '📅 Tạo buổi điểm danh mới'}
+        </p>
         {Array.isArray(allowedDateOptions) && allowedDateOptions.length > 0 && (
           <p className="mb-2 text-xs text-indigo-700">
-            Ngày hợp lệ 3 tháng tới: {allowedDateOptions.join(', ')}
+            Ngày hợp lệ theo lịch học (Schedule):{' '}
+            <span className="font-medium">
+              {allowedDateOptions.length} buổi — {formatDateVi(allowedDateOptions[0])} →{' '}
+              {formatDateVi(allowedDateOptions[allowedDateOptions.length - 1])}
+            </span>
+            <span className="block text-indigo-600/90">Chi tiết từng ngày nằm trong ô chọn bên dưới.</span>
           </p>
         )}
         <div className="flex items-center gap-3">
@@ -779,7 +1071,7 @@ function AttendanceTableView({
           onClick={() => onBack()}
           className="hover:text-indigo-600 hover:underline"
         >
-          {selectedClass.classCode}
+          {selectedClass.classCode || selectedClass.subjectCode || selectedClass.subjectName || 'Lớp'}
         </button>
         <span>›</span>
         <span className="font-medium text-slate-700">{slotDateLabel}</span>
@@ -790,7 +1082,7 @@ function AttendanceTableView({
         <div>
           <h2 className="text-lg font-bold text-slate-800">Bảng điểm danh</h2>
           <p className="text-sm text-slate-500">
-            {selectedClass.subject?.subjectName} — {slotDateLabel}
+            {selectedClass.subjectName || selectedClass.subject?.subjectName || '—'} — {slotDateLabel}
           </p>
         </div>
 
@@ -955,6 +1247,188 @@ function StudentRow({ student, index, onStatusChange, onNoteChange }) {
           className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none"
         />
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPONENT: Thẻ snapshot (chọn snapshot để điểm danh)
+// ─────────────────────────────────────────────────────────────
+function SnapshotCard({ snapshot, onSelect, isLoading }) {
+  const sem = snapshot.semesterSnapshot || {};
+  const summary = snapshot.summary || {};
+  const createdAt = new Date(snapshot.createdAt);
+
+  return (
+    <div
+      onClick={isLoading ? undefined : onSelect}
+      className={`cursor-pointer rounded-xl border bg-white p-4 transition-all hover:shadow-md ${
+        isLoading
+          ? 'border-slate-200 opacity-60 cursor-not-allowed'
+          : 'border-indigo-200 hover:border-indigo-400'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {/* Tiêu đề snapshot */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+              LIVE
+            </span>
+            <p className="font-semibold text-slate-800 truncate">{snapshot.title}</p>
+          </div>
+
+          {/* Mô tả */}
+          {snapshot.description && (
+            <p className="mt-0.5 text-sm text-slate-500 truncate">{snapshot.description}</p>
+          )}
+
+          {/* Thông tin học kỳ */}
+          <p className="mt-2 text-xs text-slate-400">
+            {sem.semesterNum ? `HK${sem.semesterNum}` : ''}
+            {sem.academicYear ? ` · ${sem.academicYear}` : ''}
+            {snapshot.curriculumCode ? ` · ${snapshot.curriculumCode}` : ''}
+          </p>
+
+          {/* Thống kê nhanh */}
+          <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
+            {summary.totalEnrollments != null && (
+              <span>
+                <strong>{summary.totalEnrollments}</strong> SV enrolled
+              </span>
+            )}
+            {summary.totalWaitlisted != null && summary.totalWaitlisted > 0 && (
+              <span className="text-yellow-600">
+                <strong>{summary.totalWaitlisted}</strong> chờ
+              </span>
+            )}
+            {summary.totalFailed != null && summary.totalFailed > 0 && (
+              <span className="text-red-600">
+                <strong>{summary.totalFailed}</strong> lỗi
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Ngày tạo */}
+        <div className="shrink-0 text-right">
+          <p className="text-xs text-slate-400">
+            {createdAt.toLocaleDateString('vi-VN')}
+          </p>
+          <p className="text-xs text-slate-400">
+            {createdAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+      </div>
+
+      <button
+        disabled={isLoading}
+        className="mt-3 w-full rounded-md bg-indigo-50 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-60 transition-colors"
+      >
+        Chọn bản này để xem lớp
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPONENT: VIEW 2b - Danh sách lớp trong 1 snapshot
+// ─────────────────────────────────────────────────────────────
+function SnapshotClassListView({
+  snapshot,
+  classSections,
+  isLoading,
+  loadError,
+  onSelectClassSection,
+  onBack,
+}) {
+  return (
+    <div>
+      {/* Breadcrumb */}
+      <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+        <button
+          onClick={onBack}
+          className="hover:text-indigo-600 hover:underline"
+        >
+          Danh sách lớp
+        </button>
+        <span>›</span>
+        <span className="font-medium text-slate-700">
+          📸 {snapshot.title}
+        </span>
+      </div>
+
+      {/* Thông tin snapshot */}
+      <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+        <p className="font-semibold text-indigo-900">{snapshot.title}</p>
+        {snapshot.description && (
+          <p className="mt-1 text-sm text-indigo-700">{snapshot.description}</p>
+        )}
+        <p className="mt-2 text-xs text-indigo-600">
+          Điểm danh theo danh sách sinh viên tại thời điểm snapshot này được lưu.
+          Các lớp được xếp bên dưới là kết quả từ bản snapshot.
+        </p>
+      </div>
+
+      {/* Tiêu đề */}
+      <h2 className="mb-3 text-base font-semibold text-slate-700">
+        Danh sách lớp trong snapshot ({classSections.length} lớp)
+      </h2>
+
+      {/* Đang tải */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-10 text-slate-400">
+          Đang tải...
+        </div>
+      )}
+
+      {/* Lỗi */}
+      {!isLoading && loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 py-8 text-center text-sm text-red-600">
+          {loadError}
+        </div>
+      )}
+
+      {/* Trống */}
+      {!isLoading && !loadError && classSections.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white py-10 text-center">
+          <p className="text-2xl">📭</p>
+          <p className="mt-2 text-sm text-slate-500">Không có lớp nào trong snapshot này</p>
+        </div>
+      )}
+
+      {/* Danh sách lớp snapshot */}
+      {!isLoading && !loadError && classSections.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          {/* Header */}
+          <div className="grid grid-cols-5 gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div>Mã lớp</div>
+            <div className="col-span-2">Môn học</div>
+            <div className="col-span-2 text-center">Sĩ số snapshot</div>
+          </div>
+
+          {classSections.map((cs) => (
+            <div
+              key={cs.classSectionId}
+              onClick={() => onSelectClassSection(cs)}
+              className="grid cursor-pointer grid-cols-5 gap-2 border-b border-slate-100 px-4 py-3 text-sm transition-colors hover:bg-indigo-50 last:border-0"
+            >
+              <div className="font-semibold text-indigo-700">
+                {cs.classCode || '—'}
+              </div>
+              <div className="col-span-2">
+                <p className="font-medium text-slate-800">{cs.subjectName || '—'}</p>
+                <p className="text-xs text-slate-400">{cs.subjectCode}</p>
+              </div>
+              <div className="col-span-2 flex items-center justify-center">
+                <span className="rounded-full bg-indigo-100 px-3 py-1 text-sm font-bold text-indigo-700">
+                  {cs.studentCount} SV
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

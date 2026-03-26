@@ -48,6 +48,14 @@ router.post(
   classController.createClassSection
 );
 
+// POST /api/classes/bulk-create-from-curriculum - Bulk create class sections from curriculum
+router.post(
+  '/bulk-create-from-curriculum',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  classController.bulkCreateClassSectionsFromCurriculum
+);
+
 // PATCH /api/classes/:classId - Update class section
 router.patch(
   '/:classId',

@@ -14,4 +14,42 @@ router.post(
   controller.trigger,
 );
 
+// ── Enrollment Management ────────────────────────────────────────────────────────
+
+// GET /api/auto-enrollment/status?semesterNum=1&academicYear=2025-2026&classGroup=SE1808-01
+// Xem trạng thái enrolled + waitlist của sinh viên cho một HK (trước khi reset / promote)
+router.get(
+  '/status',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.getEnrollmentStatus,
+);
+
+// DELETE /api/auto-enrollment/enrollments?semesterNum=1&academicYear=2025-2026&classGroup=SE1808-01
+// Xóa enrollment theo HK + classGroup (tùy chọn) để reset trạng thái
+router.delete(
+  '/enrollments',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.deleteEnrollments,
+);
+
+// DELETE /api/auto-enrollment/waitlists?semesterNum=1&academicYear=2025-2026&classGroup=SE1808-01
+// Xóa waitlist theo HK + classGroup (tùy chọn) để reset trạng thái
+router.delete(
+  '/waitlists',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.deleteWaitlists,
+);
+
+// PATCH /api/auto-enrollment/waitlists/:waitlistId/promote
+// Kéo sinh viên từ waitlist lên enrolled (tự tìm lớp trống hoặc chỉ định lớp)
+router.patch(
+  '/waitlists/:waitlistId/promote',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.promoteWaitlist,
+);
+
 module.exports = router;

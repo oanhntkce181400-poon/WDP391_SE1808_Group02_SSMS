@@ -49,6 +49,28 @@ const getClasses = async (req, res) => {
 // GET /api/attendance/classes/:classId/slots
 // Lấy danh sách các buổi học đã điểm danh của một lớp
 // ─────────────────────────────────────────────────────────────
+const getValidAttendanceDates = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const userId = req.auth.sub;
+
+    const dates = await attendanceService.getValidAttendanceDatesForLecturer(classId, userId);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Lay danh sach ngay hop le thanh cong',
+      data: { dates },
+    });
+  } catch (error) {
+    console.error('[AttendanceController] getValidAttendanceDates error:', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Loi may chu, thu lai sau',
+    });
+  }
+};
+
 const getClassSlots = async (req, res) => {
   try {
     const { classId } = req.params;
@@ -166,6 +188,7 @@ const getMyAttendance = async (req, res) => {
 
 module.exports = {
   getClasses,
+  getValidAttendanceDates,
   getClassSlots,
   getSlotAttendance,
   bulkSave,

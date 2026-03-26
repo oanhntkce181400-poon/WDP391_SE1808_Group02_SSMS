@@ -59,14 +59,16 @@ const StudentProfilePage = () => {
     try {
       setLoading(true);
       const response = await userService.getProfile();
-      const studentData = response.data || response;
-      if (studentData) {
-        setStudent(studentData);
-        // Update localStorage with latest user data
-        localStorage.setItem('auth_user', JSON.stringify(studentData));
+      // Backend: { success, data: user }; axios → response.data là envelope đó
+      const envelope = response?.data;
+      const userPayload =
+        envelope?.success && envelope?.data != null ? envelope.data : envelope;
+      if (userPayload && typeof userPayload === 'object') {
+        setStudent(userPayload);
+        localStorage.setItem('auth_user', JSON.stringify(userPayload));
         setEditFormData({
-          fullName: studentData.fullName,
-          email: studentData.email,
+          fullName: userPayload.fullName || '',
+          email: userPayload.email || '',
         });
       }
     } catch (err) {
@@ -94,11 +96,15 @@ const StudentProfilePage = () => {
   const handleSaveProfile = async () => {
     try {
       const response = await userService.updateProfile(editFormData);
-      const studentData = response.data || response;
-      if (studentData) {
-        setStudent(studentData);
-        // Update localStorage with new user data
-        localStorage.setItem('auth_user', JSON.stringify(studentData));
+      const envelope = response?.data;
+      const userPayload =
+        envelope?.success && envelope?.data != null ? envelope.data : null;
+      if (userPayload) {
+        setStudent((prev) => {
+          const next = { ...userPayload, student: prev?.student };
+          localStorage.setItem('auth_user', JSON.stringify(next));
+          return next;
+        });
         setIsEditing(false);
         setSuccessMessage('Profile updated successfully!');
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -165,9 +171,34 @@ const StudentProfilePage = () => {
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">
                   {student?.fullName}
                 </h1>
-                <p className="text-gray-600 mb-6">
-                  Student ID: {student?._id || 'N/A'}
+                <p className="text-gray-600 mb-1">
+                  Email: {student?.email || 'N/A'}
                 </p>
+                {student?.student && (
+                  <div className="mb-4 space-y-2 text-gray-600">
+                    <p>
+                      Mã SV:{' '}
+                      <span className="font-semibold text-gray-800">
+                        {student.student.studentCode}
+                      </span>
+                      {student.student.classSection && (
+                        <span className="ml-3 inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                          🏫 Nhóm lớp: {student.student.classSection}
+                        </span>
+                      )}
+                    </p>
+                    {student.student.placementClassName && (
+                      <p className="text-sm">
+                        <span className="font-medium text-slate-700">
+                          Tên lớp (lịch sử xếp lớp đã lưu):
+                        </span>{' '}
+                        <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
+                          {student.student.placementClassName}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex gap-4 justify-center flex-wrap">
@@ -240,20 +271,40 @@ const StudentProfilePage = () => {
           </div>
 
           {/* Student Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-8">
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-blue-500">
-              <p className="text-gray-600 text-sm font-medium">STUDENT ID</p>
-              <p className="text-xl font-bold text-gray-800 mt-2">SV20240102</p>
+              <p className="text-gray-600 text-sm font-medium">MÃ SINH VIÊN</p>
+              <p className="text-xl font-bold text-gray-800 mt-2">
+                {student?.student?.studentCode || '—'}
+              </p>
+            </div>
+            <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-teal-500">
+              <p className="text-gray-600 text-sm font-medium">TÊN LỚP (ĐÃ LƯU)</p>
+              <p className="text-lg font-bold text-gray-800 mt-2 leading-tight break-words">
+                {student?.student?.placementClassName || '—'}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">Theo bản &quot;Lưu lớp&quot; Auto Enrollment</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-green-500">
-              <p className="text-gray-600 text-sm font-medium">MAJOR</p>
+              <p className="text-gray-600 text-sm font-medium">NGÀNH</p>
               <p className="text-xl font-bold text-gray-800 mt-2">
-                Công nghệ thông tin
+                {student?.student?.majorCode
+                  ? student.student.majorCode === 'SE' ? 'Kỹ thuật phần mềm'
+                  : student.student.majorCode === 'AI' ? 'Trí tuệ nhân tạo'
+                  : student.student.majorCode
+                  : '—'}
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-purple-500">
-              <p className="text-gray-600 text-sm font-medium">SEMESTER</p>
-              <p className="text-xl font-bold text-gray-800 mt-2">Năm thứ 3</p>
+              <p className="text-gray-600 text-sm font-medium">HỌC KỲ</p>
+              <p className="text-xl font-bold text-gray-800 mt-2">
+                HK{student?.student?.currentCurriculumSemester || '?'}
+                {student?.student?.cohort && (
+                  <span className="block text-xs font-normal text-gray-500 mt-0.5">
+                    Khóa {student.student.cohort}
+                  </span>
+                )}
+              </p>
             </div>
             <div className={`bg-white rounded-lg shadow-md p-4 text-center border-t-4 ${
               cumulativeGPA && cumulativeGPA.gpa < 5.0 ? 'border-red-500' : 'border-orange-500'

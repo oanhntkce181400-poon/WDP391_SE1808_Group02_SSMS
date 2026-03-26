@@ -1,5 +1,6 @@
 const User = require('../models/user.model');
 const Wallet = require('../models/wallet.model');
+const { getStudentViewForUserId } = require('../services/studentUserView.service');
 const { uploadImage, deleteImage } = require('../external/cloudinary.provider');
 const { validateImportRows, normalizeCellValue, mapHeaders, findHeaderRowIndex } = require('../utils/importHelper');
 const { normalizeRole, isValidUserRole, VALID_USER_ROLES } = require('../utils/role.util');
@@ -74,9 +75,15 @@ exports.getUserProfile = async (req, res) => {
       });
     }
 
+    const serialized = serializeUser(user);
+    const studentView = await getStudentViewForUserId(userId);
+    if (studentView) {
+      serialized.student = studentView;
+    }
+
     res.json({
       success: true,
-      data: serializeUser(user),
+      data: serialized,
     });
   } catch (error) {
     res.status(500).json({

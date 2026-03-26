@@ -17,6 +17,7 @@ const {
   verifyRefreshToken,
 } = require('../../utils/token.util');
 const { normalizeRole, isValidUserRole } = require('../../utils/role.util');
+const { getStudentViewForUserId } = require('../../services/studentUserView.service');
 
 function extractRequestContext(req) {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -579,7 +580,14 @@ async function getMe(req) {
   if (!user) {
     throw new Error('User not found.');
   }
-  return sanitizeUser(user);
+  const u = sanitizeUser(user);
+  if (u && u.role === 'student') {
+    const studentView = await getStudentViewForUserId(userId);
+    if (studentView) {
+      u.student = studentView;
+    }
+  }
+  return u;
 }
 
 async function forgotPassword(req, { email }) {

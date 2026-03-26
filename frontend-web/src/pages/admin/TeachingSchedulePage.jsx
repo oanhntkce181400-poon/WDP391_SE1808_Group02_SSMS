@@ -72,6 +72,9 @@ export default function TeachingSchedulePage() {
     expectedEnrollment: 40,
     startDate: '',
     endDate: '',
+    // Thêm classGroup options
+    classGroupPrefix: '',
+    numberOfGroups: '1',
   });
   const [generating, setGenerating] = useState(false);
   const [generateResult, setGenerateResult] = useState(null);
@@ -281,6 +284,9 @@ export default function TeachingSchedulePage() {
         availableTimeSlots: sortedTimeslots.map((t) => t._id),
         startDate: generateForm.startDate,
         endDate: generateForm.endDate,
+        // Thêm classGroup options
+        classGroupPrefix: generateForm.classGroupPrefix || null,
+        numberOfGroups: generateForm.classGroupPrefix ? Number(generateForm.numberOfGroups) || 1 : null,
       };
 
       const timeoutPromise = new Promise((_, reject) => {
@@ -407,6 +413,32 @@ export default function TeachingSchedulePage() {
               value={generateForm.expectedEnrollment}
               onChange={(e) => setGenerateForm((p) => ({ ...p, expectedEnrollment: e.target.value }))}
             />
+          </div>
+          {/* ClassGroup options - chia nhóm */}
+          <div className="col-span-2 grid grid-cols-2 gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+            <div>
+              <label className="block text-sm font-medium text-indigo-700">Prefix nhóm lớp</label>
+              <input
+                type="text"
+                placeholder="VD: SE1808"
+                className="mt-1 w-full rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400"
+                value={generateForm.classGroupPrefix}
+                onChange={(e) => setGenerateForm((p) => ({ ...p, classGroupPrefix: e.target.value }))}
+              />
+              <p className="mt-1 text-xs text-indigo-500">VD: SE1808 → tạo SE1808-01, SE1808-02...</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-indigo-700">Số nhóm</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                className="mt-1 w-full rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400"
+                value={generateForm.numberOfGroups}
+                onChange={(e) => setGenerateForm((p) => ({ ...p, numberOfGroups: e.target.value }))}
+              />
+              <p className="mt-1 text-xs text-indigo-500">Số nhóm cần tạo cho mỗi môn</p>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

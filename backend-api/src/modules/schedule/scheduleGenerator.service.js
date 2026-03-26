@@ -258,10 +258,15 @@ async function autoGenerateTimetables({
   availableTimeSlots,
   startDate,
   endDate,
+  // Thêm tham số cho classGroup
+  classGroupPrefix,   // VD: "SE1808"
+  numberOfGroups,     // VD: 4 (số nhóm cần tạo)
 }) {
   if (!semester || !academicYear) {
     throw new Error('semester và academicYear là bắt buộc');
   }
+
+  const numGroups = parseInt(numberOfGroups, 10) || 1;
 
   const roomIds = normalizeIds(availableRooms);
   const timeslotIds = normalizeIds(availableTimeSlots);
@@ -397,9 +402,17 @@ async function autoGenerateTimetables({
       }
 
       const classCode = codeCounter.next();
+      // Xác định classGroup cho nhóm này
+      const groupIndex = sectionIndex;
+      const classGroup = classGroupPrefix
+        ? `${classGroupPrefix}-${String(sectionIndex + 1).padStart(2, '0')}`
+        : null;
+
       const classSection = await ClassSection.create({
         classCode,
-        className: `${subject.subjectName} - Nhóm ${sectionIndex + 1}`,
+        className: numGroups > 1
+          ? `${subject.subjectName} - Nhóm ${sectionIndex + 1}`
+          : subject.subjectName,
         subject: subject._id,
         teacher: chosen.teacher._id,
         semester: Number(semester),
@@ -410,6 +423,8 @@ async function autoGenerateTimetables({
         room: chosen.room._id,
         timeslot: chosen.slot._id,
         dayOfWeek: chosen.dayOfWeek,
+        classGroup,
+        groupIndex,
       });
 
       const schedule = await Schedule.create({
@@ -437,6 +452,8 @@ async function autoGenerateTimetables({
         scheduleId: schedule._id,
         classCode,
         className: classSection.className,
+        classGroup,
+        groupIndex,
         subject: {
           _id: subject._id,
           subjectCode: subject.subjectCode,
