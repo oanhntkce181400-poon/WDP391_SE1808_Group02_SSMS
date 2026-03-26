@@ -1,4 +1,5 @@
 const User = require('../../models/user.model');
+const Student = require('../../models/student.model');
 const RefreshToken = require('../../models/refreshToken.model');
 const DeviceSession = require('../../models/deviceSession.model');
 const LoginEvent = require('../../models/loginEvent.model');
@@ -23,6 +24,38 @@ async function findUserByEmail(email) {
   // Backward-compatible fallback for legacy mixed-case emails in DB.
   const caseInsensitivePattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i');
   return User.findOne({ email: { $regex: caseInsensitivePattern } });
+}
+
+async function findStudentByEmail(email) {
+  if (!email) return null;
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const exactStudent = await Student.findOne({ email: normalizedEmail });
+  if (exactStudent) return exactStudent;
+
+  const caseInsensitivePattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i');
+  return Student.findOne({ email: { $regex: caseInsensitivePattern } });
+}
+
+async function findUserByStudentEmail(email) {
+  if (!email) return null;
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const exactStudent = await Student.findOne({ email: normalizedEmail }).select('userId').lean();
+  if (exactStudent?.userId) {
+    return User.findById(exactStudent.userId);
+  }
+
+  const caseInsensitivePattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i');
+  const fallbackStudent = await Student.findOne({ email: { $regex: caseInsensitivePattern } })
+    .select('userId')
+    .lean();
+
+  if (fallbackStudent?.userId) {
+    return User.findById(fallbackStudent.userId);
+  }
+
+  return null;
 }
 
 async function createUser(data) {
@@ -210,6 +243,8 @@ async function consumeOtp(otpId) {
 module.exports = {
   findUserByGoogleId,
   findUserByEmail,
+  findStudentByEmail,
+  findUserByStudentEmail,
   createUser,
   updateUser,
   createDeviceSession,

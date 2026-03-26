@@ -14,8 +14,9 @@ import GradeReportScreen from '../screens/student/GradeReportScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
 import NotificationListScreen from '../screens/student/NotificationListScreen';
 import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
+import authService from '../services/authService';
 import useAuthStore from '../stores/useAuthStore';
-import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
+import { AUTH_STORAGE_KEY, getItem, removeItem } from '../utils/storage';
 
 function normalizeRole(value) {
   return String(value || '').trim().toLowerCase();
@@ -42,11 +43,36 @@ export default function AppNavigator() {
        */
       const persisted = await getItem(AUTH_STORAGE_KEY);
       if (mounted && persisted?.accessToken) {
-        setAuth({
+        const nextAuth = {
           user: persisted.user || null,
           accessToken: persisted.accessToken,
           refreshToken: persisted.refreshToken || null,
-        });
+        };
+
+        setAuth(nextAuth);
+
+        try {
+          const meResponse = await authService.me();
+          const meUser = meResponse?.data?.user || null;
+          const meRole = normalizeRole(meUser?.role);
+
+          if (meRole === 'student' && !meUser?.student) {
+            throw new Error('Student profile not found');
+          }
+
+          if (mounted && meUser) {
+            const validatedAuth = {
+              ...nextAuth,
+              user: meUser,
+            };
+            setAuth(validatedAuth);
+          }
+        } catch {
+          if (mounted) {
+            setAuth({ user: null, accessToken: null, refreshToken: null });
+          }
+          await removeItem(AUTH_STORAGE_KEY);
+        }
       }
 
       if (mounted) {

@@ -24,7 +24,7 @@ export default function LoginPage() {
   const isSubmitting = isLocalSubmitting || isGoogleSubmitting;
 
   const handlePostLogin = useCallback(
-    async ({ user, meta, tokens }) => {
+    async ({ user, tokens }) => {
       let nextUser = user || null;
       try {
         const meResponse = await authService.me();
@@ -43,13 +43,6 @@ export default function LoginPage() {
       }
       if (tokens?.refreshToken) {
         localStorage.setItem('refresh_token', tokens.refreshToken);
-      }
-
-      const mustChangePassword = Boolean(meta?.mustChangePassword || nextUser?.mustChangePassword);
-      if (mustChangePassword && nextUser?.email) {
-        const query = new URLSearchParams({ email: nextUser.email }).toString();
-        navigate(`/reset-password?${query}`, { replace: true });
-        return;
       }
 
       // Redirect based on user role
@@ -91,7 +84,6 @@ export default function LoginPage() {
           const loginResponse = await authService.loginWithGoogle(idToken);
           await handlePostLogin({
             user: loginResponse?.data?.user,
-            meta: loginResponse?.data?.meta,
             tokens: loginResponse?.data?.tokens,
           });
         } catch (err) {
@@ -123,7 +115,6 @@ export default function LoginPage() {
       const loginResponse = await authService.loginWithPassword(email, password);
       await handlePostLogin({
         user: loginResponse?.data?.user,
-        meta: loginResponse?.data?.meta,
         tokens: loginResponse?.data?.tokens,
       });
     } catch (err) {

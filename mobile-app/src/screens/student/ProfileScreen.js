@@ -58,6 +58,7 @@ export default function ProfileScreen() {
   const user = useAuthStore((state) => state.user);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const logout = useAuthStore((state) => state.logout);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const role = normalizeRole(user?.role);
   const isStudent = role === 'student';
   const { profile, loading, refreshing, error, refresh, reload } = useProfile({
@@ -65,15 +66,23 @@ export default function ProfileScreen() {
   });
 
   async function handleLogout() {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    const tokenToRevoke = refreshToken;
+
     try {
-      if (refreshToken) {
-        await authService.logout(refreshToken);
-      }
-    } catch (err) {
-      // Always continue with local sign-out even if network/server logout fails.
-    } finally {
+      // Local logout first so user always exits app immediately.
       logout();
       await removeItem(AUTH_STORAGE_KEY);
+
+      if (tokenToRevoke) {
+        await authService.logout(tokenToRevoke);
+      }
+    } catch (err) {
+      // Server revoke is best-effort only.
+    } finally {
+      setIsLoggingOut(false);
     }
   }
 

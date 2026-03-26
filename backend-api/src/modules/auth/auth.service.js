@@ -38,6 +38,7 @@ function buildRefreshExpiresAt() {
 
 function normalizeEmail(email) {
   return String(email || '')
+    .replace(/\s+/g, '')
     .trim()
     .toLowerCase();
 }
@@ -153,6 +154,21 @@ function sanitizeUser(user) {
     status: user.status,
     mustChangePassword: Boolean(user.mustChangePassword),
   };
+}
+
+async function buildAuthUserProfile(user) {
+  const sanitized = sanitizeUser(user);
+  if (!sanitized) return null;
+
+  if (sanitized.role === 'student') {
+    const studentView = await getStudentViewForUserId(user?._id);
+    if (!studentView) {
+      throw new Error('Student profile not found. Please contact admin.');
+    }
+    sanitized.student = studentView;
+  }
+
+  return sanitized;
 }
 
 async function upsertGoogleUser(googleProfile) {
@@ -316,7 +332,7 @@ async function loginWithGoogle(req, { idToken }) {
   });
 
   return {
-    user: sanitizeUser(user),
+    user: await buildAuthUserProfile(user),
     tokens: {
       accessToken,
       refreshToken,
@@ -337,19 +353,58 @@ async function loginWithPassword(req, { email, password }) {
     throw new Error('email and password are required.');
   }
 
-  const user = await repo.findUserByEmail(normalizedEmail);
+  const student = await repo.findStudentByEmail(normalizedEmail);
+  let user = null;
+
+  if (student) {
+    if (!student.userId) {
+      await recordLoginEvent({
+        ip,
+        userAgent,
+        eventType: 'login',
+        success: false,
+        failureReason: 'student-missing-user-link',
+      });
+      throw new Error('Sinh viên chưa liên kết userId');
+    }
+
+    user = await repo.findUserById(student.userId);
+    if (!user) {
+      await recordLoginEvent({
+        ip,
+        userAgent,
+        eventType: 'login',
+        success: false,
+        failureReason: 'student-user-not-found',
+      });
+      throw new Error('Sinh viên chưa liên kết userId');
+    }
+  } else {
+    user = await repo.findUserByEmail(normalizedEmail);
+    if (!user) {
+      await recordLoginEvent({
+        ip,
+        userAgent,
+        eventType: 'login',
+        success: false,
+        failureReason: 'student-not-found-by-email',
+      });
+      throw new Error('Không tìm thấy sinh viên theo email');
+    }
+  }
+
   const isValidPassword = await verifyPassword(password, user?.password);
 
-  if (!user || !isValidPassword) {
+  if (!isValidPassword) {
     await recordLoginEvent({
       userId: user?._id,
       ip,
       userAgent,
       eventType: 'login',
       success: false,
-      failureReason: 'invalid-credentials',
+      failureReason: 'invalid-password',
     });
-    throw new Error('Invalid credentials.');
+    throw new Error('Sai mật khẩu');
   }
 
   if (user.status !== 'active' || user.isActive === false) {
@@ -406,7 +461,7 @@ async function loginWithPassword(req, { email, password }) {
   });
 
   return {
-    user: sanitizeUser(user),
+    user: await buildAuthUserProfile(user),
     tokens: {
       accessToken,
       refreshToken,
@@ -522,7 +577,7 @@ async function refreshTokens(req, { refreshToken }) {
   });
 
   return {
-    user: sanitizeUser(user),
+    user: await buildAuthUserProfile(user),
     tokens: {
       accessToken,
       refreshToken: newRefreshToken,
@@ -568,26 +623,18 @@ async function logout(req, { refreshToken }) {
 
 async function getMe(req) {
   const userId = req.auth?.sub;
-  console.log('[getMe] userId:', userId, 'req.auth:', req.auth);
-  
+
   if (!userId) {
     throw new Error('User ID not found in token.');
   }
 
   const user = await repo.findUserById(userId);
-  console.log('[getMe] user found:', !!user);
-  
+
   if (!user) {
     throw new Error('User not found.');
   }
-  const u = sanitizeUser(user);
-  if (u && u.role === 'student') {
-    const studentView = await getStudentViewForUserId(userId);
-    if (studentView) {
-      u.student = studentView;
-    }
-  }
-  return u;
+
+  return buildAuthUserProfile(user);
 }
 
 async function forgotPassword(req, { email }) {

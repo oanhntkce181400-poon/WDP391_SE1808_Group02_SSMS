@@ -5,6 +5,10 @@ const authService = {
     return axiosClient.post('/auth/login', data);
   },
 
+  me() {
+    return axiosClient.get('/auth/me');
+  },
+
   refresh(refreshToken) {
     return axiosClient.post('/auth/refresh', { refreshToken });
   },

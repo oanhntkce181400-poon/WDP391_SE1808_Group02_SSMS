@@ -48,6 +48,8 @@ const studentSchema = new mongoose.Schema(
     
     // Liên kết tài khoản
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true, sparse: true },
+    // Mật khẩu hệ thống ban đầu (6 chữ số) để admin tra cứu nhanh khi cấp tài khoản.
+    initialSystemPassword: { type: String, trim: true },
     
     // Trạng thái
     isActive: { type: Boolean, default: true, index: true },

@@ -602,7 +602,7 @@ export default function StudentManagementPage() {
                         Số điện thoại
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                        Mật khẩu
+                        Mật khẩu đăng nhập
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                         Lớp SH
@@ -637,8 +637,8 @@ export default function StudentManagementPage() {
                           {student.phoneNumber || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">
-                          <span className="font-mono text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200" title="Mật khẩu mặc định = CCCD/CMND hoặc 123456">
-                            {student.identityNumber || '123456'}
+                          <span className="font-mono text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200" title="Mật khẩu đăng nhập ban đầu (6 số random)">
+                            {student.initialSystemPassword || '(chưa có)'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">
@@ -846,8 +846,9 @@ function StudentFormModal({
             {!isEdit && (
               <div className="md:col-span-2">
                 <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu sẽ được tự động tạo theo định dạng: 
-                  <span className="font-mono text-indigo-600"> tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                  <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu đăng nhập sẽ được tự động tạo.
+                  <span className="font-mono text-indigo-600"> Email: tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                  <span className="font-mono text-indigo-600"> | Mật khẩu: 6 số random</span>
                 </div>
               </div>
             )}
@@ -1032,8 +1033,8 @@ function StudentDetailModal({ student, onClose }) {
                 <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-sm font-semibold text-amber-800">🔑 Thông tin đăng nhập:</p>
                   <p className="text-sm text-amber-700 mt-1">• Email: <span className="font-mono">{student.email}</span></p>
-                  <p className="text-sm text-amber-700">• Mật khẩu: <span className="font-mono">{student.identityNumber || '123456'}</span></p>
-                  <p className="text-xs text-amber-600 mt-2">⚠️ Mật khẩu mặc định = CCCD/CMND (nếu có) hoặc "123456"</p>
+                  <p className="text-sm text-amber-700">• Mật khẩu: <span className="font-mono">{student.initialSystemPassword || '(chưa có)'}</span></p>
+                  <p className="text-xs text-amber-600 mt-2">⚠️ Mật khẩu ban đầu là 6 số random tại thời điểm tạo tài khoản.</p>
                 </div>
                 <InfoRow
                   label="Ngày sinh"

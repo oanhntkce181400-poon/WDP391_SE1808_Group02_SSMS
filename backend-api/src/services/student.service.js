@@ -490,6 +490,18 @@ function generateRandomPassword(length = 12) {
   return password.split('').sort(() => Math.random() - 0.5).join('');
 }
 
+// Tạo mật khẩu hệ thống gồm 6 chữ số ngẫu nhiên.
+function generateRandomNumericPassword(length = 6) {
+  const numbers = '0123456789';
+  let password = '';
+
+  for (let i = 0; i < length; i++) {
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+  }
+
+  return password;
+}
+
 // ─────────────────────────────────────────────────────────────
 // HELPER: Tính Khóa từ Năm nhập học
 // Lấy 2 số cuối, nếu là 00 thì lấy 2 số đầu
@@ -578,7 +590,7 @@ async function createStudent(payload, createdById) {
   const classSection = await suggestClassSection(majorCode, cohort);
 
   // 1. Tạo User Account
-  const defaultPassword = sanitizedIdentityNumber || '123456'; // Mật khẩu hệ thống = CCCD hoặc 123456
+  const defaultPassword = generateRandomNumericPassword(6);
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
   const newUser = await User.create({
@@ -587,7 +599,7 @@ async function createStudent(payload, createdById) {
     fullName,
     authProvider: 'local',
     role: 'student',
-    mustChangePassword: true, // Bắt đổi mật khẩu lần đầu
+    mustChangePassword: false,
     status: 'active',
     createdBy: createdById,
   });
@@ -607,6 +619,7 @@ async function createStudent(payload, createdById) {
     academicStatus: 'enrolled',
     enrollmentYear: enrollmentYear || cohort,
     userId: newUser._id,
+    initialSystemPassword: defaultPassword,
     isActive: true,
     createdBy: createdById,
   };

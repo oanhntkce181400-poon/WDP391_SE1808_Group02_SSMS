@@ -21,6 +21,29 @@ export default function LoginScreen({ onForgotPassword }) {
   const [error, setError] = useState('');
   const setAuth = useAuthStore((state) => state.setAuth);
 
+  function normalizeRole(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function normalizeEmailInput(value) {
+    return String(value || '')
+      .replace(/\s+/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
+  function buildPasswordCandidates(value) {
+    const raw = String(value ?? '');
+    const noZeroWidth = raw.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const trimmed = noZeroWidth.trim();
+
+    const candidates = [raw, noZeroWidth, trimmed]
+      .filter((item) => item.length > 0)
+      .filter((item, index, arr) => arr.indexOf(item) === index);
+
+    return candidates;
+  }
+
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
       setError('Vui lòng nhập email và mật khẩu');
@@ -31,10 +54,34 @@ export default function LoginScreen({ onForgotPassword }) {
     setError('');
 
     try {
-      const response = await authService.login({
-        email: email.trim(),
-        password,
-      });
+      const normalizedEmail = normalizeEmailInput(email);
+      const passwordCandidates = buildPasswordCandidates(password);
+
+      let response = null;
+      let lastError = null;
+
+      for (const candidatePassword of passwordCandidates) {
+        try {
+          // Try progressively sanitized password variants for copy/paste artifacts.
+          // eslint-disable-next-line no-await-in-loop
+          response = await authService.login({
+            email: normalizedEmail,
+            password: candidatePassword,
+          });
+          lastError = null;
+          break;
+        } catch (attemptError) {
+          lastError = attemptError;
+          const backendMessage = String(attemptError?.response?.data?.message || '').toLowerCase();
+          if (!backendMessage.includes('invalid credentials')) {
+            throw attemptError;
+          }
+        }
+      }
+
+      if (!response) {
+        throw lastError || new Error('Invalid credentials.');
+      }
 
       const user = response?.data?.user || null;
       const accessToken = response?.data?.tokens?.accessToken || null;
@@ -42,6 +89,11 @@ export default function LoginScreen({ onForgotPassword }) {
 
       if (!accessToken) {
         setError('Đăng nhập chưa nhận được access token từ server');
+        return;
+      }
+
+      if (normalizeRole(user?.role) === 'student' && !user?.student) {
+        setError('Tài khoản sinh viên chưa được liên kết hồ sơ. Vui lòng liên hệ quản trị viên.');
         return;
       }
 
