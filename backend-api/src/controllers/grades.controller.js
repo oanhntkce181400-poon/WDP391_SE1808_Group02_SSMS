@@ -441,6 +441,98 @@ class GradesController {
       });
     }
   }
+  /**
+   * GET /api/grades/export
+   * Xuất báo cáo điểm dưới dạng Excel
+   * Query params: format=excel, semester, academicYear, classSection, major
+   */
+  async exportGrades(req, res) {
+    try {
+      const studentId = req.auth?.sub || req.auth?.id;
+      const { format = 'excel', semester, academicYear, classSection, major } = req.query;
+
+      if (!studentId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      // Only allow Excel format
+      if (format.toLowerCase() !== 'excel') {
+        return res.status(400).json({
+          success: false,
+          message: 'Hiện chỉ hỗ trợ xuất định dạng Excel'
+        });
+      }
+
+      const exportService = require('../services/export.service');
+      const Student = require('../models/student.model');
+
+      // Get student info
+      let student;
+      try {
+        student = await Student.findOne({ userId: studentId }).lean();
+      } catch (err) {
+        console.error('Error finding student:', err);
+      }
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy thông tin sinh viên'
+        });
+      }
+
+      // Get export data
+      const filters = {};
+      if (semester) filters.semester = semester;
+      if (academicYear) filters.academicYear = academicYear;
+      if (classSection) filters.classSection = classSection;
+      if (major) filters.major = major;
+
+      console.log('[ExportGrades] Filters:', filters);
+
+      const enrollments = await exportService.getExportData(studentId, filters);
+
+      if (!enrollments || enrollments.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không có dữ liệu điểm để xuất'
+        });
+      }
+
+      console.log(`[ExportGrades] Found ${enrollments.length} enrollments for Excel format`);
+
+      // Generate Excel file
+      let buffer, filename, contentType;
+
+      try {
+        buffer = await exportService.generateExcel(enrollments, {
+          fullName: student.fullName || 'Unknown',
+          studentCode: student.studentCode || 'N/A'
+        });
+        filename = `BaoCaoDiem_${student.studentCode}_${new Date().getTime()}.xlsx`;
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } catch (genErr) {
+        console.error(`[ExportGrades] Error generating Excel:`, genErr);
+        throw genErr;
+      }
+
+      // Send file
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buffer);
+
+    } catch (error) {
+      console.error('[GradesController] exportGrades error:', error);
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to export grades'
+      });
+    }
+  }
 }
 
 // Export instance

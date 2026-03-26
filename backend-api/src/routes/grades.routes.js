@@ -21,6 +21,15 @@ router.get(
   gradesController.getMyGrades
 );
 
+// GET /api/grades/export
+// Xuất báo cáo điểm dưới dạng Excel
+// Query params: format=excel, semester, academicYear, classSection, major
+router.get(
+  '/export',
+  authMiddleware,
+  gradesController.exportGrades
+);
+
 // GET /api/grades/:enrollmentId/details
 // Lấy chi tiết các thành phần điểm của một enrollment
 router.get(

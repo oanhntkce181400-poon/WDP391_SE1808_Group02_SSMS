@@ -94,6 +94,13 @@ export default function HomeScreen({ onNavigate }) {
       icon: <MaterialCommunityIcons name="clipboard-check-outline" size={24} color="#7c3aed" />,
     },
     {
+      key: 'grades',
+      title: 'Báo cáo điểm',
+      subtitle: 'Xem điểm từng môn học',
+      tone: '#10b981',
+      icon: <MaterialCommunityIcons name="chart-line" size={24} color="#10b981" />,
+    },
+    {
       key: 'application',
       title: 'Đơn từ',
       subtitle: 'Theo dõi yêu cầu và biểu mẫu',

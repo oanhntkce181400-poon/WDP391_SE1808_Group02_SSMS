@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import gradesService from '../../services/gradesService';
+import ExportGradesModal from '../../components/features/ExportGradesModal';
 
 export default function ViewGradesPage() {
   const [loading, setLoading] = useState(true);
@@ -7,6 +8,8 @@ export default function ViewGradesPage() {
   const [gradesData, setGradesData] = useState(null);
   const [selectedSemester, setSelectedSemester] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     fetchGrades();
@@ -29,6 +32,32 @@ export default function ViewGradesPage() {
       setError(err?.response?.data?.message || 'Không thể tải danh sách điểm');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExport = async (format) => {
+    try {
+      setIsExporting(true);
+      const filters = {};
+      if (selectedSemester) {
+        // Format: "1-2024-2025" -> semester=1, academicYear="2024-2025"
+        const parts = selectedSemester.split('-');
+        const semester = parts[0];
+        const academicYear = parts.slice(1).join('-');
+        filters.semester = semester;
+        filters.academicYear = academicYear;
+      }
+      // Always use Excel format
+      await gradesService.exportGrades('excel', filters);
+      setExportModalOpen(false);
+      // Show success message
+      alert(`✅ Báo cáo điểm đã được xuất thành công`);
+    } catch (err) {
+      console.error('Export error:', err);
+      const errorMsg = err?.message || err?.response?.data?.message || `Không thể xuất báo cáo điểm`;
+      alert(`❌ Lỗi: ${errorMsg}`);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -92,11 +121,22 @@ export default function ViewGradesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">📊 Xem điểm học tập</h1>
-        <p className="mt-2 text-gray-600">
-          Tổng cộng: <span className="font-semibold">{totalGrades}</span> môn học
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">📊 Xem điểm học tập</h1>
+          <p className="mt-2 text-gray-600">
+            Tổng cộng: <span className="font-semibold">{totalGrades}</span> môn học
+          </p>
+        </div>
+        <button
+          onClick={() => setExportModalOpen(true)}
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 transition-colors"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Xuất file
+        </button>
       </div>
 
       {/* Filter Section */}
@@ -362,6 +402,14 @@ export default function ViewGradesPage() {
           </div>
         </div>
       </div>
+
+      {/* Export Modal */}
+      <ExportGradesModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        onExport={handleExport}
+        isLoading={isExporting}
+      />
     </div>
   );
 }

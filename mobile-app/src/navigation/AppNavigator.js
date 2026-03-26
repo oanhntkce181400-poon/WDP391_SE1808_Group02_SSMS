@@ -9,6 +9,7 @@ import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
+import GradeReportScreen from '../screens/student/GradeReportScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
@@ -67,6 +68,7 @@ export default function AppNavigator() {
       { key: 'home', icon: 'home', label: 'Trang chủ' },
       { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
+      { key: 'grades', icon: 'bar-chart', label: 'Điểm' },
       { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
       { key: 'profile', icon: 'person', label: 'Tài khoản' },
@@ -78,7 +80,7 @@ export default function AppNavigator() {
       return;
     }
 
-    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar']);
+    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar', 'grades']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
@@ -112,6 +114,9 @@ export default function AppNavigator() {
   }
   if (activeTab === 'attendance') {
     screen = <AttendanceReportScreen onNavigate={setActiveTab} />;
+  }
+  if (activeTab === 'grades') {
+    screen = <GradeReportScreen />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;
