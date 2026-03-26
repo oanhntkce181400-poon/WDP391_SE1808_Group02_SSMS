@@ -53,8 +53,8 @@ const registrationPeriodService = {
   },
 
   // Lấy danh sách semesters
-  getSemesters: () => {
-    return axiosClient.get('/semesters');
+  getSemesters: (params = {}) => {
+    return axiosClient.get('/semesters', { params });
   },
 };
 

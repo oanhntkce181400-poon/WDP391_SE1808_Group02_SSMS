@@ -26,6 +26,26 @@ const STATUS_STYLES = {
   cancelled: 'bg-red-100 text-red-800 border border-red-200',
 };
 
+const REQUEST_TYPE_LABELS = {
+  all: 'Tất cả',
+  change_class: 'Chuyển lớp',
+  drop: 'Hủy môn',
+  cross_student_exchange: 'Đổi chéo sinh viên',
+  overseas_study: 'Học môn học tại nước ngoài',
+  elective_course_registration: 'Đăng ký môn tự chọn',
+  health_insurance_registration: 'Đăng ký bảo hiểm y tế',
+};
+
+const REQUEST_TYPE_OPTIONS = [
+  { value: 'all', label: 'Tất cả (mặc định)' },
+  { value: 'change_class', label: 'Chuyển lớp' },
+  { value: 'drop', label: 'Hủy môn' },
+  { value: 'cross_student_exchange', label: 'Đổi chéo sinh viên' },
+  { value: 'overseas_study', label: 'Học môn học tại nước ngoài' },
+  { value: 'elective_course_registration', label: 'Đăng ký môn tự chọn' },
+  { value: 'health_insurance_registration', label: 'Đăng ký bảo hiểm y tế' },
+];
+
 // ─────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
@@ -329,11 +349,7 @@ export default function RegistrationPeriodManagement() {
                         {period.periodName}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
-                        {period.requestType === 'repeat' && 'Học lại'}
-                        {period.requestType === 'overload' && 'Học vượt'}
-                        {period.requestType === 'change_class' && 'Chuyển lớp'}
-                        {period.requestType === 'drop' && 'Hủy môn'}
-                        {(!period.requestType || period.requestType === 'all') && 'Tất cả'}
+                        {REQUEST_TYPE_LABELS[period.requestType] || period.requestType || REQUEST_TYPE_LABELS.all}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700">
                         {period.semester?.name || '-'}
@@ -476,11 +492,11 @@ function PeriodFormModal({ title, formData, setFormData, onSubmit, onClose, seme
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
-                <option value="all">Tất cả (mặc định)</option>
-                <option value="repeat">Học lại</option>
-                <option value="overload">Học vượt</option>
-                <option value="change_class">Chuyển lớp</option>
-                <option value="drop">Hủy môn</option>
+                {REQUEST_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <p className="text-xs text-slate-500 mt-1">
                 Admin có thể cấu hình nhiều đợt khác nhau cho từng loại đơn.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import classService from '../../services/classService';
 import registrationService from '../../services/registrationService';
+import registrationPeriodService from '../../services/registrationPeriodService';
+import { useSocket } from '../../contexts/SocketContext';
 import {
   AlertTriangle,
   CheckCircle,
@@ -14,17 +16,26 @@ import {
 } from 'lucide-react';
 
 export default function ClassRegistrationPage() {
+  const { socket } = useSocket();
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [filters, setFilters] = useState({ semester: '' });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [validationResults, setValidationResults] = useState({});
   const [eligibility, setEligibility] = useState(null);
   const [toast, setToast] = useState(null);
+  const [currentRegistrationPeriod, setCurrentRegistrationPeriod] = useState(null);
+  const [semesterOptions, setSemesterOptions] = useState([]);
+  const [targetSemesterId, setTargetSemesterId] = useState('');
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [conflictPopup, setConflictPopup] = useState(null);
+
+  const getSemesterIdFromPeriod = (period) => {
+    if (!period?.semester) return '';
+    if (typeof period.semester === 'string') return period.semester;
+    return period.semester?._id || period.semester?.id || '';
+  };
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -39,10 +50,57 @@ export default function ClassRegistrationPage() {
   // - disable Register theo eligibility tổng hợp
   const fetchEligibility = async () => {
     try {
-      const response = await registrationService.getEligibilitySummary();
+      const response = await registrationService.getEligibilitySummary(null, targetSemesterId || null);
       setEligibility(response?.data?.data || null);
     } catch (error) {
       setEligibility(null);
+    }
+  };
+
+  const fetchSemesters = async () => {
+    try {
+      const limit = 100;
+      const firstResponse = await registrationPeriodService.getSemesters({ limit, page: 1 });
+      const firstSemesters = firstResponse?.data?.data || [];
+      const totalPages = Number(firstResponse?.data?.pagination?.totalPages || 1);
+
+      let semesters = [...firstSemesters];
+      if (totalPages > 1) {
+        const remainingResponses = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            registrationPeriodService.getSemesters({ limit, page: index + 2 }),
+          ),
+        );
+
+        remainingResponses.forEach((res) => {
+          const items = res?.data?.data || [];
+          semesters = semesters.concat(items);
+        });
+      }
+
+      setSemesterOptions(semesters);
+
+      if (!targetSemesterId && semesters.length > 0) {
+        const current = semesters.find((item) => item.isCurrent);
+        setTargetSemesterId(current?.id || semesters[0]?.id || '');
+      }
+    } catch (error) {
+      setSemesterOptions([]);
+    }
+  };
+
+  const fetchCurrentRegistrationPeriod = async () => {
+    try {
+      const response = await registrationPeriodService.getCurrentPeriod();
+      const period = response?.data?.data || null;
+      setCurrentRegistrationPeriod(period);
+
+      const periodSemesterId = getSemesterIdFromPeriod(period);
+      if (periodSemesterId) {
+        setTargetSemesterId(periodSemesterId);
+      }
+    } catch (error) {
+      setCurrentRegistrationPeriod(null);
     }
   };
 
@@ -57,7 +115,7 @@ export default function ClassRegistrationPage() {
     const entries = await Promise.all(
       classList.map(async (cls) => {
         try {
-          const response = await registrationService.validateAll(cls._id);
+          const response = await registrationService.validateAll(cls._id, targetSemesterId || null);
           return [cls._id, response?.data?.data || null];
         } catch (error) {
           return [cls._id, null];
@@ -73,7 +131,7 @@ export default function ClassRegistrationPage() {
     try {
       const params = {
         keyword: searchKeyword,
-        semester: filters.semester,
+        semesterId: targetSemesterId || undefined,
         page,
         limit: 12,
         sortBy: 'createdAt',
@@ -93,12 +151,31 @@ export default function ClassRegistrationPage() {
   };
 
   useEffect(() => {
-    fetchEligibility();
+    fetchSemesters();
+    fetchCurrentRegistrationPeriod();
   }, []);
 
   useEffect(() => {
+    fetchEligibility();
+  }, [targetSemesterId]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRegistrationPeriodUpdated = () => {
+      fetchCurrentRegistrationPeriod();
+    };
+
+    socket.on('registration-period-updated', handleRegistrationPeriodUpdated);
+
+    return () => {
+      socket.off('registration-period-updated', handleRegistrationPeriodUpdated);
+    };
+  }, [socket]);
+
+  useEffect(() => {
     fetchClasses();
-  }, [page, filters]);
+  }, [page, targetSemesterId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -153,7 +230,7 @@ export default function ClassRegistrationPage() {
 
   const validateSingleClass = async (classId) => {
     try {
-      const response = await registrationService.validateAll(classId);
+      const response = await registrationService.validateAll(classId, targetSemesterId || null);
       const data = response?.data?.data || null;
       setValidationResults((prev) => ({ ...prev, [classId]: data }));
       return data;
@@ -165,7 +242,7 @@ export default function ClassRegistrationPage() {
 
   const checkScheduleConflictNow = async (classId, { showWhenNoConflict = false } = {}) => {
     try {
-      const response = await registrationService.validateScheduleConflict(classId);
+      const response = await registrationService.validateScheduleConflict(classId, targetSemesterId || null);
       const result = response?.data?.data || null;
 
       if (result?.hasConflict) {
@@ -249,14 +326,19 @@ export default function ClassRegistrationPage() {
             />
             <div className="mt-3">
               <select
-                value={filters.semester}
-                onChange={(e) => setFilters({ ...filters, semester: e.target.value })}
+                value={targetSemesterId}
+                onChange={(e) => {
+                  setTargetSemesterId(e.target.value);
+                  setPage(1);
+                }}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
               >
-                <option value="">All semesters</option>
-                <option value="1">Semester 1</option>
-                <option value="2">Semester 2</option>
-                <option value="3">Semester 3</option>
+                <option value="">Select semester</option>
+                {semesterOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name || item.code} ({item.academicYear})
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -275,6 +357,11 @@ export default function ClassRegistrationPage() {
             <div className="mt-2 text-sm text-slate-600">
               Credits: <span className="font-semibold text-slate-900">{creditInfo?.currentCredits || 0}/{creditInfo?.maxCredits || 20}</span>
             </div>
+            {currentRegistrationPeriod?.periodName && (
+              <div className="mt-2 text-xs text-slate-500">
+                Active period: {currentRegistrationPeriod.periodName}
+              </div>
+            )}
             <div className="mt-2 h-2 w-full rounded bg-slate-200">
               <div className="h-2 rounded bg-blue-600" style={{ width: `${creditPercent}%` }} />
             </div>

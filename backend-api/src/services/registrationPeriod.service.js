@@ -472,7 +472,14 @@ async function getOpenRequestTypeSummary(studentCohort) {
 
   const hasAllType = availablePeriods.some((p) => p.requestType === 'all');
 
-  const baseTypes = ['repeat', 'overload', 'change_class', 'drop'];
+  const baseTypes = [
+    'change_class',
+    'drop',
+    'cross_student_exchange',
+    'overseas_study',
+    'elective_course_registration',
+    'health_insurance_registration',
+  ];
   const openTypes = hasAllType
     ? ['all', ...baseTypes]
     : Array.from(new Set(availablePeriods.map((p) => p.requestType))).filter(Boolean);

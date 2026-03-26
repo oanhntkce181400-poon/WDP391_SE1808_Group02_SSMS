@@ -10,15 +10,24 @@ const registrationService = {
   validateWallet: (classId) =>
     axiosClient.post('/registrations/validate-wallet', { classId }),
 
-  validateScheduleConflict: (classId) =>
-    axiosClient.post('/registrations/check-schedule-conflict', { classId }),
+  validateScheduleConflict: (classId, semesterId = null) =>
+    axiosClient.post('/registrations/check-schedule-conflict', {
+      classId,
+      ...(semesterId ? { semesterId } : {}),
+    }),
 
-  validateAll: (classId) =>
-    axiosClient.post('/registrations/validate-all', { classId }),
+  validateAll: (classId, semesterId = null) =>
+    axiosClient.post('/registrations/validate-all', {
+      classId,
+      ...(semesterId ? { semesterId } : {}),
+    }),
 
-  getEligibilitySummary: (classId = null) =>
+  getEligibilitySummary: (classId = null, semesterId = null) =>
     axiosClient.get('/registrations/eligibility-summary', {
-      params: classId ? { classId } : {},
+      params: {
+        ...(classId ? { classId } : {}),
+        ...(semesterId ? { semesterId } : {}),
+      },
     }),
 };
 

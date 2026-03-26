@@ -155,9 +155,6 @@ async function startServer() {
 
     return new Promise((resolve, reject) => {
       const server = httpServer.listen(PORT, () => {
-        const io = initializeSocketIO(httpServer);
-        app.set("io", io);
-
         console.log(`🚀 Server is running on http://localhost:${PORT}`);
         console.log("✅ Socket server is attached");
         console.log("✅ Server startup complete");

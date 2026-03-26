@@ -31,10 +31,24 @@ const registrationPeriodSchema = new mongoose.Schema(
     // - overload: đăng ký học vượt
     // - change_class: xin chuyển lớp
     // - drop: hủy môn / rút môn
+    // - cross_student_exchange: đổi chéo sinh viên
+    // - overseas_study: học môn học tại nước ngoài
+    // - elective_course_registration: đăng ký môn tự chọn
+    // - health_insurance_registration: đăng ký bảo hiểm y tế
     // - all: áp dụng cho tất cả loại đơn / đăng ký chung
     requestType: {
       type: String,
-      enum: ['repeat', 'overload', 'change_class', 'drop', 'all'],
+      enum: [
+        'repeat',
+        'overload',
+        'change_class',
+        'drop',
+        'cross_student_exchange',
+        'overseas_study',
+        'elective_course_registration',
+        'health_insurance_registration',
+        'all',
+      ],
       default: 'all',
       index: true,
     },

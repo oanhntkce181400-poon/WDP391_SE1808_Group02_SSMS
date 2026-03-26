@@ -247,7 +247,7 @@ async function reviewRequest(requestId, newStatus, staffNote) {
 
   // Tìm đơn
   const requestDoc = await Request.findById(requestId)
-    .populate('student', 'fullName email')
+    .populate('student', 'fullName email userId')
     .exec();
 
   if (!requestDoc) {

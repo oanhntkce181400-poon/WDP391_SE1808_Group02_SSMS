@@ -55,6 +55,7 @@ function initializeSocketIO(httpServer) {
     console.log(`   User: ${socket.email} (ID: ${socket.userId})`);
 
     socket.join(`user:${socket.userId}`);
+    
 
     socket.emit('welcome', {
       message: 'Connected to SSMS Socket Server',
