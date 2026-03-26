@@ -1,0 +1,46 @@
+@startuml
+hide footbox
+title View Majors - Retrieve and Display Majors List
+
+actor PrimaryActor as "User (Admin / Academic Staff)"
+participant Screen as "Screen (Majors List)"
+participant API as "API"
+participant Router as "Router"
+participant Controller as "Controller"
+participant Service as "Service"
+participant Model as "Model"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Open Majors List
+activate Screen
+Screen -> API: (2) call GET
+activate API
+API -> Router: (3) forward GET
+activate Router
+Router -> Controller: (4) getMajors(queryParams)
+activate Controller
+Controller -> Service: (5) findMajors({ filters, pagination, sort })
+activate Service
+Service -> Model: (6) find(query) -- with filters & optional relations
+activate Model
+Model -> DB: (7) db query
+activate DB
+DB --> Model: (8) rows[], totalCount
+deactivate DB
+Model --> Service: (9) majors data
+deactivate Model
+Service -> Service: (10) apply pagination and format response
+Service --> Controller: (11) paginated majors list
+deactivate Service
+Controller --> Router: (12) 200 OK { majors[], total, page, limit }
+deactivate Controller
+Router --> API: (13) 200 OK { majors[], total, page, limit }
+API --> Screen: (14) render majors table/list
+Screen --> PrimaryActor: (15) display results
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

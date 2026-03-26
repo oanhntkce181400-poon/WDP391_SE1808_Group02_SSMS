@@ -1,0 +1,50 @@
+@startuml
+hide footbox
+title Class Diagram - Add Subjects to Curriculum
+
+class CurriculumController {
+  +addSubjects(data): Result
+}
+
+class CurriculumService {
+  +addSubjects(data): Result
+  -validateCurriculumExists(id:int): Curriculum
+  -validateSubjectsExist(subjectIds:int[]): Subject[]
+}
+
+class CurriculumRepository {
+  +findById(id:int): Curriculum?
+}
+
+class CurriculumSubjectRepository {
+  +bulkInsert(rows: CurriculumSubjectPayload[]): Result
+  +findByCurriculum(curriculumId:int): CurriculumSubject[]
+}
+
+class AddSubjectsDto {
+  +subject_ids: int[]
+  +semester_id?: int
+}
+
+class Curriculum { -curriculum_id:int; -name:string; -semester_id:int }
+class Subject { -subject_id:int; -subject_code:string; -name:string }
+class CurriculumSubject { -id:int; -curriculum_id:int; -subject_id:int; -semester_id:int }
+
+class CurriculumRouter {
+  +routes: /api/curriculums
+}
+
+CurriculumRouter --> CurriculumController : routes to
+CurriculumController --> CurriculumService : uses
+CurriculumService --> CurriculumRepository : uses
+CurriculumService --> CurriculumSubjectRepository : uses
+CurriculumService --> Subject : validates
+CurriculumRepository --> Curriculum : persists
+CurriculumSubjectRepository --> CurriculumSubject : persists
+
+note right of CurriculumService
+Bulk insert uses transaction; validate all subjects exist before inserting.
+end note
+
+@enduml
+

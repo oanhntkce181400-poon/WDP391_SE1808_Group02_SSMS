@@ -1,0 +1,85 @@
+@startuml
+title Create Majors - Add New Major (Admin)
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant MajorRouter as "MajorRouter"
+participant Validation as "ValidationMiddleware"
+participant MajorController as "MajorController"
+participant MajorService as "MajorService"
+participant MajorModel as "MajorModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open majors list
+activate Screen
+
+Screen -> APIClient: (2) POST /api/majors
+activate APIClient
+APIClient -> MajorRouter: (3) forward POST
+activate MajorRouter
+
+MajorRouter -> Validation: (4) validate payload
+activate Validation
+alt invalid
+  Validation --> MajorRouter: (4.1.1) invalid payload
+  deactivate Validation
+
+  MajorRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  MajorRouter -> MajorController: (4.2.1) request data
+  activate MajorController
+  MajorController -> MajorService: (4.2.2) createMajor()
+  activate MajorService
+
+  MajorService -> MajorModel: (4.2.3) findByCode()
+  activate MajorModel
+  MajorModel -> DB: (4.2.4) db query
+  activate DB
+  DB --> MajorModel: (4.2.5) return rows
+  deactivate DB
+  MajorModel --> MajorService:(4.2.6) return exists
+  deactivate MajorModel
+
+  alt exists
+    MajorService --> MajorController: (4.2.6.1.1) conflict error
+    MajorController --> MajorRouter: (4.2.6.1.2) 409 Conflict
+    MajorRouter --> APIClient: (4.2.6.1.3) 409 Conflict
+    APIClient --> Screen: (4.2.6.1.4) show error
+    Screen --> PrimaryActor: (4.2.6.1.5) display error
+  else not exists
+    MajorService -> MajorModel: (4.2.6.2.1) create()
+    activate MajorModel
+    MajorModel -> DB: (4.2.6.2.2) db insert
+    activate DB
+    DB --> MajorModel:(4.2.6.2.3) return created
+    deactivate DB
+    MajorModel --> MajorService: (4.2.6.2.4) return created
+    deactivate MajorModel
+
+    MajorService --> MajorController: (4.2.6.2.5) return created
+    deactivate MajorService
+    MajorController --> MajorRouter: (4.2.6.2.6) 201 Created
+    deactivate MajorController
+    MajorRouter --> APIClient: (4.2.6.2.7) 201 Created
+    deactivate MajorRouter
+    APIClient --> Screen: (4.2.6.2.8)show success
+    deactivate APIClient
+    Screen --> PrimaryActor: (4.2.6.2.9) display success
+    deactivate Screen
+  end
+end
+
+
+
+
+deactivate PrimaryActor
+@enduml
+

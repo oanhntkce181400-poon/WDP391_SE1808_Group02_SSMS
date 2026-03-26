@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import useProfile from '../../hooks/useProfile';
+import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, removeItem } from '../../utils/storage';
 
@@ -55,6 +56,7 @@ function InfoRow({ label, value }) {
 
 export default function ProfileScreen() {
   const user = useAuthStore((state) => state.user);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
   const logout = useAuthStore((state) => state.logout);
   const role = normalizeRole(user?.role);
   const isStudent = role === 'student';
@@ -63,8 +65,16 @@ export default function ProfileScreen() {
   });
 
   async function handleLogout() {
-    logout();
-    await removeItem(AUTH_STORAGE_KEY);
+    try {
+      if (refreshToken) {
+        await authService.logout(refreshToken);
+      }
+    } catch (err) {
+      // Always continue with local sign-out even if network/server logout fails.
+    } finally {
+      logout();
+      await removeItem(AUTH_STORAGE_KEY);
+    }
   }
 
   if (isStudent && loading && !profile) {

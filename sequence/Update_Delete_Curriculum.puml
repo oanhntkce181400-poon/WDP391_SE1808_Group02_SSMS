@@ -1,0 +1,108 @@
+@startuml
+title Update/Delete Curriculum - Modify or Remove Curriculum
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Curriculum Detail)"
+participant APIClient as "API Client (Frontend)"
+participant CurriculumRouter as "CurriculumRouter"
+participant Validation as "ValidationMiddleware"
+participant CurriculumController as "CurriculumController"
+participant CurriculumService as "CurriculumService"
+participant CurriculumModel as "CurriculumModel"
+participant CurriculumSubjectModel as "CurriculumSubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open curriculum detail
+activate Screen
+
+alt update or delete
+  Screen -> APIClient: (2) PUT /api/curriculums/{id} or DELETE /api/curriculums/{id}
+end
+
+activate APIClient
+APIClient -> CurriculumRouter: (3) forward request
+activate CurriculumRouter
+CurriculumRouter -> Validation: (4) validate payload/params
+activate Validation
+alt invalid
+  Validation --> CurriculumRouter: (4.1.1) invalid: missing/invalid id or body
+  deactivate Validation
+
+  CurriculumRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  CurriculumRouter -> CurriculumController: (4.2.1) request action
+  activate CurriculumController
+
+  alt update
+    CurriculumController -> CurriculumService: (4.2.1.1.1) updateCurriculum()
+    activate CurriculumService
+    CurriculumService -> CurriculumModel: (4.2.1.1.2) update()
+    activate CurriculumModel
+    CurriculumModel -> DB: (4.2.1.1.3) db update
+    activate DB
+    DB --> CurriculumModel: (4.2.1.1.4) return updated
+    deactivate DB
+    CurriculumModel --> CurriculumService: (4.2.1.1.5) return updated
+    deactivate CurriculumModel
+    CurriculumService --> CurriculumController: (4.2.1.1.6) return updated
+    deactivate CurriculumService
+    CurriculumController --> CurriculumRouter: (4.2.1.1.7) 200 OK
+  else delete
+    CurriculumController -> CurriculumService: (4.2.1.2.1) deleteCurriculum()
+    activate CurriculumService
+    CurriculumService -> CurriculumSubjectModel: (4.2.1.2.2) deleteMany()
+    activate CurriculumSubjectModel
+    CurriculumSubjectModel -> DB: (4.2.1.2.3) db delete
+    activate DB
+    DB --> CurriculumSubjectModel: (4.2.1.2.4) return result
+    deactivate DB
+    CurriculumSubjectModel --> CurriculumService: (4.2.1.2.5) return removed
+    deactivate CurriculumSubjectModel
+
+    CurriculumService -> CurriculumModel: (4.2.1.3.1) findById()
+    activate CurriculumModel
+    CurriculumModel -> DB: (4.2.1.3.2) db query
+    activate DB
+    DB --> CurriculumModel: (4.2.1.3.3) return row | null
+    deactivate DB
+    CurriculumModel --> CurriculumService: (4.2.1.3.4) return exists
+    deactivate CurriculumModel
+
+    alt exists
+      CurriculumService -> CurriculumModel: (4.2.1.3.4.1.1)  deleteById()
+      activate CurriculumModel
+      CurriculumModel -> DB: (4.2.1.3.4.1.2)  db delete
+      activate DB
+      DB --> CurriculumModel: (4.2.1.3.4.1.3)  return deleted
+      deactivate DB
+      CurriculumModel --> CurriculumService: (4.2.1.3.4.1.4)  return deleted
+      deactivate CurriculumModel
+      CurriculumService --> CurriculumController: (4.2.1.3.4.1.5)  return deleted
+      
+      CurriculumController --> CurriculumRouter: (4.2.1.3.4.1.6)  200 OK
+    else not found
+      CurriculumService --> CurriculumController: (4.2.1.3.4.2.1) 404 Not Found
+      deactivate CurriculumService
+    CurriculumController --> CurriculumRouter: (4.2.1.3.4.2.2)  404 Not Found
+    deactivate CurriculumController
+    end
+  end
+end
+
+CurriculumRouter --> APIClient: (5) response
+deactivate CurriculumRouter
+APIClient --> Screen: (6) display result
+deactivate APIClient
+Screen --> PrimaryActor: (7) show message
+
+
+deactivate Screen
+deactivate PrimaryActor
+@enduml

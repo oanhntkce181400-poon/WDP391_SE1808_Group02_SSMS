@@ -1,0 +1,56 @@
+@startuml
+title View Curriculums - Retrieve and Display Curriculums List
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant CurriculumRouter as "CurriculumRouter"
+participant Validation as "ValidationMiddleware"
+participant CurriculumController as "CurriculumController"
+participant CurriculumService as "CurriculumService"
+participant CurriculumModel as "CurriculumModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open curriculums list
+activate Screen
+
+Screen -> APIClient: (2) GET /api/curriculums
+activate APIClient
+APIClient -> CurriculumRouter: (3) forward GET
+activate CurriculumRouter
+CurriculumRouter -> Validation: (4) validate query
+activate Validation
+Validation --> CurriculumRouter: (4.1) return validated query
+deactivate Validation
+
+CurriculumRouter -> CurriculumController: (5) request data
+activate CurriculumController
+CurriculumController -> CurriculumService: (6) findCurriculums()
+activate CurriculumService
+
+CurriculumService -> CurriculumModel: (7) find()
+activate CurriculumModel
+CurriculumModel -> DB: (8) db query
+activate DB
+DB --> CurriculumModel: (9) return rows
+deactivate DB
+CurriculumModel --> CurriculumService: (10) return rows
+deactivate CurriculumModel
+
+CurriculumService -> CurriculumService: (10.1) paginate & format
+CurriculumService --> CurriculumController: (11) return page
+deactivate CurriculumService
+
+CurriculumController --> CurriculumRouter: (12) 200 OK
+deactivate CurriculumController
+CurriculumRouter --> APIClient: (13) 200 OK
+APIClient --> Screen: (14) render curriculums
+Screen --> PrimaryActor: (15) display results
+deactivate CurriculumRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml

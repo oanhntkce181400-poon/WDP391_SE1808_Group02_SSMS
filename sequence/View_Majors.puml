@@ -1,0 +1,56 @@
+@startuml
+title View Majors - Retrieve and Display Majors List
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant MajorRouter as "MajorRouter"
+participant Validation as "ValidationMiddleware"
+participant MajorController as "MajorController"
+participant MajorService as "MajorService"
+participant MajorModel as "MajorModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open majors list
+activate Screen
+
+Screen -> APIClient: (2) GET /api/majors
+activate APIClient
+APIClient -> MajorRouter: (3) forward GET
+activate MajorRouter
+MajorRouter -> Validation: (4) validate query
+activate Validation
+Validation --> MajorRouter: (4.1) return validated query
+deactivate Validation
+
+MajorRouter -> MajorController: (5) request data
+activate MajorController
+MajorController -> MajorService: (6) findMajors()
+activate MajorService
+
+MajorService -> MajorModel: (7) find()
+activate MajorModel
+MajorModel -> DB: (8) db query
+activate DB
+DB --> MajorModel: (9) return rows
+deactivate DB
+MajorModel --> MajorService: (10) return rows
+deactivate MajorModel
+
+MajorService -> MajorService: (10.1) paginate & format
+MajorService --> MajorController: (11) return page
+deactivate MajorService
+
+MajorController --> MajorRouter: (12) 200 OK
+deactivate MajorController
+MajorRouter --> APIClient: (13) 200 OK
+APIClient --> Screen: (14) render majors
+Screen --> PrimaryActor: (15) display results
+deactivate MajorRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml

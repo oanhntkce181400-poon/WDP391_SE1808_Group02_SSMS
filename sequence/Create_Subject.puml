@@ -1,0 +1,84 @@
+@startuml
+title Create Subject - Add New Subject to System
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Subject List)"
+participant APIClient as "API Client (Frontend)"
+participant SubjectRouter as "SubjectRouter"
+participant Validation as "ValidationMiddleware"
+participant SubjectController as "SubjectController"
+participant SubjectService as "SubjectService"
+participant SubjectModel as "SubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open subject list
+activate Screen
+
+Screen -> APIClient: (2) POST /api/subjects
+activate APIClient
+APIClient -> SubjectRouter: (3) forward POST
+activate SubjectRouter
+
+SubjectRouter -> Validation: (4) validate payload
+activate Validation
+alt invalid
+  Validation --> SubjectRouter: (4.1.1) invalid payload
+  deactivate Validation
+
+  SubjectRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  SubjectRouter -> SubjectController: (4.2.1) request data
+  activate SubjectController
+  SubjectController -> SubjectService: (4.2.2) createSubject()
+  activate SubjectService
+
+  SubjectService -> SubjectModel: (4.2.3) findByCode()
+  activate SubjectModel
+  SubjectModel -> DB: (4.2.4) db query
+  activate DB
+  DB --> SubjectModel: (4.2.5) return rows
+  deactivate DB
+  SubjectModel --> SubjectService: (4.2.6) return exists
+  deactivate SubjectModel
+
+  alt exists
+    SubjectService --> SubjectController: (4.2.6.1.1) conflict error
+    SubjectController --> SubjectRouter: (4.2.6.1.2) 409 Conflict
+    SubjectRouter --> APIClient: (4.2.6.1.3) 409 Conflict
+    APIClient --> Screen: (4.2.6.1.4) show error
+    Screen --> PrimaryActor: (4.2.6.1.5) display error
+  else not exists
+    SubjectService -> SubjectModel: (4.2.6.2.1) create()
+    activate SubjectModel
+    SubjectModel -> DB: (4.2.6.2.2) db insert
+    activate DB
+    DB --> SubjectModel: (4.2.6.2.3) return created
+    deactivate DB
+    SubjectModel --> SubjectService: (4.2.6.2.4) return created
+    deactivate SubjectModel
+
+    SubjectService --> SubjectController: (4.2.6.2.5) return created
+    deactivate SubjectService
+    SubjectController --> SubjectRouter: (4.2.6.2.6) 201 Created
+    deactivate SubjectController
+    SubjectRouter --> APIClient: (4.2.6.2.7) 201 Created
+    deactivate SubjectRouter
+    APIClient --> Screen: (4.2.6.2.8) show success
+    deactivate APIClient
+    Screen --> PrimaryActor: (4.2.6.2.9) display success
+    deactivate Screen
+  end
+end
+
+
+
+
+deactivate PrimaryActor
+@enduml

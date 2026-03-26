@@ -1,0 +1,37 @@
+@startuml
+hide footbox
+title Class Diagram - Update / Delete Curriculum
+
+class CurriculumController {
+  +updateCurriculum(id:int, dto:UpdateCurriculumDto, userId:int): Curriculum
+  +deleteCurriculum(id:int, userId:int): Result
+}
+
+class CurriculumService {
+  +updateCurriculum(id:int, dto:UpdateCurriculumDto, userId:int): Curriculum
+  +deleteCurriculum(id:int, userId:int): Result
+  -removeAssociations(curriculumId:int): void
+}
+
+class CurriculumRepository {
+  +findById(id:int): Curriculum?
+  +updateById(id:int, data:Partial<Curriculum>): Curriculum
+  +deleteById(id:int): Result
+}
+
+class CurriculumSubjectRepository {
+  +deleteManyByCurriculum(curriculumId:int): Result
+}
+
+class UpdateCurriculumDto { +name?:string; +code?:string; +description?:string }
+
+CurriculumController --> CurriculumService : uses
+CurriculumService --> CurriculumRepository : uses
+CurriculumService --> CurriculumSubjectRepository : uses
+
+note right of CurriculumService
+Delete flow removes curriculum_subject associations then deletes curriculum (transactional).
+end note
+
+@enduml
+

@@ -1,0 +1,88 @@
+@startuml
+hide footbox
+title Add Curriculum - Add New Curriculum for Semester
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Curriculum List / Create Modal)"
+participant API as "API"
+participant Router as "Router"
+participant Validation as "Validation"
+participant Controller as "Controller"
+participant Service as "Service"
+participant Model as "Model"
+participant ModelSem as "SemesterModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Open curriculum list
+activate Screen
+Screen -> API: (2) call POST
+activate API
+API -> Router: (3) forward POST
+activate Router
+Router -> Validation: (4) validate body (zod: semester_id exists, unique code)
+activate Validation
+Validation --> Router: (4.1) ValidationResult { valid: true, errors: [] }
+deactivate Validation
+Router -> Controller: (5) request data
+activate Controller
+Controller -> Service: (6) add curriculum
+activate Service
+Service -> ModelSem: (7) findById(semester_id) -- verify semester exists
+activate ModelSem
+ModelSem --> Service: (8) semester data | null
+deactivate ModelSem
+alt (9.1) semester not found
+  Service --> Controller: (9.1.1) validation error
+  
+  Controller --> Router: (9.1.2) 400 Bad Request { message: "Invalid semester_id" }
+  Router --> API: (9.1.3) 400 Bad Request { message: "Invalid semester_id" }
+  API --> Screen: (9.1.4) show validation error
+  Screen --> PrimaryActor: (9.1.5) display error
+else (9.2) semester exists
+  Service -> Model: (10.2.1) findOne({ code: body.code, semester_id: body.semester_id })
+  activate Model
+  Model -> DB: (10.2.1.1) db query
+  activate DB
+  DB --> Model: (10.2.1.2) rows (empty | [existingRow])
+  deactivate DB
+  Model --> Service: (10.2.1.3) exists = (rows.length > 0)
+  deactivate Model
+  alt (10.2.1.3.1) exists
+    Service --> Controller: (10.2.1.3.1.1) ConflictError("Curriculum code exists for semester")
+    
+    Controller --> Router: (10.2.1.3.1.2) 409 Conflict { message: "Curriculum code exists for semester" }
+    Router --> API: (10.2.1.3.1.3) 409 Conflict { message: "Curriculum code exists for semester" }
+    API --> Screen: (10.2.1.3.1.4) show validation error
+    Screen --> PrimaryActor: (10.2.1.3.1.5) display error
+  else (10.2.1.3.2) not exists
+    Service -> Model: (10.2.1.3.2.1) add data
+    activate Model
+    Model -> DB: (10.2.1.3.2.1.1) db insert
+    activate DB
+    DB --> Model: (10.2.1.3.2.1.2) createdCurriculum
+    deactivate DB
+    
+    Model --> Service: (10.2.1.3.2.1.3) createdCurriculum
+    deactivate Model
+    
+    Service --> Controller: (10.2.1.3.2.1.4) createdCurriculum
+    deactivate Service
+    
+    Controller --> Router: (10.2.1.3.2.1.5) 201 Created { curriculum: createdCurriculum }
+    deactivate Controller
+    Router --> API: (10.2.1.3.2.1.6) 201 Created { curriculum: createdCurriculum }
+    deactivate Router
+    API --> Screen: (10.2.1.3.2.1.7) success -> close modal, refresh list
+    deactivate API
+    Screen --> PrimaryActor: (10.2.1.3.2.1.8) show success message
+    deactivate Screen
+  end
+end
+deactivate Controller
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+
