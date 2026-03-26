@@ -49,9 +49,11 @@ function buildStudentRequestStatusNotification(requestDoc) {
   const status = requestDoc.status;
 
   let message = `Đơn của bạn đã được cập nhật.`;
-  if (status === 'Approved') message = 'Đơn của bạn đã được duyệt.';
-  if (status === 'Rejected') message = 'Đơn của bạn đã bị từ chối.';
-  if (status === 'Processing') message = 'Đơn của bạn đang được xử lý.';
+  if (status === 'Approved' || status === 'Rejected') {
+    message = 'Đơn của bạn đã được phản hồi.';
+  } else if (status === 'Processing') {
+    message = 'Đơn của bạn đang được xử lý.';
+  }
 
   return {
     id: `student-request-status-${requestDoc._id}-${requestDoc.status}-${updateStamp}`,

@@ -60,6 +60,12 @@ async function resolveStudentNotificationTargets(requestDoc) {
   return Array.from(targets);
 }
 
+function resolveStudentEmail(requestDoc) {
+  const populatedStudent = requestDoc?.student;
+  const email = populatedStudent?.email;
+  return email ? String(email).trim().toLowerCase() : null;
+}
+
 // ─────────────────────────────────────────────────────────────
 // POST /api/requests - Tạo đơn mới
 // ─────────────────────────────────────────────────────────────
@@ -247,18 +253,30 @@ const reviewRequest = async (req, res) => {
 
     const targetIds = await resolveStudentNotificationTargets(updatedRequest);
 
-    if (io && targetIds.length > 0) {
+    if (io) {
       const notificationPayload = buildStudentRequestStatusNotification(updatedRequest);
 
-      targetIds.forEach((targetId) => {
-        emitToUser(
-          io,
-          targetId,
+      if (targetIds.length > 0) {
+        targetIds.forEach((targetId) => {
+          emitToUser(
+            io,
+            targetId,
+            'student-request-status-updated',
+            notificationPayload,
+          );
+          emitToUser(io, targetId, 'notification', notificationPayload);
+        });
+      }
+
+      const studentEmail = resolveStudentEmail(updatedRequest);
+      if (studentEmail && typeof io.sendToEmail === 'function') {
+        io.sendToEmail(
+          studentEmail,
           'student-request-status-updated',
           notificationPayload,
         );
-        emitToUser(io, targetId, 'notification', notificationPayload);
-      });
+        io.sendToEmail(studentEmail, 'notification', notificationPayload);
+      }
     }
 
     return res.status(200).json({

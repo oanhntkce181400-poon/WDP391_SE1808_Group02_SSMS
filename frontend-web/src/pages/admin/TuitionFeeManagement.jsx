@@ -1,9 +1,11 @@
 // Tuition Fee Management Page - Quản lý học phí theo khung chương trình
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import curriculumService from '../../services/curriculumService';
 import nextIcon from '../../assets/next.png';
 
 export default function TuitionFeeManagement() {
+  const navigate = useNavigate();
   const [curriculums, setCurriculums] = useState([]);
   const [allCurriculums, setAllCurriculums] = useState([]); // Store all curriculums
   const [loading, setLoading] = useState(false);
@@ -104,11 +106,20 @@ export default function TuitionFeeManagement() {
 
           {/* Header */}
           <div className="flex flex-col gap-4">
-            <div>
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <h1 className="text-[#0d141b] dark:text-white text-3xl font-black leading-tight tracking-tight">
                 Quản lý Học phí
               </h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal mt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/payment-summary')}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+              >
+                Nhắc học phí
+              </button>
+            </div>
+            <div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal">
                 Quản lý học phí theo kỳ học, áp dụng giảm giá và tính toán chi phí.
               </p>
             </div>

@@ -63,6 +63,14 @@ const financeService = {
     return axiosClient.post('/finance/payments/confirm-with-enrollment', data);
   },
 
+  // Gửi email nhắc học phí cho sinh viên (admin/staff)
+  remindStudentTuition(studentId, semesterCode = null) {
+    return axiosClient.post('/finance/payments/remind-student', {
+      studentId,
+      semesterCode,
+    });
+  },
+
   // Số tiền nộp thừa học phí (để chuyển vào ví)
   getTuitionExcess() {
     return axiosClient.get('/finance/tuition-excess');

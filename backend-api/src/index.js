@@ -73,6 +73,7 @@ app.use("/api/curriculums", require("./routes/curriculum.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 app.use("/api/auth", authRoutes);
+app.use("/api/push-tokens", require("./routes/pushToken.routes"));
 app.use("/api/actors", actorsRoutes);
 app.use("/api/rooms", require("./routes/room.routes"));
 app.use("/api/timeslots", require("./routes/timeslot.routes"));

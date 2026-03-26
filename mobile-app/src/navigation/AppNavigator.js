@@ -10,6 +10,8 @@ import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
+import NotificationListScreen from '../screens/student/NotificationListScreen';
+import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
 
@@ -20,6 +22,7 @@ function normalizeRole(value) {
 export default function AppNavigator() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
+  const [routeParams, setRouteParams] = useState(null);
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUser = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -30,10 +33,6 @@ export default function AppNavigator() {
     let mounted = true;
 
     async function bootstrapAuth() {
-      /*
-       * Khôi phục phiên đăng nhập từ local storage khi mở app lại để người dùng
-       * không phải đăng nhập lại ở mỗi lần khởi động.
-       */
       const persisted = await getItem(AUTH_STORAGE_KEY);
       if (mounted && persisted?.accessToken) {
         setAuth({
@@ -65,6 +64,7 @@ export default function AppNavigator() {
 
     return [
       { key: 'home', icon: 'home', label: 'Trang chủ' },
+      { key: 'notification', icon: 'notifications', label: 'Thông báo' },
       { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
       { key: 'feedback', icon: 'star', label: 'Đánh giá' },
@@ -78,18 +78,33 @@ export default function AppNavigator() {
       return;
     }
 
-    const extraScreens = isAdminViewer ? new Set() : new Set(['attendance', 'academicCalendar']);
+    const extraScreens = isAdminViewer
+      ? new Set()
+      : new Set(['attendance', 'academicCalendar', 'notification-detail']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
     if (!availableTabs.has(activeTab) && !extraScreens.has(activeTab)) {
       setActiveTab(defaultTab);
+      setRouteParams(null);
     }
   }, [accessToken, activeTab, isAdminViewer, tabs]);
 
+  function handleNavigate(nextTab, params = null) {
+    setActiveTab(nextTab);
+    setRouteParams(params);
+  }
+
   if (bootstrapping) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#f8fafc',
+        }}
+      >
         <ActivityIndicator size="large" color="#2563eb" />
         <Text style={{ marginTop: 8, color: '#475569' }}>Đang khởi tạo ứng dụng...</Text>
       </View>
@@ -100,9 +115,26 @@ export default function AppNavigator() {
     return <LoginScreen />;
   }
 
-  let screen = isAdminViewer ? <FeedbackLecturerScreen onNavigate={setActiveTab} /> : <HomeScreen onNavigate={setActiveTab} />;
+  let screen = isAdminViewer ? (
+    <FeedbackLecturerScreen onNavigate={handleNavigate} />
+  ) : (
+    <HomeScreen onNavigate={handleNavigate} />
+  );
+
   if (activeTab === 'feedback') {
-    screen = <FeedbackLecturerScreen onNavigate={setActiveTab} />;
+    screen = <FeedbackLecturerScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'notification') {
+    screen = <NotificationListScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'notification-detail') {
+    screen = (
+      <NotificationDetailScreen
+        announcementId={routeParams?.announcementId || routeParams?.notification?.sourceId}
+        notification={routeParams?.notification || null}
+        onBack={() => handleNavigate('notification')}
+      />
+    );
   }
   if (activeTab === 'schedule') {
     screen = <ScheduleScreen />;
@@ -111,7 +143,7 @@ export default function AppNavigator() {
     screen = <ExamScheduleScreen />;
   }
   if (activeTab === 'attendance') {
-    screen = <AttendanceReportScreen onNavigate={setActiveTab} />;
+    screen = <AttendanceReportScreen onNavigate={handleNavigate} />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;
@@ -151,7 +183,7 @@ export default function AppNavigator() {
           return (
             <Pressable
               key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => handleNavigate(tab.key)}
               style={{
                 width: 46,
                 height: 46,

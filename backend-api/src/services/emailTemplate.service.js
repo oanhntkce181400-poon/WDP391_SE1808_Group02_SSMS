@@ -107,6 +107,32 @@ const SYSTEM_EMAIL_TEMPLATES = Object.freeze([
     isSystem: true,
   },
   {
+    templateCode: 'REGISTRATION_SUCCESS',
+    templateName: 'Đăng ký môn học thành công',
+    description: 'Mẫu gửi khi sinh viên đăng ký lớp học phần thành công.',
+    category: 'academic',
+    subjectTemplate: '[SSMS] Đăng ký thành công {{subjectName}}',
+    textContent:
+      'Xin chào {{studentName}}, bạn đã đăng ký thành công lớp {{classCode}} cho môn {{subjectName}} trong {{semesterName}}. Truy cập {{registrationUrl}} để xem danh sách lớp đã đăng ký.',
+    htmlContent: buildCardEmailHtml({
+      title: 'Đăng ký môn học thành công',
+      intro: 'Hệ thống đã ghi nhận đăng ký lớp học của bạn.',
+      details: [
+        'Mã lớp: <strong>{{classCode}}</strong>',
+        'Môn học: <strong>{{subjectName}}</strong>',
+        'Học kỳ: <strong>{{semesterName}}</strong>',
+      ],
+      footerNote:
+        'Bạn nên kiểm tra lại thời khóa biểu và học phí sau khi đăng ký để đảm bảo không bị trùng lịch hoặc thiếu thanh toán.',
+      buttonLabel: 'Xem lớp đã đăng ký',
+      buttonUrl: '{{registrationUrl}}',
+      accentColor: '#0369A1',
+    }),
+    variables: ['studentName', 'classCode', 'subjectName', 'semesterName', 'registrationUrl'],
+    status: 'active',
+    isSystem: true,
+  },
+  {
     templateCode: 'TUITION_PAYMENT_REMINDER',
     templateName: 'Nhắc nhở thanh toán học phí',
     description: 'Mẫu gửi để nhắc sinh viên thanh toán học phí theo học kỳ.',

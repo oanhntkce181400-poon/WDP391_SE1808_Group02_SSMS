@@ -13,6 +13,7 @@ const systemSettingsSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     primaryColor: { type: String, default: '#1A237E' },
     secondaryColor: { type: String, default: '#42A5F5' },
+    emailNotificationsEnabled: { type: Boolean, default: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

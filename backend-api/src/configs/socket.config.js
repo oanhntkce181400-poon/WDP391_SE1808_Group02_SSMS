@@ -55,6 +55,9 @@ function initializeSocketIO(httpServer) {
     console.log(`   User: ${socket.email} (ID: ${socket.userId})`);
 
     socket.join(`user:${socket.userId}`);
+    if (socket.email) {
+      socket.join(`user-email:${String(socket.email).toLowerCase()}`);
+    }
     
 
     socket.emit('welcome', {
@@ -84,6 +87,11 @@ function initializeSocketIO(httpServer) {
 
   io.sendToUser = function (userId, event, data) {
     io.to(`user:${userId}`).emit(event, data);
+  };
+
+  io.sendToEmail = function (email, event, data) {
+    if (!email) return;
+    io.to(`user-email:${String(email).toLowerCase()}`).emit(event, data);
   };
 
   io.broadcastToAll = function (event, data) {

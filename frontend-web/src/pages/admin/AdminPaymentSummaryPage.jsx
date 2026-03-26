@@ -13,6 +13,9 @@ function formatMoney(amount) {
 export default function AdminPaymentSummaryPage() {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sendingReminderId, setSendingReminderId] = useState('');
+  const [isBulkSending, setIsBulkSending] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [filters, setFilters] = useState({
     semesterId: '',
     majorCode: '',
@@ -66,6 +69,84 @@ export default function AdminPaymentSummaryPage() {
       return <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">Đã nộp</span>;
     }
     return <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">Còn nợ</span>;
+  };
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    window.setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 2600);
+  };
+
+  const handleSendReminder = async (student) => {
+    if (!student?.studentId) return;
+    setSendingReminderId(String(student.studentId));
+    try {
+      const semesterCode = data?.summary?.semesterCode || '';
+      const response = await financeService.remindStudentTuition(student.studentId, semesterCode || null);
+      const result = response?.data?.data;
+
+      if (result?.sent) {
+        showToast(`Đã gửi nhắc học phí cho ${student.fullName}`);
+      } else {
+        showToast(response?.data?.message || 'Không gửi được email nhắc học phí', 'error');
+      }
+    } catch (error) {
+      showToast(error?.response?.data?.message || 'Gửi email nhắc học phí thất bại', 'error');
+    } finally {
+      setSendingReminderId('');
+    }
+  };
+
+  const handleSendBulkReminders = async () => {
+    const students = data?.students || [];
+    const unpaidStudents = students.filter((item) => Number(item.remainingDebt || 0) > 0);
+
+    if (unpaidStudents.length === 0) {
+      showToast('Không có sinh viên nào đang nợ học phí', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Gửi nhắc học phí cho ${unpaidStudents.length} sinh viên còn nợ?`,
+    );
+    if (!confirmed) return;
+
+    setIsBulkSending(true);
+    try {
+      const semesterCode = data?.summary?.semesterCode || '';
+      const results = await Promise.allSettled(
+        unpaidStudents.map((student) =>
+          financeService.remindStudentTuition(student.studentId, semesterCode || null),
+        ),
+      );
+
+      let successCount = 0;
+      let failCount = 0;
+
+      results.forEach((result) => {
+        if (result.status !== 'fulfilled') {
+          failCount += 1;
+          return;
+        }
+
+        if (result.value?.data?.data?.sent) {
+          successCount += 1;
+        } else {
+          failCount += 1;
+        }
+      });
+
+      if (failCount === 0) {
+        showToast(`Đã gửi email nhắc học phí cho ${successCount} sinh viên`);
+      } else {
+        showToast(`Đã gửi ${successCount}, lỗi ${failCount}`, 'error');
+      }
+    } catch (_error) {
+      showToast('Gửi nhắc học phí hàng loạt thất bại', 'error');
+    } finally {
+      setIsBulkSending(false);
+    }
   };
 
   return (
@@ -185,7 +266,17 @@ export default function AdminPaymentSummaryPage() {
         {/* Students Table */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-4">
-            <h2 className="text-lg font-semibold text-slate-800">Danh sách sinh viên</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-800">Danh sách sinh viên</h2>
+              <button
+                type="button"
+                onClick={handleSendBulkReminders}
+                disabled={isBulkSending || isLoading}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBulkSending ? 'Đang gửi hàng loạt...' : 'Nhắc tất cả còn nợ'}
+              </button>
+            </div>
           </div>
           
           {isLoading ? (
@@ -212,6 +303,7 @@ export default function AdminPaymentSummaryPage() {
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Đã nộp</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-500">Còn nợ</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">Trạng thái</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-slate-500">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -244,6 +336,23 @@ export default function AdminPaymentSummaryPage() {
                       <td className="px-4 py-3 text-center">
                         {getStatusBadge(student.isPaid, student.remainingDebt)}
                       </td>
+                      <td className="px-4 py-3 text-center">
+                        {student.remainingDebt > 0 ? (
+                          <button
+                            type="button"
+                            disabled={
+                              isBulkSending ||
+                              sendingReminderId === String(student.studentId)
+                            }
+                            onClick={() => handleSendReminder(student)}
+                            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {sendingReminderId === String(student.studentId) ? 'Đang gửi...' : 'Nhắc học phí'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -252,6 +361,18 @@ export default function AdminPaymentSummaryPage() {
           )}
         </div>
       </div>
+
+      {toast.show ? (
+        <div className="fixed bottom-6 right-6 z-[200]">
+          <div
+            className={`rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${
+              toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

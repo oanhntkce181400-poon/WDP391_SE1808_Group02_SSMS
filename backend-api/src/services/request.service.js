@@ -5,6 +5,7 @@
 
 const Request = require('../models/request.model');
 const Student = require('../models/student.model');
+const notificationEmailService = require('./notificationEmail.service');
 
 // ─────────────────────────────────────────────────────────────
 // HÀM TIỆN ÍCH NỘI BỘ (Private helpers)
@@ -261,31 +262,20 @@ async function reviewRequest(requestId, newStatus, staffNote) {
   requestDoc.staffNote = staffNote || '';
   await requestDoc.save();
 
-  // Gửi email thông báo cho sinh viên (nếu đã cấu hình mailer)
+  // Gửi email thông báo cho sinh viên theo template cấu hình
   try {
-    const mailer = require('../external/mailer');
     const studentEmail = requestDoc.student?.email;
     const studentName = requestDoc.student?.fullName || 'Sinh viên';
 
     if (studentEmail) {
-      // Tạo nội dung email dựa theo trạng thái
-      const statusText = newStatus === 'Approved' ? 'ĐÃ DUYỆT ✅' : newStatus === 'Rejected' ? 'BỊ TỪ CHỐI ❌' : 'ĐANG XỬ LÝ 🔄';
-      const subject = `[SSMS] Đơn từ "${requestDoc.requestType}" ${statusText}`;
-
-      // Gọi hàm gửi mail chung (dùng lại transporter có sẵn)
-      const transporter = mailer._getTransporter ? mailer._getTransporter() : null;
-      if (transporter) {
-        await transporter.sendMail({
-          from: `SSMS Academic <${process.env.SMTP_USER}>`,
-          to: studentEmail,
-          subject,
-          html: buildRequestResultEmail({ studentName, requestType: requestDoc.requestType, status: newStatus, statusText, staffNote }),
-        });
-      } else {
-        // Mailer chưa cấu hình → chỉ log ra console
-        console.log(`[RequestService] Email thông báo cho ${studentEmail}: ${subject}`);
-        if (staffNote) console.log(`[RequestService] Nội dung phản hồi: ${staffNote}`);
-      }
+      await notificationEmailService.sendRequestStatusEmail({
+        studentEmail,
+        studentName,
+        requestType: requestDoc.requestType,
+        requestStatus: newStatus,
+        processedBy: 'Phòng Công tác Sinh viên',
+        responseNote: staffNote,
+      });
     }
   } catch (emailErr) {
     // Lỗi gửi mail không làm hỏng API - chỉ log cảnh báo
@@ -293,29 +283,6 @@ async function reviewRequest(requestId, newStatus, staffNote) {
   }
 
   return requestDoc;
-}
-
-// Hàm tạo HTML email thông báo kết quả đơn
-function buildRequestResultEmail({ studentName, requestType, status, statusText, staffNote }) {
-  const color = status === 'Approved' ? '#16a34a' : status === 'Rejected' ? '#dc2626' : '#2563eb';
-  return `
-    <div style="font-family: Inter, sans-serif; background: #f8fafc; padding: 32px;">
-      <div style="max-width: 520px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-        <div style="background: #1A237E; padding: 20px 28px;">
-          <h1 style="color: #fff; margin: 0; font-size: 18px;">SSMS - Thông báo kết quả đơn từ</h1>
-        </div>
-        <div style="padding: 28px;">
-          <p style="color: #334155;">Kính gửi <strong>${studentName}</strong>,</p>
-          <p style="color: #334155;">Đơn từ <strong>"${requestType}"</strong> của bạn đã được xử lý:</p>
-          <div style="background: #f1f5f9; border-left: 4px solid ${color}; border-radius: 8px; padding: 16px; margin: 16px 0;">
-            <p style="color: ${color}; font-size: 18px; font-weight: 700; margin: 0;">${statusText}</p>
-          </div>
-          ${staffNote ? `<p style="color: #334155;"><strong>Ghi chú từ phòng CTSV:</strong><br/>${staffNote}</p>` : ''}
-          <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">Vui lòng đăng nhập vào hệ thống SSMS để xem chi tiết.</p>
-        </div>
-      </div>
-    </div>
-  `;
 }
 
 // Export tất cả các hàm để controller dùng

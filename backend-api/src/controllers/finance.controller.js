@@ -321,6 +321,50 @@ async function payTuitionByWallet(req, res) {
   }
 }
 
+// POST /api/finance/payments/remind/:billId - Gửi nhắc thanh toán học phí qua email
+async function sendTuitionReminder(req, res) {
+  try {
+    const { billId } = req.params;
+    const data = await financeService.sendTuitionReminderByBillId(billId);
+
+    return res.status(200).json({
+      success: true,
+      message: data.sent
+        ? 'Đã gửi email nhắc thanh toán học phí'
+        : 'Không gửi email (đang tắt notification hoặc thiếu cấu hình)',
+      data,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Lỗi hệ thống',
+    });
+  }
+}
+
+// POST /api/finance/payments/remind-student - Gửi nhắc học phí theo studentId
+async function sendTuitionReminderByStudent(req, res) {
+  try {
+    const { studentId, semesterCode } = req.body;
+    const data = await financeService.sendTuitionReminderByStudent({ studentId, semesterCode });
+
+    return res.status(200).json({
+      success: true,
+      message: data.sent
+        ? 'Đã gửi email nhắc học phí cho sinh viên'
+        : 'Không gửi email (đang tắt notification hoặc thiếu cấu hình)',
+      data,
+    });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message || 'Lỗi hệ thống',
+    });
+  }
+}
+
 module.exports = {
   getMyTuitionSummary,
   confirmPayment,
@@ -331,4 +375,6 @@ module.exports = {
   confirmPaymentWithEnrollment,
   getTuitionExcess,
   payTuitionByWallet,
+  sendTuitionReminder,
+  sendTuitionReminderByStudent,
 };

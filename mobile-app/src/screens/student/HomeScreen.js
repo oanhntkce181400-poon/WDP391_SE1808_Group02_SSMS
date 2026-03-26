@@ -12,12 +12,6 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useProfile from '../../hooks/useProfile';
 
-/*
- * Trang chủ cần đóng vai trò một landing page thật cho sinh viên, không chỉ là
- * vài nút điều hướng rời rạc. Màn này chỉ đọc profile gọn để vẫn mở nhanh nhưng
- * đủ dữ liệu học tập giúp người dùng quyết định đi đâu tiếp theo.
- */
-
 function formatSemester(value) {
   if (!value) return 'N/A';
   return `Học kỳ ${value}`;
@@ -60,11 +54,14 @@ function ServiceRow({ title, subtitle, icon, onPress }) {
 export default function HomeScreen({ onNavigate }) {
   const { profile, loading, refreshing, error, refresh, reload } = useProfile();
 
-  /*
-   * Giữ điều hướng ở dạng dữ liệu giúp bổ sung hoặc bớt shortcut nhanh hơn mà
-   * không phải sửa nhiều khối JSX rời rạc.
-   */
   const quickActions = [
+    {
+      key: 'notification',
+      title: 'Thông báo',
+      subtitle: 'Xem các thông báo mới nhất từ nhà trường',
+      tone: '#2563eb',
+      icon: <Ionicons name="notifications-outline" size={24} color="#2563eb" />,
+    },
     {
       key: 'feedback',
       title: 'Đánh giá giảng viên',
@@ -143,7 +140,8 @@ export default function HomeScreen({ onNavigate }) {
           <Text style={styles.heroEyebrow}>Ứng dụng sinh viên</Text>
           <Text style={styles.heroName}>{profile?.fullName || 'Sinh viên'}</Text>
           <Text style={styles.heroSubline}>
-            {profile?.studentCode || 'N/A'} • {profile?.majorCode || 'N/A'} • {profile?.cohortLabel || 'N/A'}
+            {profile?.studentCode || 'N/A'} • {profile?.majorCode || 'N/A'} •{' '}
+            {profile?.cohortLabel || 'N/A'}
           </Text>
 
           <View style={styles.heroMetaRow}>
@@ -167,7 +165,9 @@ export default function HomeScreen({ onNavigate }) {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Truy cập nhanh</Text>
-            <Text style={styles.sectionSubtitle}>Mở nhanh những chức năng sinh viên dùng thường xuyên nhất.</Text>
+            <Text style={styles.sectionSubtitle}>
+              Mở nhanh những chức năng sinh viên dùng thường xuyên nhất.
+            </Text>
           </View>
 
           <View style={styles.quickActionGrid}>
@@ -220,6 +220,12 @@ export default function HomeScreen({ onNavigate }) {
             </Text>
           </View>
 
+          <ServiceRow
+            title="Mở thông báo mới nhất"
+            subtitle="Xem danh sách thông báo gần đây và đọc nội dung chi tiết từng thông báo."
+            icon={<Ionicons name="notifications-outline" size={22} color="#2563eb" />}
+            onPress={() => onNavigate?.('notification')}
+          />
           <ServiceRow
             title="Gửi đánh giá giảng viên"
             subtitle="Đánh giá chất lượng lớp học và cập nhật phản hồi gần nhất của bạn."
