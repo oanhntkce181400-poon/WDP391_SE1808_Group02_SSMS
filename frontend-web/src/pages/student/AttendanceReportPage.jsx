@@ -36,37 +36,24 @@ function getTermLabel(termKey) {
   return `KỲ ${semester || '?'} - ${academicYear || '?'}`;
 }
 
-function getRateTextColor(rate) {
-  if (rate >= 20) return 'text-red-600';
-  if (rate >= 10) return 'text-amber-600';
-  return 'text-green-600';
-}
-
-function getProgressColor(rate) {
-  if (rate >= 20) return 'bg-red-500';
-  if (rate >= 10) return 'bg-amber-500';
-  return 'bg-green-500';
-}
-
 function getAttendanceTextColor(rate) {
   if (rate >= 85) return 'text-green-600';
   if (rate >= 70) return 'text-amber-600';
   return 'text-red-600';
 }
 
-function DeductionRing({ absenceRate = 0 }) {
-  const safeAbsence = Math.max(0, Math.min(100, Number(absenceRate || 0)));
-  const score = Math.max(0, Math.round((100 - safeAbsence) * 10) / 10);
-  const backgroundStyle = safeAbsence <= 0
-    ? { background: '#22c55e' }
+function DeductionRing({ attendanceScore = 0 }) {
+  const score = Math.max(0, Math.min(100, Number(attendanceScore || 0)));
+  const backgroundStyle = score <= 0
+    ? { background: '#f97316' }
     : {
-      background: `conic-gradient(from -90deg, #f97316 0 ${safeAbsence}%, #22c55e ${safeAbsence}% 100%)`,
+      background: `conic-gradient(from -90deg, #22c55e 0 ${score}%, #f97316 ${score}% 100%)`,
     };
 
   return (
     <div className="relative mx-auto h-20 w-20 rounded-full" style={backgroundStyle}>
       <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white">
-        <span className="text-2xl font-bold text-green-600">{Math.round(score)}</span>
+        <span className={`text-2xl font-bold ${getAttendanceTextColor(score)}`}>{Math.round(score)}</span>
       </div>
     </div>
   );
@@ -163,10 +150,6 @@ export default function AttendanceReportPage() {
 
     return calculated;
   }, [selectedTerm, summary, filteredItems]);
-
-  const attendanceRate = selectedItem
-    ? Number(selectedItem.attendanceStats?.participationRateToDate || 0)
-    : 0;
 
   if (loading) {
     return (
@@ -282,7 +265,6 @@ export default function AttendanceReportPage() {
           <SummaryCard
             label="Tham gia đến hiện tại"
             value={displayedSummary.attendedSessions || 0}
-            hint="Tính cả buổi đi trễ"
           />
         </div>
       </div>
@@ -302,6 +284,8 @@ export default function AttendanceReportPage() {
           {filteredItems.map((item) => {
             const classId = String(item.classSection?._id || '');
             const stats = item.attendanceStats || {};
+            const attendanceScore = Number(stats.attendanceScore || (100 - Number(stats.absenceRateToDate || 0)));
+            const attendanceRate = Number(stats.participationRateToDate || 0);
             return (
               <button
                 key={classId}
@@ -330,10 +314,13 @@ export default function AttendanceReportPage() {
                     ) : null}
                   </div>
 
-                  <div className="min-w-[150px] rounded-xl bg-slate-50 px-4 py-3 text-left">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance</div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">
-                      Vang: {stats.absentSessions || 0} buoi
+                  <div className="min-w-[180px] rounded-xl bg-slate-50 px-4 py-3 text-center">
+                    <DeductionRing attendanceScore={attendanceScore} />
+                    <div className={`mt-2 text-sm font-bold ${getAttendanceTextColor(attendanceRate)}`}>
+                      {Math.round(attendanceRate)}% tham gia
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-700">
+                      Vắng: {stats.absentSessions || 0} buổi
                     </div>
                   </div>
                 </div>
