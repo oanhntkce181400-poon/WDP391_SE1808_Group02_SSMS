@@ -18,6 +18,25 @@ const normalizeCellValue = (value) => {
   return value.toString().trim();
 };
 
+// Fuzzy match status (allow common typos)
+const normalizeStatus = (status) => {
+  const s = status.toLowerCase().trim();
+  
+  const statusMap = {
+    'active': 'active',
+    'actice': 'active', // common typo
+    'activ': 'active',
+    'avtive': 'active',
+    'inactive': 'inactive',
+    'inactiv': 'inactive',
+    'blocked': 'blocked',
+    'block': 'blocked',
+    'pending': 'pending',
+  };
+  
+  return statusMap[s] || s;
+};
+
 // Map column headers (support both English and Vietnamese)
 const mapHeaders = (rawHeaders) => {
   const headerMap = {
@@ -52,22 +71,49 @@ const mapHeaders = (rawHeaders) => {
   });
 };
 
-// Find header row (skip empty rows, find first non-empty row with data)
+// Find header row by detecting known header labels (email/fullName/role/status), fallback to first non-empty row.
 const findHeaderRowIndex = (worksheet) => {
-  let headerRowIndex = 1;
-  worksheet.eachRow((row, rowNumber) => {
-    if (headerRowIndex === 1) {
-      // Check if row has any non-empty cells
-      let hasContent = false;
-      row.eachCell((cell) => {
-        if (cell.value) hasContent = true;
-      });
-      if (hasContent && !row.values.every((v) => !v)) {
+  let headerRowIndex = null;
+  const requiredHeaderCandidates = ['email', 'fullName', 'role', 'status'];
+
+  for (let rowNumber = 1; rowNumber <= worksheet.rowCount; rowNumber++) {
+    const row = worksheet.getRow(rowNumber);
+    if (!row || row.actualCellCount === 0) continue;
+
+    const rawHeaders = [];
+    row.eachCell({ includeEmpty: false }, (cell) => {
+      rawHeaders.push(normalizeCellValue(cell.value));
+    });
+
+    if (rawHeaders.length === 0) continue;
+
+    const mappedHeaders = mapHeaders(rawHeaders);
+    const matched = mappedHeaders.filter((h) => requiredHeaderCandidates.includes(h));
+
+    // Choose row with at least two recognized header columns.
+    if (matched.length >= 2) {
+      headerRowIndex = rowNumber;
+      break;
+    }
+
+    // Keep first row containing at least email (fallback if no better rows)
+    if (!headerRowIndex && mappedHeaders.includes('email')) {
+      headerRowIndex = rowNumber;
+    }
+  }
+
+  if (!headerRowIndex) {
+    // Fallback: first non-empty row if no header-like row was found.
+    for (let rowNumber = 1; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      if (row && row.actualCellCount > 0) {
         headerRowIndex = rowNumber;
+        break;
       }
     }
-  });
-  return headerRowIndex;
+  }
+
+  return headerRowIndex || 1;
 };
 
 // Validate email format
@@ -90,7 +136,8 @@ const validateUserRow = (row, rowIndex) => {
   const email = normalizeCellValue(row.email);
   const fullName = normalizeCellValue(row.fullName);
   const role = normalizeRole(normalizeCellValue(row.role));
-  const status = normalizeCellValue(row.status).toLowerCase(); // LOWERCASE
+  const statusRaw = normalizeCellValue(row.status);
+  const status = normalizeStatus(statusRaw); // Use normalizeStatus for fuzzy matching
 
   // Check required fields
   if (!email) {
@@ -105,14 +152,15 @@ const validateUserRow = (row, rowIndex) => {
   if (role && !isValidUserRole(role)) {
     errors.push(`Role khong hop le: ${role}. Phai la: ${VALID_USER_ROLES.join(', ')}`);
   }
-  if (status && !['active', 'inactive', 'blocked', 'pending'].includes(status)) {
-    errors.push(`Status không hợp lềE ${status}. Phải là: active, inactive, blocked, pending`);
+  // Check status only if provided, using normalized value
+  if (statusRaw && !['active', 'inactive', 'blocked', 'pending'].includes(status)) {
+    errors.push(`Status không hợp lềE ${statusRaw}. Phải là: active, inactive, blocked, pending (typo như "actice" sẽ được fix)`);
   }
 
   return {
     isValid: errors.length === 0,
     errors,
-    normalized: { email, fullName, role, status }, // Return normalized LOWERCASE values
+    normalized: { email, fullName, role, status: status || 'active' }, // Default to 'active' if not provided
   };
 };
 

@@ -150,11 +150,14 @@ export default function ViewGradesPage() {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">-- Tất cả kỳ --</option>
-            {semesters.map((sem) => (
-              <option key={sem} value={sem}>
-                {groupedBySemester[sem]?.semesterDisplay}
-              </option>
-            ))}
+            {semesters.map((sem) => {
+              const semData = groupedBySemester[sem];
+              return (
+                <option key={sem} value={sem}>
+                  Kỳ {semData?.semester} - {semData?.academicYear}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -175,7 +178,7 @@ export default function ViewGradesPage() {
       {selectedSemester && (
         <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200 p-4">
           <p className="text-sm text-blue-700 font-medium">
-            {groupedBySemester[selectedSemester]?.semesterDisplay}
+            Kỳ {groupedBySemester[selectedSemester]?.semester} - {groupedBySemester[selectedSemester]?.academicYear}
           </p>
           <p className="mt-2 text-3xl font-bold text-blue-900">
             {semesterGPA}

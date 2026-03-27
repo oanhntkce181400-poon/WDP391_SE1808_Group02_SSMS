@@ -12,11 +12,11 @@ function normalizeGrades(raw = {}) {
       totalWeightedPoints: group.totalWeightedPoints || 0,
       semesterGPA: typeof group.semesterGPA === 'number'
         ? group.semesterGPA.toFixed(2)
-        : '0.00',
+        : String(group.semesterGPA || '0.00'),
       enrollments: (group.enrollments || []).map((enrollment) => ({
         id: enrollment._id || '',
-        subjectCode: enrollment.subject?.subjectCode || 'N/A',
-        subjectName: enrollment.subject?.subjectName || 'N/A',
+        subjectCode: enrollment.subject?.subjectCode || enrollment.subjectCode || 'N/A',
+        subjectName: enrollment.subject?.subjectName || enrollment.subjectName || 'N/A',
         credits: enrollment.credits || 0,
         grade: typeof enrollment.grade === 'number'
           ? enrollment.grade.toFixed(1)
@@ -27,11 +27,14 @@ function normalizeGrades(raw = {}) {
         finalScore: enrollment.finalScore || null,
         assignmentScore: enrollment.assignmentScore || null,
         continuousScore: enrollment.continuousScore || null,
+        ptScores: enrollment.ptScores || [],
         semester: group.semester,
         academicYear: group.academicYear,
       })),
     })),
-    overallGPA: typeof raw.overallGPA === 'number' ? raw.overallGPA.toFixed(2) : '0.00',
+    overallGPA: typeof raw.overallGPA === 'number' 
+      ? raw.overallGPA.toFixed(2) 
+      : String(raw.overallGPA || '0.00'),
   };
 }
 

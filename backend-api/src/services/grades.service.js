@@ -846,104 +846,199 @@ class GradesService {
    */
   async getMyGrades(studentId) {
     try {
+      console.log('📊 [Grades Service] getMyGrades starting, studentId:', studentId);
+      
+      const ClassSection = require('../models/classSection.model');
+      const Subject = require('../models/subject.model');
+
+      // Get enrollments with classSection populated
       const enrollments = await ClassEnrollment.find({
-        student: studentId,
-        status: { $in: ['enrolled', 'completed', 'active'] }
+        student: studentId
       })
-        .populate({
-          path: 'classSection',
-          populate: {
-            path: 'subject',
-            select: 'subjectCode subjectName credits gradingWeights'
-          }
-        })
-        .populate('student', 'studentCode fullName')
+        .populate('classSection')
         .sort({ createdAt: -1 })
         .lean();
 
+      console.log('📊 [Grades Service] Found enrollments:', enrollments?.length || 0);
+      if (enrollments && enrollments.length > 0) {
+        console.log('   First enrollment:', {
+          _id: enrollments[0]._id,
+          classSection: enrollments[0].classSection?._id,
+          grade: enrollments[0].grade
+        });
+      }
+
       if (!enrollments || enrollments.length === 0) {
+        console.log('⚠️ [Grades Service] No enrollments found, returning empty');
         return {
-          success: true,
-          message: 'Chưa có dữ liệu điểm',
-          enrollments: [],
-          groupedBySemester: {},
-          semesters: []
+          semesterGroups: [],
+          overallGPA: 0.00
         };
       }
 
-      // Group by semester
+      // Get all subject IDs from classSection
+      const subjectIds = [];
+      const classData = {};
+      
+      for (const enrollment of enrollments) {
+        if (enrollment.classSection?.subject) {
+          subjectIds.push(enrollment.classSection.subject);
+          if (!classData[enrollment.classSection._id]) {
+            classData[enrollment.classSection._id] = {
+              semester: enrollment.classSection.semester,
+              academicYear: enrollment.classSection.academicYear,
+              subjectId: enrollment.classSection.subject
+            };
+          }
+        }
+      }
+
+      console.log('📊 [Grades Service] Subject IDs to fetch:', subjectIds.length);
+
+      // Fetch all subjects
+      const subjects = await Subject.find({ _id: { $in: subjectIds } }).lean().exec();
+      
+      console.log('📊 [Grades Service] Fetched subjects:', subjects?.length || 0);
+
+      const subjectMap = {};
+      subjects.forEach(s => {
+        subjectMap[s._id.toString()] = s;
+      });
+
+      // Group by semester and calculate GPA
       const groupedBySemester = {};
-      const semesterSet = new Set();
+      let totalWeightedPoints = 0;
+      let totalCredits = 0;
 
       for (const enrollment of enrollments) {
         if (!enrollment.classSection) continue;
 
-        const semesterNumber = enrollment.classSection.semester;
-        const academicYear = enrollment.classSection.academicYear;
-        const semesterKey = `${semesterNumber}-${academicYear}`;
-        const semesterDisplay = `Kỳ ${semesterNumber} - ${academicYear}`;
+        const cs = classData[enrollment.classSection._id];
+        if (!cs) continue;
 
-        semesterSet.add(semesterKey);
+        const { semester, academicYear, subjectId } = cs;
+        const subject = subjectMap[subjectId.toString()];
+        
+        if (!semester || !academicYear || !subject) {
+          console.log('⚠️ [Grades Service] Skipping enrollment - missing data:', {
+            semester,
+            academicYear,
+            hasSubject: !!subject
+          });
+          continue;
+        }
+
+        const semesterKey = `${semester}-${academicYear}`;
+        const credits = subject?.credits || 0;
+
+        // Recalculate grade from component scores (same as gpaService)
+        // Formula: GK 30% + CK 50% + PT 20%
+        let calculatedGrade = enrollment.grade || 0;
+
+        if (enrollment.midtermScore !== null && enrollment.finalScore !== null) {
+          let grade = (enrollment.midtermScore * 0.3) + (enrollment.finalScore * 0.5);
+          
+          // Priority 1: Use PT (ProgressTest) scores
+          if (enrollment.ptScores && Array.isArray(enrollment.ptScores) && enrollment.ptScores.length > 0) {
+            const ptAverage = enrollment.ptScores.reduce((sum, pt) => sum + pt.score, 0) / enrollment.ptScores.length;
+            grade += ptAverage * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 2: Use QT (Continuous) scores if available
+          else if (enrollment.continuousScore !== null) {
+            grade += enrollment.continuousScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 3: If neither PT nor QT available, use BT (Assignment) if available
+          else if (enrollment.assignmentScore !== null) {
+            grade += enrollment.assignmentScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 4: If none available, scale up GK + CK to 10-point scale
+          else {
+            calculatedGrade = parseFloat((grade / 0.8).toFixed(2));
+          }
+        }
 
         if (!groupedBySemester[semesterKey]) {
           groupedBySemester[semesterKey] = {
-            semesterNumber,
-            academicYear,
-            semesterDisplay,
+            semester: semester,
+            academicYear: academicYear,
+            totalCredits: 0,
+            totalWeightedPoints: 0,
             enrollments: []
           };
         }
 
         groupedBySemester[semesterKey].enrollments.push({
           _id: enrollment._id,
-          subjectCode: enrollment.classSection.subject?.subjectCode || 'N/A',
-          subjectName: enrollment.classSection.subject?.subjectName || 'N/A',
-          credits: enrollment.classSection.subject?.credits || 0,
-          grade: enrollment.grade,
+          subjectCode: subject?.subjectCode || 'N/A',
+          subjectName: subject?.subjectName || 'N/A',
+          credits: credits,
+          grade: calculatedGrade,
+          subject: {
+            subjectCode: subject?.subjectCode || 'N/A',
+            subjectName: subject?.subjectName || 'N/A',
+            credits: credits
+          },
           midtermScore: enrollment.midtermScore,
           finalScore: enrollment.finalScore,
           assignmentScore: enrollment.assignmentScore,
           continuousScore: enrollment.continuousScore,
           ptScores: enrollment.ptScores || [],
-          classCode: enrollment.classSection.classCode,
-          gradingWeights: enrollment.classSection.subject?.gradingWeights || {
-            GK: 30,
-            CK: 50,
-            BT: 20,
-            PT: 0,
-            QT: 0
-          },
-          gradeComponents: {
-            GK: enrollment.midtermScore,
-            CK: enrollment.finalScore,
-            BT: enrollment.assignmentScore,
-            'Quá trình': enrollment.continuousScore
-          }
+          status: enrollment.status,
+          gradeLabel: this.getGradeLabel(calculatedGrade)
         });
+
+        groupedBySemester[semesterKey].totalCredits += credits;
+        groupedBySemester[semesterKey].totalWeightedPoints += calculatedGrade * credits;
+        totalCredits += credits;
+        totalWeightedPoints += calculatedGrade * credits;
       }
 
-      // Sort semesters (most recent first)
-      const semesters = Array.from(semesterSet)
-        .sort((a, b) => {
-          const [semA, yearA] = a.split('-');
-          const [semB, yearB] = b.split('-');
-          const yearDiff = yearB.localeCompare(yearA);
-          if (yearDiff !== 0) return yearDiff;
-          return parseInt(semB) - parseInt(semA);
-        });
+      // Calculate semester GPA and prepare response
+      const semesterGroups = Object.values(groupedBySemester).map(group => ({
+        semester: group.semester,
+        academicYear: group.academicYear,
+        totalCredits: group.totalCredits,
+        totalWeightedPoints: group.totalWeightedPoints,
+        semesterGPA: group.totalCredits > 0 
+          ? (group.totalWeightedPoints / group.totalCredits).toFixed(2)
+          : '0.00',
+        enrollments: group.enrollments
+      }));
+
+      // Calculate overall GPA
+      const overallGPA = totalCredits > 0 
+        ? (totalWeightedPoints / totalCredits).toFixed(2)
+        : '0.00';
+
+      console.log('📊 [Grades Service] Final result:', {
+        semesterGroupsCount: semesterGroups.length,
+        overallGPA,
+        totalCredits,
+        totalWeightedPoints
+      });
 
       return {
-        success: true,
-        message: 'Lấy dữ liệu điểm thành công',
-        enrollments,
-        groupedBySemester,
-        semesters,
-        totalGrades: enrollments.length
+        semesterGroups,
+        overallGPA
       };
     } catch (error) {
-      console.error('Error getting my grades:', error);
+      console.error('❌ [Grades Service] Error getting my grades:', error);
       throw new Error(`Lỗi lấy dữ liệu điểm: ${error.message}`);
     }
+  }
+
+  getGradeLabel(grade) {
+    const g = Number(grade);
+    if (Number.isNaN(g)) return 'N/A';
+    if (g >= 8.5) return 'Xuất sắc';
+    if (g >= 8.0) return 'Giỏi';
+    if (g >= 7.0) return 'Khá';
+    if (g >= 5.5) return 'Trung bình';
+    if (g >= 4.0) return 'Yếu';
+    return 'Kém';
   }
 
   /**

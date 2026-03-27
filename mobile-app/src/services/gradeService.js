@@ -25,6 +25,18 @@ const gradeService = {
   getCurrentSemesterCourses() {
     return axiosClient.get('/students/me/current-semester-courses');
   },
+
+  // Lấy tất cả chi tiết điểm của sinh viên
+  getMyGradeDetails(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.semester) params.append('semester', filters.semester);
+    if (filters.academicYear) params.append('academicYear', filters.academicYear);
+    if (filters.status) params.append('status', filters.status);
+    
+    const queryString = params.toString();
+    const url = queryString ? `/grades/my-grades/details?${queryString}` : '/grades/my-grades/details';
+    return axiosClient.get(url);
+  },
 };
 
 export default gradeService;

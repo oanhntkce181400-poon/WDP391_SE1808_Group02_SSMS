@@ -35,9 +35,17 @@ async function createWishlist(req, res) {
 async function getMyWishlist(req, res) {
   try {
     const userId = parseUserId(req);
-    const data = await wishlistService.getMyWishlist(userId);
+    const wishlists = await wishlistService.getMyWishlist(userId);
 
-    return res.status(200).json({ data });
+    // Compute summary
+    const summary = {
+      total: wishlists.length,
+      pending: wishlists.filter(w => w.status === 'pending').length,
+      approved: wishlists.filter(w => w.status === 'approved').length,
+      rejected: wishlists.filter(w => w.status === 'rejected').length,
+    };
+
+    return res.status(200).json({ wishlists, summary });
   } catch (error) {
     console.error('[WishlistController] getMyWishlist error:', error);
     return res.status(error.statusCode || 500).json({

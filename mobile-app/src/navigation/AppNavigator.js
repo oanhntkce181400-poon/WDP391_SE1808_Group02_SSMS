@@ -11,6 +11,8 @@ import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
 import GradeReportScreen from '../screens/student/GradeReportScreen';
+import GradeDetailScreen from '../screens/student/GradeDetailScreen';
+import WishlistScreen from '../screens/student/WishlistScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
 import NotificationListScreen from '../screens/student/NotificationListScreen';
 import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
@@ -101,6 +103,7 @@ export default function AppNavigator() {
       { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
       { key: 'grades', icon: 'bar-chart', label: 'Điểm' },
+      { key: 'wishlist', icon: 'bookmark', label: 'Yêu cầu' },
       { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
       { key: 'profile', icon: 'person', label: 'Tài khoản' },
@@ -114,7 +117,7 @@ export default function AppNavigator() {
 
     const extraScreens = isAdminViewer
       ? new Set()
-      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades']);
+      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades', 'gradeDetail', 'wishlist']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
@@ -185,7 +188,20 @@ export default function AppNavigator() {
     screen = <AttendanceReportScreen onNavigate={handleNavigate} />;
   }
   if (activeTab === 'grades') {
-    screen = <GradeReportScreen />;
+    screen = <GradeReportScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'gradeDetail') {
+    screen = (
+      <GradeDetailScreen
+        route={{ params: routeParams }}
+        navigation={{
+          goBack: () => handleNavigate('grades')
+        }}
+      />
+    );
+  }
+  if (activeTab === 'wishlist') {
+    screen = <WishlistScreen />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;

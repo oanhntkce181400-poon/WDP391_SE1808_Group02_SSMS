@@ -159,8 +159,8 @@ async function startServer() {
     initializeCronJobs();
 
     return new Promise((resolve, reject) => {
-      const server = httpServer.listen(PORT, () => {
-        console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      const server = httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
         console.log("✅ Socket server is attached");
         console.log("✅ Server startup complete");
         resolve();

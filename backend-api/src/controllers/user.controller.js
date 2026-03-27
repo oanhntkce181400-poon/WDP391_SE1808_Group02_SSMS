@@ -275,9 +275,6 @@ exports.deleteUser = async (req, res) => {
 
 // Import users from Excel file
 exports.importUsers = async (req, res) => {
-  let session;
-  let transactionStarted = false;
-
   try {
     // Check authentication
     if (!req.auth) {
@@ -292,17 +289,6 @@ exports.importUsers = async (req, res) => {
       });
     }
 
-    // Try to start transaction (will fail on standalone MongoDB)
-    try {
-      session = await User.startSession();
-      session.startTransaction();
-      transactionStarted = true;
-      console.log('Transaction started');
-    } catch (txnErr) {
-      console.warn('Transaction not available, proceeding without transaction:', txnErr.message);
-      // Continue without transaction
-    }
-
     console.log('Importing users from Excel...');
 
     // Parse Excel file from buffer
@@ -311,7 +297,6 @@ exports.importUsers = async (req, res) => {
     const worksheet = workbook.getWorksheet(1);
 
     if (!worksheet) {
-      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Invalid Excel file: No worksheet found',
@@ -381,7 +366,7 @@ exports.importUsers = async (req, res) => {
 
     console.log(`Validation result: ${validRows.length} valid, ${invalidRows.length} invalid`);
 
-    // Import valid rows
+    // Import valid rows (no transaction - MongoDB free tier doesn't support it)
     const importedUsers = [];
     const errors = [];
 
@@ -399,7 +384,7 @@ exports.importUsers = async (req, res) => {
           importSource: 'excel_import',
         });
 
-        const savedUser = await newUser.save(transactionStarted ? { session } : {});
+        const savedUser = await newUser.save();
 
         // Create default wallet for user
         const wallet = new Wallet({
@@ -411,7 +396,7 @@ exports.importUsers = async (req, res) => {
           status: 'active',
         });
 
-        await wallet.save(transactionStarted ? { session } : {});
+        await wallet.save();
 
         importedUsers.push({
           rowIndex: rowData.rowIndex,
@@ -430,11 +415,6 @@ exports.importUsers = async (req, res) => {
       }
     }
 
-    // Commit transaction if started
-    if (transactionStarted) {
-      await session.commitTransaction();
-      console.log('Transaction committed');
-    }
     console.log(`Successfully imported ${importedUsers.length} users`);
 
     res.json({
@@ -449,18 +429,10 @@ exports.importUsers = async (req, res) => {
       },
     });
   } catch (error) {
-    if (transactionStarted) {
-      await session.abortTransaction();
-      console.log('Transaction aborted');
-    }
     console.error('Import error:', error);
     res.status(500).json({
       success: false,
       message: error.message,
     });
-  } finally {
-    if (session) {
-      await session.endSession();
-    }
   }
 };

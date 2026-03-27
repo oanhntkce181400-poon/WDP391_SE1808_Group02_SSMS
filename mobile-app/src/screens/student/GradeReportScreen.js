@@ -80,22 +80,14 @@ function GradeCard({ enrollment, onPress }) {
 
       {(enrollment.midtermScore !== null ||
         enrollment.finalScore !== null ||
-        enrollment.assignmentScore !== null ||
-        enrollment.continuousScore !== null) && (
+        enrollment.continuousScore !== null ||
+        (enrollment.ptScores && enrollment.ptScores.length > 0)) && (
         <View style={styles.gradeComponentsRow}>
           {enrollment.midtermScore !== null && (
             <View style={styles.scoreComponentBadge}>
               <Text style={styles.scoreComponentLabel}>GK:</Text>
               <Text style={styles.scoreComponentValue}>
                 {Number(enrollment.midtermScore).toFixed(1)}
-              </Text>
-            </View>
-          )}
-          {enrollment.assignmentScore !== null && (
-            <View style={styles.scoreComponentBadge}>
-              <Text style={styles.scoreComponentLabel}>BT:</Text>
-              <Text style={styles.scoreComponentValue}>
-                {Number(enrollment.assignmentScore).toFixed(1)}
               </Text>
             </View>
           )}
@@ -115,6 +107,17 @@ function GradeCard({ enrollment, onPress }) {
               </Text>
             </View>
           )}
+          {enrollment.ptScores && enrollment.ptScores.length > 0 && (
+            <View style={styles.scoreComponentBadge}>
+              <Text style={styles.scoreComponentLabel}>PT:</Text>
+              <Text style={styles.scoreComponentValue}>
+                {Number(enrollment.ptScores[0]?.score || 0).toFixed(1)}
+              </Text>
+            </View>
+          )}
+          <View style={styles.detailsIndicator}>
+            <Ionicons name="chevron-forward-outline" size={14} color="#1d4ed8" />
+          </View>
         </View>
       )}
     </Pressable>
@@ -165,6 +168,7 @@ function SemesterSection({ semesterGroup, onSelectGrade }) {
               <GradeCard
                 enrollment={item}
                 onPress={() => onSelectGrade(item)}
+                onViewDetails={() => onSelectGrade(item)}
               />
             )}
             scrollEnabled={false}
@@ -217,14 +221,6 @@ function GradeDetailModal({ visible, enrollment, onClose }) {
                   </Text>
                 </View>
               )}
-              {enrollment.assignmentScore !== null && (
-                <View style={styles.componentItem}>
-                  <Text style={styles.componentLabel}>Bài tập (BT)</Text>
-                  <Text style={styles.componentScore}>
-                    {Number(enrollment.assignmentScore).toFixed(1)}
-                  </Text>
-                </View>
-              )}
               {enrollment.continuousScore !== null && (
                 <View style={styles.componentItem}>
                   <Text style={styles.componentLabel}>Quá trình (QT)</Text>
@@ -243,6 +239,22 @@ function GradeDetailModal({ visible, enrollment, onClose }) {
               )}
             </View>
           </View>
+
+          {enrollment.ptScores && enrollment.ptScores.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailLabel}>Điểm thực hành (PT)</Text>
+              <View style={styles.componentGrid}>
+                {enrollment.ptScores.map((pt, idx) => (
+                  <View key={idx} style={styles.componentItem}>
+                    <Text style={styles.componentLabel}>{pt.type}</Text>
+                    <Text style={styles.componentScore}>
+                      {Number(pt.score).toFixed(1)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           <View style={styles.detailSection}>
             <Text style={styles.detailLabel}>Thông tin khác</Text>
@@ -265,10 +277,21 @@ function GradeDetailModal({ visible, enrollment, onClose }) {
   );
 }
 
-export default function GradeReportScreen() {
+export default function GradeReportScreen({ onNavigate }) {
   const { grades, loading, refreshing, error, refresh, reload } = useGrades();
   const [selectedEnrollment, setSelectedEnrollment] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const handleViewDetails = (enrollment) => {
+    if (onNavigate) {
+      // Navigate to detailed grade view
+      onNavigate('gradeDetail', { enrollmentId: enrollment.id });
+    } else {
+      // Fallback to modal if navigation not available
+      setSelectedEnrollment(enrollment);
+      setModalVisible(true);
+    }
+  };
 
   if (loading && !grades) {
     return (
@@ -319,10 +342,7 @@ export default function GradeReportScreen() {
         renderItem={({ item: semesterGroup }) => (
           <SemesterSection
             semesterGroup={semesterGroup}
-            onSelectGrade={(enrollment) => {
-              setSelectedEnrollment(enrollment);
-              setModalVisible(true);
-            }}
+            onSelectGrade={handleViewDetails}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -558,6 +578,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  detailsIndicator: {
+    marginLeft: 'auto',
+    paddingLeft: 8,
+    justifyContent: 'center',
   },
   helperText: {
     fontSize: 14,

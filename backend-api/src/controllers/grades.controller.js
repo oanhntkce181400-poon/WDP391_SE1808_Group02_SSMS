@@ -286,20 +286,68 @@ class GradesController {
    */
   async getMyGrades(req, res) {
     try {
-      const studentId = req.auth?.sub || req.auth?.id;
-      if (!studentId) {
+      // Get userId from JWT token
+      const userId = req.auth?.sub || req.auth?.id;
+      
+      console.log('📊 [Grades Controller] getMyGrades called');
+      console.log('   userId from JWT:', userId);
+      
+      if (!userId) {
         return res.status(401).json({
           success: false,
           message: 'Unauthorized'
         });
       }
 
-      const result = await gradesService.getMyGrades(studentId);
+      // Find Student record by userId
+      const Student = require('../models/student.model');
+      const student = await Student.findOne({ userId: userId }).lean();
+      
+      console.log('📊 [Grades Controller] Student lookup:');
+      console.log('   Found:', !!student);
+      if (student) {
+        console.log('   studentId:', student._id);
+      }
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy thông tin sinh viên'
+        });
+      }
+
+      const result = await gradesService.getMyGrades(student._id);
+      
+      console.log('📊 [Grades Controller] Result received:', {
+        semesterGroups: result.semesterGroups?.length || 0,
+        overallGPA: result.overallGPA
+      });
+
+      // Transform response to match frontend expectations
+      const semesters = result.semesterGroups.map(
+        (group) => `${group.semester}-${group.academicYear}`
+      );
+
+      const groupedBySemester = {};
+      result.semesterGroups.forEach((group) => {
+        const semesterKey = `${group.semester}-${group.academicYear}`;
+        groupedBySemester[semesterKey] = {
+          semester: group.semester,
+          academicYear: group.academicYear,
+          totalCredits: group.totalCredits,
+          semesterGPA: group.semesterGPA,
+          enrollments: group.enrollments
+        };
+      });
 
       return res.status(200).json({
         success: true,
-        message: result.message,
-        data: result
+        data: {
+          semesters,
+          groupedBySemester,
+          overallGPA: result.overallGPA,
+          totalGrades: result.semesterGroups.length
+        }
       });
     } catch (error) {
       console.error('[GradesController] getMyGrades error:', error);
