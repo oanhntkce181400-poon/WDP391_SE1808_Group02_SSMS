@@ -32,7 +32,7 @@ exports.getStudentsWithOutstandingFees = async (req, res) => {
  */
 exports.sendReminders = async (req, res) => {
   try {
-    const { studentIds, type, template, customMessage } = req.body;
+    const { studentIds, type, template, customMessage, overrideCooldown } = req.body;
     const sentBy = req.auth.sub;
 
     if (!studentIds || studentIds.length === 0) {
@@ -53,7 +53,8 @@ exports.sendReminders = async (req, res) => {
       type: type || 'all',
       template: template || 'default',
       customMessage,
-      sentBy
+      sentBy,
+      overrideCooldown: !!overrideCooldown,
     });
 
     res.json({

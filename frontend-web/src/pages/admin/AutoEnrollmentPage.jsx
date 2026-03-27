@@ -304,6 +304,10 @@ export default function AutoEnrollmentPage() {
   const [deletingWaitlists, setDeletingWaitlists] = useState(false);
   const [promotingId, setPromotingId] = useState(null); // waitlistId đang promote
   const [actionMessage, setActionMessage] = useState({ type: "", text: "" }); // { type: "success"|"error", text }
+  const [statusCurriculumId, setStatusCurriculumId] = useState("");
+  const [statusCurriculumSemRows, setStatusCurriculumSemRows] = useState([]);
+  const [loadingStatusCurriculumSemesters, setLoadingStatusCurriculumSemesters] =
+    useState(false);
 
   useEffect(() => {
     const loadSemesters = async () => {
@@ -351,6 +355,32 @@ export default function AutoEnrollmentPage() {
   }, []);
 
   useEffect(() => {
+    if (!statusCurriculumId) {
+      setStatusCurriculumSemRows([]);
+      return;
+    }
+    let cancelled = false;
+    setStatusCurriculumSemRows([]);
+    setLoadingStatusCurriculumSemesters(true);
+    curriculumService
+      .getSemesters(statusCurriculumId)
+      .then((res) => {
+        if (!cancelled) {
+          setStatusCurriculumSemRows(res?.data?.data || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStatusCurriculumSemRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStatusCurriculumSemesters(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [statusCurriculumId]);
+
+  useEffect(() => {
     if (enrollmentMode !== "normal" || !selectedCurriculumId) {
       setCurriculumSemRows([]);
       return;
@@ -376,10 +406,11 @@ export default function AutoEnrollmentPage() {
     };
   }, [enrollmentMode, selectedCurriculumId]);
 
-  // Load classGroups khi đổi HK hoặc khung CT.
+  // Load classGroups khi đổi HK hoặc khung CT (tab Chạy).
   // Lưu ý: ClassSection.academicYear thường là niên khóa khung CT (vd 2026-2030),
   // còn Semester.academicYear của HK hệ thống có thể là 2025-2026 → lọc sai sẽ ra 0 nhóm.
   useEffect(() => {
+    if (activeTab !== "enrollment") return;
     const selectedSem = semesters.find(
       (s) => String(s.id) === String(selectedSemesterId),
     );
@@ -419,13 +450,111 @@ export default function AutoEnrollmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSemesterId, semesters, selectedCurriculumId, curriculums]);
+  }, [activeTab, selectedSemesterId, semesters, selectedCurriculumId, curriculums]);
+
+  // Cùng logic nhóm lớp cho tab Trạng thái (HK + khung CT trên tab đó).
+  useEffect(() => {
+    if (activeTab !== "status") return;
+    const selectedSem = semesters.find(
+      (s) => String(s.id) === String(statusSemester),
+    );
+    if (!selectedSem) {
+      setClassGroups([]);
+      return;
+    }
+    const cur = curriculums.find(
+      (c) => String(c._id || c.id) === String(statusCurriculumId),
+    );
+    const academicYearForGroups =
+      statusCurriculumId && cur?.academicYear
+        ? cur.academicYear
+        : selectedSem.academicYear;
+
+    let cancelled = false;
+    setLoadingClassGroups(true);
+    setClassGroups([]);
+    setStatusClassGroup("");
+    classService
+      .getClassGroups({
+        semester: selectedSem.semesterNum,
+        academicYear: academicYearForGroups,
+        ...(statusCurriculumId ? { curriculumId: statusCurriculumId } : {}),
+      })
+      .then((res) => {
+        if (!cancelled) setClassGroups(res?.data?.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setClassGroups([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingClassGroups(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, statusSemester, semesters, statusCurriculumId, curriculums]);
 
   const selectedCurriculum = useMemo(
     () =>
       curriculums.find((c) => String(c._id || c.id) === selectedCurriculumId),
     [curriculums, selectedCurriculumId],
   );
+
+  const statusSelectedCurriculum = useMemo(
+    () =>
+      curriculums.find(
+        (c) => String(c._id || c.id) === String(statusCurriculumId),
+      ),
+    [curriculums, statusCurriculumId],
+  );
+
+  const statusSemesterOptions = useMemo(() => {
+    if (!statusCurriculumId) {
+      return dedupeInstitutionalSemesters(semesters).map((s) => {
+        const id = semesterOptionId(s);
+        return {
+          ...s,
+          id,
+          optionKey: `${id}_${s.academicYear}`,
+          curriculumSemesterOrder: undefined,
+          curriculumSlotName: undefined,
+          optionLabel: undefined,
+        };
+      });
+    }
+    if (loadingStatusCurriculumSemesters) {
+      return [];
+    }
+    if (!statusCurriculumSemRows.length) {
+      return [];
+    }
+    return buildSemesterOptionsFromCurriculum(
+      semesters,
+      statusCurriculumSemRows,
+      statusSelectedCurriculum,
+    );
+  }, [
+    semesters,
+    statusCurriculumId,
+    statusCurriculumSemRows,
+    statusSelectedCurriculum,
+    loadingStatusCurriculumSemesters,
+  ]);
+
+  useEffect(() => {
+    if (!statusSemesterOptions.length) return;
+    const valid = statusSemesterOptions.some(
+      (s) => String(s.id) === String(statusSemester),
+    );
+    if (valid) return;
+    const current = semesters.find((item) => item.isCurrent);
+    const nextId =
+      current &&
+      statusSemesterOptions.some((s) => String(s.id) === String(current.id))
+        ? semesterOptionId(current)
+        : statusSemesterOptions[0].id;
+    setStatusSemester(nextId);
+  }, [statusSemesterOptions, semesters]);
 
   const semesterOptions = useMemo(() => {
     if (enrollmentMode === "retake") {
@@ -698,9 +827,9 @@ export default function AutoEnrollmentPage() {
                   })}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  Chọn một khung để chỉ xếp SV đang gắn khung đó (theo trường
-                  curriculumId). Để trống = mọi SV đủ điều kiện theo bộ lọc bên
-                  dưới.
+                  Ưu tiên SV có đúng <span className="font-medium">curriculumId</span> khớp
+                  khung. SV chưa gán khung nhưng <span className="font-medium">majorCode</span>{" "}
+                  trùng ngành của khung vẫn được xét.
                 </p>
               </div>
             )}
@@ -736,8 +865,9 @@ export default function AutoEnrollmentPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  Chọn một nhóm để chỉ xếp SV vào lớp thuộc nhóm đó. Để trống =
-                  xếp cho mọi nhóm (SV sẽ được ghép đúng classGroup của mình).
+                  Khi chọn nhóm: gồm SV có Lớp SH (<span className="font-medium">classSection</span>)
+                  đúng nhóm đó và SV <span className="font-medium">chưa có Lớp SH</span> (trống).
+                  Để trống = mọi nhóm theo classGroup từng SV.
                 </p>
               </div>
             )}
@@ -796,16 +926,24 @@ export default function AutoEnrollmentPage() {
               Chỉ sinh viên chưa hoàn thành kỳ hiện tại
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={excludeStudentsAlreadyAssignedInSemester}
-                onChange={(e) =>
-                  setExcludeStudentsAlreadyAssignedInSemester(e.target.checked)
-                }
-                disabled={running}
-              />
-              Bỏ qua SV đã có lớp trong HK hệ thống đang chọn (tránh trùng)
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={excludeStudentsAlreadyAssignedInSemester}
+                  onChange={(e) =>
+                    setExcludeStudentsAlreadyAssignedInSemester(e.target.checked)
+                  }
+                  disabled={running}
+                />
+                Bỏ qua SV đã có lớp trong HK hệ thống đang chọn (tránh trùng)
+              </span>
+              {onlyStudentsWithoutEnrollments && (
+                <span className="ml-6 text-xs text-slate-500">
+                  Khi đã tick &quot;chưa hoàn thành kỳ&quot; phía trên, tùy chọn này được bỏ qua
+                  trên server để vẫn xếp thêm môn cho SV đã có một phần lớp trong HK.
+                </span>
+              )}
             </label>
 
             <button
@@ -854,7 +992,13 @@ export default function AutoEnrollmentPage() {
       {activeTab === "status" && (
         <EnrollmentStatusTab
           semesters={semesters}
+          curriculums={curriculums}
+          loadingCurriculums={loadingCurriculums}
           classGroups={classGroups}
+          statusCurriculumId={statusCurriculumId}
+          setStatusCurriculumId={setStatusCurriculumId}
+          statusSemesterOptions={statusSemesterOptions}
+          loadingStatusCurriculumSemesters={loadingStatusCurriculumSemesters}
           statusSemester={statusSemester}
           setStatusSemester={setStatusSemester}
           setStatusSemesterInfo={setStatusSemesterInfo}
@@ -1144,7 +1288,13 @@ export default function AutoEnrollmentPage() {
 // ── EnrollmentStatusTab ───────────────────────────────────────────────────────────
 function EnrollmentStatusTab({
   semesters,
+  curriculums,
+  loadingCurriculums,
   classGroups,
+  statusCurriculumId,
+  setStatusCurriculumId,
+  statusSemesterOptions,
+  loadingStatusCurriculumSemesters,
   statusSemester,
   setStatusSemester,
   setStatusSemesterInfo,
@@ -1165,7 +1315,9 @@ function EnrollmentStatusTab({
   actionMessage,
   setActionMessage,
 }) {
-  const selectedSem = semesters.find((s) => String(s.id) === String(statusSemester));
+  const selectedSem =
+    statusSemesterOptions.find((s) => String(s.id) === String(statusSemester)) ||
+    semesters.find((s) => String(s.id) === String(statusSemester));
 
   const loadStatus = async () => {
     if (!selectedSem) return;
@@ -1174,10 +1326,16 @@ function EnrollmentStatusTab({
     setEnrollmentStatus(null);
     setActionMessage({ type: "", text: "" });
     try {
+      const csOrder = selectedSem?.curriculumSemesterOrder;
       const res = await autoEnrollmentService.getEnrollmentStatus({
         semesterNum: selectedSem.semesterNum,
         academicYear: selectedSem.academicYear,
         classGroup: statusClassGroup || undefined,
+        curriculumId: statusCurriculumId || undefined,
+        curriculumSemesterOrder:
+          csOrder != null && Number.isFinite(Number(csOrder)) && Number(csOrder) >= 1
+            ? Number(csOrder)
+            : undefined,
       });
       if (res.data?.success) {
         setEnrollmentStatus(res.data.data);
@@ -1251,12 +1409,17 @@ function EnrollmentStatusTab({
     }
   };
 
-  const semesterOptions = semesters.map((s) => ({
-    ...s,
-    optionKey: `${s._id ?? s.id}_${s.academicYear}`,
-  }));
-
   const summary = enrollmentStatus?.summary || {};
+
+  const statusFilterHint = [
+    statusCurriculumId ? "khung CT đã chọn" : null,
+    selectedSem?.curriculumSemesterOrder != null
+      ? `kỳ ${selectedSem.curriculumSemesterOrder} trong khung`
+      : null,
+    statusClassGroup ? `nhóm ${statusClassGroup}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="space-y-5">
@@ -1269,12 +1432,53 @@ function EnrollmentStatusTab({
           Xem sinh viên nào đã <span className="font-medium text-green-700">enrolled</span>, đang{" "}
           <span className="font-medium text-amber-700">waitlisted</span>, hoặc{" "}
           <span className="font-medium text-slate-700">chưa có gì</span> trong học kỳ này —
-          trước khi reset hoặc promote.
+          trước khi reset hoặc promote. Chọn{" "}
+          <span className="font-medium">khung chương trình</span> để lọc giống tab Chạy (kỳ trong
+          khung map sang HK hệ thống — cùng nguồn với{" "}
+          <Link to="/admin/semesters" className="text-blue-600 underline hover:text-blue-800">
+            Quản lý học kỳ
+          </Link>
+          ).
         </p>
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">
+            Khung chương trình <span className="font-normal text-slate-400">(tùy chọn)</span>
+          </label>
+          <select
+            value={statusCurriculumId}
+            onChange={(e) => {
+              setStatusCurriculumId(e.target.value);
+              setEnrollmentStatus(null);
+              setStatusSemesterInfo(null);
+            }}
+            disabled={loadingCurriculums}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="">
+              {loadingCurriculums
+                ? "Đang tải..."
+                : "— Không lọc theo khung — (tất cả HK hệ thống)"}
+            </option>
+            {curriculums.map((c) => {
+              const id = String(c._id || c.id);
+              const label = [c.code, c.name].filter(Boolean).join(" — ") || id;
+              return (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              );
+            })}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            Khi chọn khung: dropdown học kỳ chỉ còn các kỳ của khung (map tới HK hệ thống); kết quả
+            lọc thêm theo <span className="font-medium">curriculum</span> trên lớp học phần và{" "}
+            <span className="font-medium">kỳ trong khung</span> (curriculumSemesterOrder).
+          </p>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Học kỳ
+              Học kỳ hệ thống / kỳ trong khung
             </label>
             <select
               value={statusSemester}
@@ -1283,15 +1487,33 @@ function EnrollmentStatusTab({
                 setEnrollmentStatus(null);
                 setStatusSemesterInfo(null);
               }}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              disabled={
+                !statusSemesterOptions.length ||
+                (Boolean(statusCurriculumId) && loadingStatusCurriculumSemesters)
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
             >
-              <option value="">— Chọn học kỳ —</option>
-              {semesterOptions.map((s) => (
-                <option key={s.optionKey} value={s.id}>
-                  {s.name} ({s.academicYear})
+              {!statusSemesterOptions.length ? (
+                <option value="">
+                  {statusCurriculumId && loadingStatusCurriculumSemesters
+                    ? "Đang tải kỳ theo khung..."
+                    : statusCurriculumId
+                      ? "Không map được HK cho khung này."
+                      : "— Chọn học kỳ —"}
                 </option>
-              ))}
+              ) : (
+                statusSemesterOptions.map((s) => (
+                  <option key={s.optionKey ?? s.id} value={s.id}>
+                    {s.optionLabel ?? `${s.name} (${s.academicYear})`}
+                  </option>
+                ))
+              )}
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {statusCurriculumId
+                ? "Mỗi dòng = một kỳ trong khung CT → HK hệ thống tương ứng."
+                : "Danh sách HK hệ thống đã gộp trùng (cùng nguồn với trang Quản lý học kỳ)."}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -1501,7 +1723,8 @@ function EnrollmentStatusTab({
           {enrollmentStatus.enrolled?.length === 0 && enrollmentStatus.waitlisted?.length === 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <p className="text-sm text-slate-500">
-                Chưa có enrollment hoặc waitlist nào cho HK này{statusClassGroup ? ` (nhóm ${statusClassGroup})` : ""}.
+                Chưa có enrollment hoặc waitlist nào cho HK này
+                {statusFilterHint ? ` (${statusFilterHint})` : ""}.
               </p>
             </div>
           )}

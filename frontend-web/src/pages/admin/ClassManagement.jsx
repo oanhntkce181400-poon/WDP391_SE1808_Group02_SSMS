@@ -16,6 +16,7 @@ import {
   Calendar,
   CheckSquare,
   GraduationCap,
+  UserPlus,
 } from "lucide-react";
 import classService from "../../services/classService";
 import subjectService from "../../services/subjectService";
@@ -24,6 +25,7 @@ import lecturerService from "../../services/lecturerService";
 import curriculumService from "../../services/curriculumService";
 import AssignScheduleModal from "../../components/features/AssignScheduleModal";
 import ReassignClassModal from "../../components/features/ReassignClassModal";
+import AddStudentModal from "../../components/features/AddStudentModal";
 
 /* ───── helpers ───── */
 // Kiểm tra xem lớp đã có lịch chưa (có thể mở lớp)
@@ -190,6 +192,11 @@ export default function ClassManagement() {
   // Reassign class modal state
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [selectedClassForReassign, setSelectedClassForReassign] =
+    useState(null);
+
+  // Add student modal state
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [selectedClassForAddStudent, setSelectedClassForAddStudent] =
     useState(null);
 
   // Bulk selection state
@@ -1073,6 +1080,21 @@ export default function ClassManagement() {
                                 <Users size={15} />
                               </button>
                             )}
+                          {cls.status === "published" ||
+                          cls.status === "scheduled" ||
+                          cls.status === "active" ? (
+                            <button
+                              onClick={() => {
+                                setSelectedClassForAddStudent(cls);
+                                setShowAddStudentModal(true);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Thêm sinh viên"
+                              disabled={cls.currentEnrollment >= cls.maxCapacity}
+                            >
+                              <UserPlus size={15} />
+                            </button>
+                          ) : null}
                           <button
                             onClick={() => openEdit(cls)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -1248,6 +1270,21 @@ export default function ClassManagement() {
           }}
           onSuccess={() => {
             // Refresh class list after successful reassign
+            fetchClasses(pagination.page, search, statusFilter);
+          }}
+        />
+      )}
+
+      {/* ── Add Student Modal ── */}
+      {showAddStudentModal && selectedClassForAddStudent && (
+        <AddStudentModal
+          classSection={selectedClassForAddStudent}
+          onClose={() => {
+            setShowAddStudentModal(false);
+            setSelectedClassForAddStudent(null);
+          }}
+          onSuccess={() => {
+            // Refresh class list after successful enrollment
             fetchClasses(pagination.page, search, statusFilter);
           }}
         />

@@ -2,6 +2,7 @@ const PaymentReminder = require('../models/paymentReminder.model');
 const Student = require('../models/student.model');
 const TuitionBill = require('../models/tuitionBill.model');
 const emailService = require('./email.service');
+const paymentValidation = require('./paymentValidation.service');
 
 class PaymentReminderService {
   
@@ -53,13 +54,66 @@ class PaymentReminderService {
       }
     });
 
+    // Luồng học phí trên portal: ví / Payment theo mã kỳ khung — thường không có TuitionBill.
+    // Bổ sung SV chưa thanh toán kỳ khung hiện tại (cùng logic trang Học phí).
+    if (!semesterId) {
+      const studentQuery = { isActive: true, academicStatus: 'enrolled' };
+      if (majorCode) studentQuery.majorCode = majorCode;
+      if (cohort !== undefined && cohort !== null && String(cohort).trim() !== '') {
+        const c = parseInt(String(cohort).replace(/^K/i, ''), 10);
+        if (!Number.isNaN(c)) studentQuery.cohort = c;
+      }
+
+      const candidates = await Student.find(studentQuery)
+        .select('_id studentCode fullName majorCode cohort email phoneNumber userId')
+        .lean();
+
+      const CHUNK = 20;
+      for (let i = 0; i < candidates.length; i += CHUNK) {
+        const chunk = candidates.slice(i, i + CHUNK);
+        await Promise.all(
+          chunk.map(async (st) => {
+            const idStr = st._id.toString();
+            if (studentMap.has(idStr)) return;
+            try {
+              const semPay = await paymentValidation.checkSemesterPaymentRequirement(st._id);
+              if (semPay.hasPaid) return;
+              const totalOutstanding = semPay.tuitionFee?.finalTuitionFee ?? 0;
+              if (totalOutstanding <= 0) return;
+              studentMap.set(idStr, {
+                studentId: st._id,
+                studentCode: st.studentCode,
+                fullName: st.fullName,
+                email: st.email,
+                phone: st.phoneNumber,
+                majorCode: st.majorCode,
+                cohort: st.cohort,
+                totalOutstanding,
+                billsCount: 0,
+                latestDueDate: semPay.deadline || null,
+              });
+            } catch (_) {
+              /* bỏ qua SV lỗi dữ liệu kỳ học */
+            }
+          }),
+        );
+      }
+    }
+
     return Array.from(studentMap.values());
   }
 
   /**
-   * Kiểm tra có thể gửi reminder không (prevent spam - 24h)
+   * Kiểm tra có thể gửi reminder không (prevent spam)
+   * @param {string} studentId
+   * @param {object} options
+   * @param {boolean} [options.overrideCooldown=false] - Bỏ qua giới hạn thời gian
    */
-  async canSendReminder(studentId) {
+  async canSendReminder(studentId, options = {}) {
+    const { overrideCooldown = false } = options;
+
+    if (overrideCooldown) return { canSend: true };
+
     const lastReminder = await PaymentReminder.findOne({
       student: studentId,
       status: 'sent'
@@ -68,11 +122,12 @@ class PaymentReminderService {
     if (!lastReminder) return { canSend: true };
 
     const hoursSinceLastReminder = (Date.now() - lastReminder.sentAt) / (1000 * 60 * 60);
-    
-    if (hoursSinceLastReminder < 24) {
-      return { 
-        canSend: false, 
-        hoursRemaining: Math.ceil(24 - hoursSinceLastReminder)
+    const COOLDOWN_HOURS = parseInt(process.env.PAYMENT_REMINDER_COOLDOWN_HOURS || '24', 10);
+
+    if (hoursSinceLastReminder < COOLDOWN_HOURS) {
+      return {
+        canSend: false,
+        hoursRemaining: Math.ceil(COOLDOWN_HOURS - hoursSinceLastReminder)
       };
     }
 
@@ -96,10 +151,30 @@ class PaymentReminderService {
       $expr: { $gt: ['$totalAmount', '$paidAmount'] }
     });
 
-    const totalOutstanding = unpaidBills.reduce(
-      (sum, bill) => sum + (bill.totalAmount - bill.paidAmount), 
+    let totalOutstanding = unpaidBills.reduce(
+      (sum, bill) => sum + (bill.totalAmount - bill.paidAmount),
       0
     );
+    let deadline = unpaidBills[0]?.dueDate;
+
+    if (totalOutstanding <= 0) {
+      try {
+        const semPay = await paymentValidation.checkSemesterPaymentRequirement(studentId);
+        if (!semPay.hasPaid) {
+          const due = semPay.tuitionFee?.finalTuitionFee ?? 0;
+          if (due > 0) {
+            totalOutstanding = due;
+            deadline = semPay.deadline || deadline;
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    if (totalOutstanding <= 0) {
+      throw new Error('Sinh viên không còn nợ học phí');
+    }
 
     // Create reminder record
     const reminder = new PaymentReminder({
@@ -115,7 +190,7 @@ class PaymentReminderService {
     const results = { email: 'skipped', sms: 'skipped', inapp: 'skipped' };
 
     try {
-      const messageContent = customMessage || this.generateMessage(student, totalOutstanding, unpaidBills[0]?.dueDate);
+      const messageContent = customMessage || this.generateMessage(student, totalOutstanding, deadline);
 
       // Send Email
       if (['email', 'all'].includes(type) && user?.email) {
@@ -124,7 +199,7 @@ class PaymentReminderService {
             to: user.email,
             studentName: student.fullName,
             amount: totalOutstanding,
-            deadline: unpaidBills[0]?.dueDate,
+            deadline,
             message: messageContent
           });
           results.email = 'sent';
@@ -134,26 +209,44 @@ class PaymentReminderService {
       }
 
       // Send SMS (mock - integrate SMS gateway)
-      if (['sms', 'all'].includes(type) && user?.phone) {
+      const smsPhone = user?.phone || student.phoneNumber;
+      if (['sms', 'all'].includes(type) && smsPhone) {
         try {
-          await this.sendSMS(user.phone, messageContent);
+          await this.sendSMS(smsPhone, messageContent);
           results.sms = 'sent';
         } catch (error) {
           results.sms = 'failed';
         }
       }
 
-      // Send In-app notification via Socket.IO
+      // Send In-app notification via Socket.IO (room = user:USER_ID, khớp socket.join trong socket.config)
       if (['inapp', 'all'].includes(type)) {
         try {
-          const io = require('../configs/socket.config').getIO();
-          io.to(user._id.toString()).emit('notification', {
-            type: 'payment_reminder',
-            title: 'Nhắc nhở thanh toán học phí',
-            message: messageContent,
-            data: { amount: totalOutstanding }
-          });
-          results.inapp = 'sent';
+          const { getIO } = require('../configs/socket.config');
+          const io = getIO();
+          const uid = user?._id ? String(user._id) : null;
+          if (io && uid) {
+            if (typeof io.sendToUser === 'function') {
+              io.sendToUser(uid, 'notification', {
+                type: 'payment_reminder',
+                title: 'Nhắc nhở thanh toán học phí',
+                message: messageContent,
+                data: { amount: totalOutstanding },
+                sentAt: new Date().toISOString(),
+              });
+            } else {
+              io.to(`user:${uid}`).emit('notification', {
+                type: 'payment_reminder',
+                title: 'Nhắc nhở thanh toán học phí',
+                message: messageContent,
+                data: { amount: totalOutstanding },
+                sentAt: new Date().toISOString(),
+              });
+            }
+            results.inapp = 'sent';
+          } else {
+            results.inapp = user ? 'failed' : 'skipped';
+          }
         } catch (error) {
           results.inapp = 'failed';
         }
@@ -187,14 +280,27 @@ class PaymentReminderService {
 
     for (const studentId of studentIds) {
       try {
-        // Check spam prevention
-        const canSend = await this.canSendReminder(studentId);
+        // Check spam prevention (hoặc override nếu admin cho phép)
+        const canSend = await this.canSendReminder(studentId, {
+          overrideCooldown: options.overrideCooldown,
+        });
         if (!canSend.canSend) {
           results.skipped++;
+          const skipReason = `Giới hạn ${process.env.PAYMENT_REMINDER_COOLDOWN_HOURS || 24}h: đã gửi nhắc gần đây; thử lại sau khoảng ${canSend.hoursRemaining} giờ nữa.`;
+          await PaymentReminder.create({
+            student: studentId,
+            reminderType: options.type || 'all',
+            template: options.template || 'default',
+            customMessage: options.customMessage,
+            sentBy: options.sentBy,
+            status: 'skipped',
+            sentAt: new Date(),
+            errorMessage: skipReason,
+          });
           results.details.push({
             studentId,
             status: 'skipped',
-            reason: `Đã gửi reminder cách đây ${24 - canSend.hoursRemaining} giờ`
+            reason: skipReason,
           });
           continue;
         }

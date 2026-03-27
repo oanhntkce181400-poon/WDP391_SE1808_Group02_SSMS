@@ -36,13 +36,25 @@ exports.getFeeCountdown = async (req, res) => {
       .sort({ dueDate: 1 })
       .select('totalAmount paidAmount dueDate semesterCode status');
 
+    // Trang /student/finance dùng học phí kỳ khung (getCurriculumPaymentStatus / ví) — mã Payment là K{n}_CURRICULUM.
+    // getMyTuitionSummary() theo học kỳ hệ thống (semester.code) nên có thể vẫn báo còn nợ dù đã nộp đủ qua ví.
+    let semPay = null;
+    try {
+      semPay = await paymentValidation.checkSemesterPaymentRequirement(student._id);
+    } catch (semErr) {
+      console.error('getFeeCountdown curriculum payment:', semErr.message);
+    }
+    const curriculumHasPaid = !!(semPay && semPay.hasPaid);
+
     // Luồng học phí trên trang Học phí dùng Payment + tổng tín chỉ (finance.service),
     // có thể không có TuitionBill hoặc bill chưa đồng bộ → không được coi là "đã thanh toán"
     // chỉ vì không tìm thấy bill nợ.
     let financeRemaining = 0;
+    let financeSummaryOk = false;
     try {
       const summary = await financeService.getMyTuitionSummary(userId);
       financeRemaining = Math.max(0, Number(summary?.remainingDebt) || 0);
+      financeSummaryOk = true;
     } catch (financeErr) {
       console.error('getFeeCountdown finance summary:', financeErr.message);
     }
@@ -50,17 +62,22 @@ exports.getFeeCountdown = async (req, res) => {
     const billDebt = outstandingBill
       ? Math.max(0, (outstandingBill.totalAmount || 0) - (outstandingBill.paidAmount || 0))
       : 0;
-    const hasDebt = billDebt > 0 || financeRemaining > 0;
-    const totalOutstanding = billDebt > 0 ? billDebt : financeRemaining;
+    // Đồng bộ với trang Học phí: khi tóm tắt Payment + tín chỉ báo hết nợ thì coi như đã thanh toán,
+    // không để TuitionBill chưa đồng bộ làm banner "còn nợ" / countdown sai.
+    let hasDebt = financeSummaryOk ? financeRemaining > 0 : billDebt > 0;
+    let totalOutstanding = financeSummaryOk ? financeRemaining : billDebt;
+    if (curriculumHasPaid) {
+      hasDebt = false;
+      totalOutstanding = 0;
+    }
 
     // Cùng logic trang /student/payment: hạn học phí theo kỳ khung (startDate kỳ) có thể đã quá
     // trong khi đợt đăng ký (RegistrationPeriod) vẫn còn → không hiển thị countdown “còn X giờ” sai.
-    let curriculumPaymentLapsed = false;
-    try {
-      const semPay = await paymentValidation.checkSemesterPaymentRequirement(student._id);
-      curriculumPaymentLapsed = !!(semPay.mustPay && semPay.isOverdue);
-    } catch (semErr) {
-      console.error('getFeeCountdown curriculum payment:', semErr.message);
+    let curriculumPaymentLapsed = !!(semPay && semPay.mustPay && semPay.isOverdue);
+
+    // Thanh toán qua ví / mã kỳ khác với semesterCode khung — tóm tắt học phí đã 0 thì không ép cảnh báo quá hạn khung.
+    if (curriculumPaymentLapsed && financeSummaryOk && financeRemaining === 0) {
+      curriculumPaymentLapsed = false;
     }
 
     if (curriculumPaymentLapsed) {

@@ -20,6 +20,7 @@ const PaymentReminderPage = () => {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [filters, setFilters] = useState({ majorCode: '', cohort: '' });
+  const [overrideCooldown, setOverrideCooldown] = useState(false);
 
   useEffect(() => {
     fetchStudents();
@@ -75,11 +76,25 @@ const PaymentReminderPage = () => {
       const response = await paymentReminderService.sendReminders({
         studentIds: selectedStudents,
         type: reminderType,
-        customMessage: customMessage || undefined
+        customMessage: customMessage || undefined,
+        overrideCooldown,
       });
-      toast.success(response.message);
+      const batch = response.data;
+      if (!batch) {
+        toast.success(response.message);
+      } else if (batch.sent > 0) {
+        toast.success(response.message);
+      } else if (batch.skipped > 0 && batch.failed === 0) {
+        toast.warning(
+          `${response.message} Các sinh viên này đã được nhắc trong vòng 24 giờ — lịch sử ghi nhận dòng "skipped".`
+        );
+      } else {
+        toast.error(response.message || 'Gửi reminders thất bại');
+      }
       setSelectedStudents([]);
       setCustomMessage('');
+      setOverrideCooldown(false);
+      fetchHistory();
       
     } catch (error) {
       toast.error(error.response?.data?.message || 'Gửi reminders thất bại');
@@ -177,6 +192,23 @@ const PaymentReminderPage = () => {
               placeholder="Nhập tin nhắn tùy chỉnh hoặc để trống để sử dụng mẫu mặc định..."
               className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
             />
+
+            <label className="flex items-center gap-3 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition">
+              <input
+                type="checkbox"
+                checked={overrideCooldown}
+                onChange={(e) => setOverrideCooldown(e.target.checked)}
+                className="w-4 h-4 rounded border-amber-400 text-blue-600 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-amber-800">
+                  Bỏ qua giới hạn gửi lại (24 giờ)
+                </span>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Cho phép gửi nhắc cho sinh viên đã được nhắc gần đây trong vòng 24 giờ.
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Student Selection */}

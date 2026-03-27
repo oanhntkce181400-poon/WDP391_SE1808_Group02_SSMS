@@ -1,0 +1,83 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="PaymentReminders" name="Send Payment Reminders">
+    <mxGraphModel dx="1200" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Class Diagram: Send Payment Reminders" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="480" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="R1" value="PaymentReminderRouter" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="55" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="R1r" value="POST /api/payment-reminders/send" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="R1">
+          <mxGeometry y="30" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="C1" value="PaymentReminderController" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="55" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="C1m" value="+sendReminders(req): Response" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="C1">
+          <mxGeometry y="30" width="320" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="S1" value="PaymentReminderService" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="740" y="55" width="360" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="S1m" value="+sendBatchReminders(studentIds, options): BatchResult&#xa;+sendReminder(studentId, options): ReminderResult&#xa;+canSendReminder(studentId, options): CooldownInfo&#xa;+getStudentsWithOutstandingFees(filters): StudentDebtRow[]" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="S1">
+          <mxGeometry y="30" width="360" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="M1" value="EmailService" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="M1m" value="+sendPaymentReminder(params): void" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="M1">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="E1" value="Student" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="200" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="E1a" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-email: string&#xa;-fullName: string" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="E1">
+          <mxGeometry y="30" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="E2" value="TuitionBill" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="200" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="E2a" value="-id: ObjectId&#xa;-student: ObjectId&#xa;-totalAmount: number&#xa;-paidAmount: number&#xa;-dueDate: Date" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="E2">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="E3" value="PaymentReminder" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="900" y="200" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="E3a" value="-id: ObjectId&#xa;-student: ObjectId&#xa;-status: string&#xa;-sentAt: Date&#xa;-reminderType: string&#xa;-results: object" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="E3">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="DTO" value="BatchReminderResultDTO" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="460" y="360" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="DTOa" value="+sent: number&#xa;+skipped: number&#xa;+failed: number&#xa;+details: object[]" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="DTO">
+          <mxGeometry y="30" width="280" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="endArrow=open;endFill=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="R1r" target="C1m"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=open;endFill=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="C1m" target="S1m"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=open;endFill=1;html=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="S1" target="M1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="endArrow=open;endFill=1;html=1;exitX=0.45;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="S1" target="E1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=open;endFill=1;html=1;exitX=0.65;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="S1" target="E2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="endArrow=open;endFill=1;html=1;exitX=0.9;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="S1" target="E3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="endArrow=open;endFill=1;dashed=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="DTO"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7l" value="returns" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="e7"><mxGeometry relative="1" as="geometry"><mxPoint y="-6" as="offset" /></mxGeometry></mxCell>
+
+        <mxCell id="n1" value="AuthMiddleware&#xa;RBACMiddleware (admin/staff)" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="125" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n1e" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="R1" target="n1"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

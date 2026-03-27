@@ -95,6 +95,7 @@ export default function Header({ mode = "admin" }) {
         { label: "Giảng viên", href: "/admin/lecturers" },
         { label: "Giờ học", href: "/admin/timeslots" },
         { label: "Học phí", href: "/admin/tuition-fees" },
+        { label: "Nhắc nhở thanh toán", href: "/admin/payment-reminders" },
         { label: null, href: null },
         { label: "Kỳ đăng ký", href: "/admin/registration-periods" },
         { label: "Duyệt wishlist", href: "/admin/wishlist" },

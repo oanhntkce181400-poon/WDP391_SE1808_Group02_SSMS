@@ -113,7 +113,14 @@ async function trigger(req, res) {
 
 async function getEnrollmentStatus(req, res) {
   try {
-    const { semesterNum, academicYear, classGroup } = req.query;
+    const {
+      semesterNum,
+      academicYear,
+      classGroup,
+      curriculumId,
+      curriculumSemesterOrder,
+      majorCodes,
+    } = req.query;
 
     if (!semesterNum || !academicYear) {
       return res.status(400).json({
@@ -126,6 +133,9 @@ async function getEnrollmentStatus(req, res) {
       semesterNum: Number(semesterNum),
       academicYear: String(academicYear),
       classGroup: classGroup || undefined,
+      curriculumId: curriculumId || undefined,
+      curriculumSemesterOrder: curriculumSemesterOrder ?? undefined,
+      majorCodes: majorCodes || undefined,
     });
 
     return res.status(200).json({ success: true, data });

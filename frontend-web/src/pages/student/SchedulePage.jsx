@@ -355,7 +355,7 @@ export default function SchedulePage() {
                 </p>
               )}
               <a
-                href="/student/payment"
+                href="/student/finance"
                 className="inline-flex items-center mt-3 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition"
               >
                 Thanh toán ngay
