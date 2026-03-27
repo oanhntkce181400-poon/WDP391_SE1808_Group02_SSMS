@@ -4,6 +4,7 @@
 
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const { pickPdfFonts } = require('../utils/pdfFonts');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Student = require('../models/student.model');
 
@@ -206,6 +207,8 @@ class ExportService {
   async generatePDF(enrollments, studentInfo) {
     return new Promise((resolve, reject) => {
       try {
+        const FONT = pickPdfFonts();
+
         const doc = new PDFDocument({
           size: 'A4',
           margin: 40
@@ -217,14 +220,14 @@ class ExportService {
         doc.on('error', reject);
 
         // Title
-        doc.fontSize(24).font('Helvetica-Bold').text('BÁO CÁO ĐIỂM', { align: 'center' });
+        doc.fontSize(24).font(FONT.bold).text('BÁO CÁO ĐIỂM', { align: 'center' });
         doc.moveDown(0.5);
 
         // Student info
-        doc.fontSize(12).font('Helvetica-Bold');
+        doc.fontSize(12).font(FONT.bold);
         doc.text(`Sinh viên: ${studentInfo.fullName}`, { align: 'left' });
         doc.text(`Mã số: ${studentInfo.studentCode}`, { align: 'left' });
-        doc.fontSize(10).font('Helvetica').text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, { align: 'left' });
+        doc.fontSize(10).font(FONT.regular).text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, { align: 'left' });
         doc.moveDown(1);
 
         // Prepare data by semester
@@ -240,7 +243,7 @@ class ExportService {
 
         // Add semester sections
         for (const [semester, semesterEnrollments] of Object.entries(groupedBySemester)) {
-          doc.fontSize(14).font('Helvetica-Bold').text(semester, { underline: true });
+          doc.fontSize(14).font(FONT.bold).text(semester, { underline: true });
           doc.moveDown(0.5);
 
           // Table header
@@ -259,7 +262,7 @@ class ExportService {
           const rowHeight = 20;
 
           // Draw header
-          doc.fontSize(9).font('Helvetica-Bold');
+          doc.fontSize(9).font(FONT.bold);
           let colX = xPos;
           for (const col of columns) {
             doc.rect(colX, headerY, col.width, rowHeight).stroke();
@@ -268,7 +271,7 @@ class ExportService {
           }
 
           // Draw data rows
-          doc.fontSize(9).font('Helvetica');
+          doc.fontSize(9).font(FONT.regular);
           let currentY = headerY + rowHeight;
 
           for (const enrollment of semesterEnrollments) {
@@ -298,7 +301,7 @@ class ExportService {
           doc.moveDown(3);
         }
 
-        doc.fontSize(10).font('Helvetica-Italic').text('Tài liệu này được tạo tự động từ hệ thống quản lý điểm.', {
+        doc.fontSize(10).font(FONT.oblique).text('Tài liệu này được tạo tự động từ hệ thống quản lý điểm.', {
           align: 'center',
           color: '#666666'
         });

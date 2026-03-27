@@ -1,4 +1,4 @@
-﻿const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 
 function getDbConfig() {
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
@@ -21,7 +21,7 @@ async function connectDB() {
     await mongoose.connect(uri, {
       dbName,
       appName,
-      serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS || 5000),
+      serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS || 30000),
       maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE || 10),
     });
     console.log(`MongoDB connected to ${sanitizeUriForLog(uri)}/${dbName}`);

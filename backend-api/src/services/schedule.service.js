@@ -592,6 +592,7 @@ async function ensureAutoProvisionedEnrollmentForStudent(student) {
   const existingEnrollments = await ClassEnrollment.find({
     student: student._id,
     status: 'enrolled',
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: 'classSection',
@@ -863,12 +864,44 @@ async function getMyWeekSchedule(userId, weekStart) {
 
   const { student } = await findStudentByUser(userId);
 
+  // ── Lấy danh sách học phần đã đăng ký TRƯỚC khi kiểm tra chặn học phí ──
+  // Luôn trả về danh sách học phần đã enrolled, kể cả khi bị chặn xem lịch tuần
+  const semCtx = await resolveTeachingSemesterContext(
+    student,
+    Number(student.currentCurriculumSemester) || 1,
+  );
+
+  const enrollments = await ClassEnrollment.find({
+    student: student._id,
+    status: 'enrolled',
+    courseFeeCleared: { $ne: false },
+  })
+    .populate({
+      path: 'classSection',
+      populate: [
+        { path: 'subject', select: 'subjectCode subjectName credits' },
+        { path: 'room', select: 'roomCode roomName' },
+        { path: 'teacher', select: 'fullName' },
+        { path: 'timeslot', select: 'startTime endTime startPeriod endPeriod groupName' },
+      ],
+    })
+    .lean();
+
+  const rawClasses = enrollments.map((e) => e.classSection).filter(Boolean);
+  const enrolledClasses = filterPublishedEnrollmentsForStudentTerm(rawClasses, semCtx);
+
+  // ── Bây giờ mới kiểm tra chặn học phí ──
   const curriculumBlock = await checkCurriculumScheduleBlock(student);
   if (curriculumBlock.blocked) {
     return {
       weekStart: formatDateYmd(weekStartDate),
       weekEnd: formatDateYmd(weekEndDate),
+      currentTerm: {
+        semesterNum: semCtx?.semesterNum || null,
+        academicYear: semCtx?.academicYear || null,
+      },
       schedules: [],
+      enrolledClasses,
       paymentRequired: true,
       tuitionBlock: {
         message: curriculumBlock.message,
@@ -883,7 +916,12 @@ async function getMyWeekSchedule(userId, weekStart) {
     return {
       weekStart: formatDateYmd(weekStartDate),
       weekEnd: formatDateYmd(weekEndDate),
+      currentTerm: {
+        semesterNum: semCtx?.semesterNum || null,
+        academicYear: semCtx?.academicYear || null,
+      },
       schedules: [],
+      enrolledClasses,
       paymentRequired: true,
       tuitionBlock: {
         message: tuitionBlock.message,
@@ -901,30 +939,7 @@ async function getMyWeekSchedule(userId, weekStart) {
     console.warn('[getMyWeekSchedule] ensureAutoProvisionedEnrollmentForStudent:', e?.message || e);
   }
 
-  const semCtx = await resolveTeachingSemesterContext(
-    student,
-    Number(student.currentCurriculumSemester) || 1,
-  );
-
-  const enrollments = await ClassEnrollment.find({
-    student: student._id,
-    status: 'enrolled',
-  })
-    .populate({
-      path: 'classSection',
-      populate: [
-        { path: 'subject', select: 'subjectCode subjectName' },
-        { path: 'room', select: 'roomCode roomName' },
-        { path: 'teacher', select: 'fullName' },
-        { path: 'timeslot', select: 'startTime endTime startPeriod endPeriod groupName' },
-      ],
-    })
-    .lean();
-
-  const rawClasses = enrollments.map((e) => e.classSection).filter(Boolean);
-  const classes = filterPublishedEnrollmentsForStudentTerm(rawClasses, semCtx);
-
-  if (classes.length === 0) {
+  if (enrolledClasses.length === 0) {
     return {
       weekStart: formatDateYmd(weekStartDate),
       weekEnd: formatDateYmd(weekEndDate),
@@ -935,10 +950,11 @@ async function getMyWeekSchedule(userId, weekStart) {
         endDate: semCtx?.endDate || null,
       },
       schedules: [],
+      enrolledClasses: [],
     };
   }
 
-  const classIds = classes.map((cls) => cls._id);
+  const classIds = enrolledClasses.map((cls) => cls._id);
   const [schedules, activeSlots] = await Promise.all([
     Schedule.find({
       classSection: { $in: classIds },
@@ -961,7 +977,7 @@ async function getMyWeekSchedule(userId, weekStart) {
   }
 
   const items = [];
-  for (const cls of classes) {
+  for (const cls of enrolledClasses) {
     const key = String(cls._id);
     const classSchedules = schedulesByClass.get(key) || [];
     for (const sch of classSchedules) {
@@ -992,6 +1008,7 @@ async function getMyWeekSchedule(userId, weekStart) {
       endDate: semCtx?.endDate || null,
     },
     schedules: itemsWithAttendance,
+    enrolledClasses,
   };
 }
 

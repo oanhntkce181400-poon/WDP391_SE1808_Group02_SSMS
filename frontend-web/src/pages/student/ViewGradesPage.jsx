@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
 import gradesService from '../../services/gradesService';
+import transcriptService from '../../services/transcriptService';
 import ExportGradesModal from '../../components/features/ExportGradesModal';
 
 export default function ViewGradesPage() {
@@ -10,6 +12,7 @@ export default function ViewGradesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     fetchGrades();
@@ -58,6 +61,19 @@ export default function ViewGradesPage() {
       alert(`❌ Lỗi: ${errorMsg}`);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      setDownloadingPdf(true);
+      await transcriptService.downloadTranscript();
+      toast.success('Tải bảng điểm PDF thành công!');
+    } catch (err) {
+      console.error('PDF download error:', err);
+      toast.error(err?.response?.data?.message || 'Không thể tải bảng điểm PDF');
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -121,22 +137,39 @@ export default function ViewGradesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">📊 Xem điểm học tập</h1>
           <p className="mt-2 text-gray-600">
             Tổng cộng: <span className="font-semibold">{totalGrades}</span> môn học
           </p>
         </div>
-        <button
-          onClick={() => setExportModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Xuất file
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            title="Tải bảng điểm chính thức (tất cả các học kỳ)"
+          >
+            {downloadingPdf ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            Tải bảng điểm PDF
+          </button>
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Xuất file
+          </button>
+        </div>
       </div>
 
       {/* Filter Section */}

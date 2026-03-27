@@ -83,6 +83,12 @@ const classEnrollmentSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // false = chưa thanh toán học phần (học lại): không hiện TKB / điểm danh / roster hợp lệ
+    courseFeeCleared: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
     note: {
       type: String,
       trim: true,

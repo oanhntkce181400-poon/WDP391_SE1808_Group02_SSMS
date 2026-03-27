@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const { pickPdfFonts } = require('../utils/pdfFonts');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Student = require('../models/student.model');
 const Transcript = require('../models/transcript.model');
@@ -56,20 +57,39 @@ class TranscriptService {
       .sort({ 'classSection.semester': 1 });
 
     if (enrollments.length === 0) {
-      throw new Error('Không tìm thấy bảng điểm cho sinh viên này');
+      return {
+        studentInfo: {
+          studentId: student._id,
+          name: student.fullName,
+          studentCode: student.studentCode,
+          major: student.majorCode,
+          majorName: student.majorId?.name,
+          cohort: student.cohort,
+          program: student.curriculumId?.name || 'Không xác định',
+        },
+        summary: {
+          totalCredits: 0,
+          cumulativeGPA: '0.00',
+          semesters: 0,
+        },
+        semesters: {},
+      };
     }
 
     // Group by semester
     const semesterData = this.groupBySemester(enrollments, semesterFrom, semesterTo);
-    
-    // Calculate cumulative GPA
-    const allGrades = enrollments.flatMap(e => {
+
+    // Calculate cumulative GPA (thang 4): dùng gradePoint, không dùng nhầm field `grade`
+    const allGrades = enrollments.flatMap((e) => {
       if (semesterFrom && e.classSection?.semester < semesterFrom) return [];
       if (semesterTo && e.classSection?.semester > semesterTo) return [];
       const credits = e.classSection?.subject?.credits || 0;
-      return [{ grade: e.grade, credits }];
+      const num = Number(e.grade);
+      if (!Number.isFinite(num) || credits <= 0) return [];
+      const gp = GRADE_POINTS[numericToLetter(num)] ?? 0;
+      return [{ gradePoint: gp, credits }];
     });
-    
+
     const cumulativeGPA = this.calculateGPA(allGrades);
     const totalCredits = allGrades.reduce((sum, g) => sum + g.credits, 0);
 
@@ -81,14 +101,14 @@ class TranscriptService {
         major: student.majorCode,
         majorName: student.majorId?.name,
         cohort: student.cohort,
-        program: student.curriculumId?.name || 'Không xác định'
+        program: student.curriculumId?.name || 'Không xác định',
       },
       summary: {
         totalCredits,
-        cumulativeGPA: cumulativeGPA.toFixed(2),
-        semesters: Object.keys(semesterData).length
+        cumulativeGPA: Number.isFinite(cumulativeGPA) ? cumulativeGPA.toFixed(2) : '0.00',
+        semesters: Object.keys(semesterData).length,
       },
-      semesters: semesterData
+      semesters: semesterData,
     };
   }
 
@@ -99,24 +119,26 @@ class TranscriptService {
     const preview = await this.getPreview(studentId, options);
     
     return new Promise((resolve, reject) => {
+      const FONT = pickPdfFonts();
       const doc = new PDFDocument({
         size: 'A4',
         margin: 50,
-        layout: 'landscape'
+        layout: 'landscape',
+        autoFirstPage: true,
       });
-      
+
       const chunks = [];
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
       // Header
-      doc.fontSize(16).font('Helvetica-Bold').text('TRƯỜNG ĐẠI HỌC FPT', { align: 'center' });
-      doc.fontSize(14).text('BẢNG ĐIỂM SINH VIÊN', { align: 'center' });
+      doc.fontSize(16).font(FONT.bold).text('TRƯỜNG ĐẠI HỌC FPT', { align: 'center' });
+      doc.fontSize(14).font(FONT.bold).text('BẢNG ĐIỂM SINH VIÊN', { align: 'center' });
       doc.moveDown();
 
       // Student Info Box
-      doc.fontSize(11).font('Helvetica');
+      doc.fontSize(11).font(FONT.regular);
       const infoY = doc.y;
       
       doc.text(`Họ và tên: ${preview.studentInfo.name}`, 50, infoY);
@@ -133,7 +155,7 @@ class TranscriptService {
       const colWidths = [60, 200, 60, 50, 60, 70];
       const headers = ['Mã môn', 'Tên môn', 'Số tín chỉ', 'Điểm', 'Thang 4', 'Kết quả'];
 
-      doc.font('Helvetica-Bold').fontSize(10);
+      doc.font(FONT.bold).fontSize(10);
       let xPos = 50;
       headers.forEach((header, i) => {
         doc.text(header, xPos, tableTop, { width: colWidths[i], align: 'center' });
@@ -144,29 +166,31 @@ class TranscriptService {
       doc.moveTo(50, tableTop + 15).lineTo(810, tableTop + 15).stroke();
 
       // Table Rows
-      doc.font('Helvetica').fontSize(9);
+      doc.font(FONT.regular).fontSize(9);
       let yPos = tableTop + 20;
 
       Object.values(preview.semesters).forEach((semester) => {
         // Semester header
-        doc.font('Helvetica-Bold').fontSize(10);
+        doc.font(FONT.bold).fontSize(10);
         doc.text(`Học kỳ ${semester.semester}`, 50, yPos);
-        doc.text(`GPA: ${semester.semesterGPA.toFixed(2)}`, 700, yPos, { width: 80 });
+        const sg = Number(semester.semesterGPA);
+        doc.text(`GPA: ${Number.isFinite(sg) ? sg.toFixed(2) : '0.00'}`, 700, yPos, { width: 80 });
         yPos += 18;
 
         // Courses
-        doc.font('Helvetica').fontSize(9);
-        semester.courses.forEach(course => {
+        doc.font(FONT.regular).fontSize(9);
+        semester.courses.forEach((course) => {
           xPos = 50;
-          const letterGrade = numericToLetter(course.grade);
+          const gNum = Number(course.grade);
+          const letterGrade = numericToLetter(Number.isFinite(gNum) ? gNum : 0);
           const gradePoint = GRADE_POINTS[letterGrade] || 0;
           const row = [
             course.code,
-            course.name.substring(0, 30),
-            course.credits.toString(),
-            course.grade.toFixed(1),
+            String(course.name || '').substring(0, 30),
+            String(course.credits ?? ''),
+            Number.isFinite(gNum) ? gNum.toFixed(1) : '—',
             gradePoint.toFixed(1),
-            gradePoint >= 1.0 ? 'Đạt' : 'Không đạt'
+            gradePoint >= 1.0 ? 'Đạt' : 'Không đạt',
           ];
 
           row.forEach((cell, i) => {
@@ -177,7 +201,7 @@ class TranscriptService {
         });
 
         // Semester subtotal
-        doc.font('Helvetica-Bold').fontSize(9);
+        doc.font(FONT.bold).fontSize(9);
         doc.text(`Tổng tín chỉ HK${semester.semester}: ${semester.totalCredits}`, 50, yPos);
         yPos += 20;
 
@@ -189,13 +213,13 @@ class TranscriptService {
       });
 
       // Summary
-      doc.font('Helvetica-Bold').fontSize(12);
+      doc.font(FONT.bold).fontSize(12);
       doc.moveDown(2);
       doc.text(`Tổng số tín chỉ tích lũy: ${preview.summary.totalCredits}`, 50);
       doc.text(`GPA tích lũy: ${preview.summary.cumulativeGPA}`, 50);
 
       // Footer
-      doc.fontSize(9).font('Helvetica');
+      doc.fontSize(9).font(FONT.oblique);
       const now = new Date();
       doc.text(`Ngày in: ${now.toLocaleDateString('vi-VN')}`, 700, 550, { align: 'right' });
       doc.text(`Trang 1/1`, 50, 550);
@@ -246,18 +270,21 @@ class TranscriptService {
       }
       
       const course = enrollment.classSection?.subject || {};
+      const numGrade = Number(enrollment.grade);
       grouped[semesterNum].courses.push({
-        code: course.code,
-        name: course.name,
+        code: course.subjectCode || course.code || '',
+        name: course.subjectName || course.name || '',
         credits: course.credits || 0,
-        grade: enrollment.grade,
-        gradePoint: GRADE_POINTS[numericToLetter(enrollment.grade)] || 0
+        grade: Number.isFinite(numGrade) ? numGrade : null,
+        gradePoint: GRADE_POINTS[numericToLetter(numGrade)] || 0,
       });
     });
 
-    // Calculate GPA for each semester
-    Object.values(grouped).forEach(sem => {
-      sem.semesterGPA = this.calculateGPA(sem.courses.map(c => ({ grade: c.gradePoint, credits: c.credits })));
+    // Calculate GPA for each semester (calculateGPA expects { gradePoint, credits })
+    Object.values(grouped).forEach((sem) => {
+      sem.semesterGPA = this.calculateGPA(
+        sem.courses.map((c) => ({ gradePoint: c.gradePoint, credits: c.credits })),
+      );
       sem.totalCredits = sem.courses.reduce((sum, c) => sum + c.credits, 0);
     });
 
@@ -265,8 +292,14 @@ class TranscriptService {
   }
 
   calculateGPA(grades) {
-    const totalPoints = grades.reduce((sum, g) => sum + (g.gradePoint * g.credits), 0);
-    const totalCredits = grades.reduce((sum, g) => sum + g.credits, 0);
+    if (!Array.isArray(grades) || grades.length === 0) return 0;
+    const totalPoints = grades.reduce((sum, g) => {
+      const gp = Number(g.gradePoint);
+      const cr = Number(g.credits) || 0;
+      if (!Number.isFinite(gp) || cr <= 0) return sum;
+      return sum + gp * cr;
+    }, 0);
+    const totalCredits = grades.reduce((sum, g) => sum + (Number(g.credits) || 0), 0);
     return totalCredits > 0 ? totalPoints / totalCredits : 0;
   }
 }

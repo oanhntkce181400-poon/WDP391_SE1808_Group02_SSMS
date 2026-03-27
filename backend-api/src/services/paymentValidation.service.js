@@ -233,6 +233,7 @@ async function sumEnrolledCreditsForTeachingPeriod(studentId, semesterNum, acade
   const enrollments = await ClassEnrollment.find({
     student: studentId,
     status: { $in: ["enrolled", "completed"] },
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: "classSection",

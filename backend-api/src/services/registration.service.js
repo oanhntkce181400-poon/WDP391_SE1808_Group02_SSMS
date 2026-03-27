@@ -62,6 +62,7 @@ async function getSemesterEnrollments(studentId, semester) {
   return ClassEnrollment.find({
     student: studentId,
     status: { $in: ['enrolled', 'completed'] },
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: 'classSection',
@@ -214,6 +215,7 @@ async function findSameSubjectEnrollmentInSemester(studentId, classSection) {
     student: studentId,
     classSection: { $in: siblingIds },
     status: { $in: ['enrolled', 'completed'] },
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: 'classSection',
@@ -899,4 +901,5 @@ module.exports = {
   checkOverloadLimit,
   checkCreditLimit,
   getStudentEligibilitySummary,
+  hasSubjectEnrollmentHistory,
 };

@@ -105,6 +105,7 @@ export default function Header({ mode = "admin" }) {
         { label: "Thống kê lớp", href: "/admin/class-performance" },
         { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
         { label: "Phân bố điểm", href: "/admin/grade-distribution-report" },
+        { label: "Báo cáo hiệu suất học tập", href: "/admin/performance-report" },
         { label: "Danh sách xuất sắc", href: "/admin/honor-roll-students" },
         { label: "Đánh giá", href: "/admin/feedback-management" },
         { label: "Mẫu email", href: "/admin/email-templates" },

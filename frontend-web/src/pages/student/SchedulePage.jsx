@@ -142,6 +142,7 @@ export default function SchedulePage() {
   );
 
   const [schedules, setSchedules] = useState([]);
+  const [enrolledClasses, setEnrolledClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -171,6 +172,7 @@ export default function SchedulePage() {
       const response = await scheduleService.getMySchedule(weekStart);
       const data = response.data.data;
       setSchedules(data?.schedules || []);
+      setEnrolledClasses(data?.enrolledClasses || []);
 
       // Kiểm tra nếu bị chặn do học phí
       if (data?.paymentRequired && data?.tuitionBlock) {
@@ -361,6 +363,48 @@ export default function SchedulePage() {
                 Thanh toán ngay
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Danh sách học phần đã đăng ký (kể cả khi bị chặn học phí) ── */}
+      {enrolledClasses.length > 0 && (
+        <div className="mb-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+            <h2 className="text-base font-semibold text-slate-700">
+              Học phần đã đăng ký ({enrolledClasses.length})
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Lịch học chi tiết theo tuần sẽ hiển thị sau khi thanh toán học phí
+            </p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {enrolledClasses.map((cls) => (
+              <div key={cls._id} className="px-5 py-3 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {cls.classCode}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {cls.subject?.subjectName}
+                  </p>
+                </div>
+                <div className="text-xs text-slate-600 whitespace-nowrap">
+                  {cls.teacher?.fullName || 'Chưa phân công'}
+                </div>
+                <div className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  cls.status === 'published'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : cls.status === 'scheduled'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {cls.status === 'published' ? 'Đã xếp lịch'
+                    : cls.status === 'scheduled' ? 'Đang chờ công bố'
+                    : cls.status}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -9,6 +9,7 @@ const Teacher = require("../../models/teacher.model");
 const Semester = require("../../models/semester.model");
 const registrationService = require("../../services/registration.service");
 const notificationEmailService = require("../../services/notificationEmail.service");
+const walletService = require("../../services/wallet.service");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -408,6 +409,7 @@ async function enrollStudent(classId, studentId, options = {}) {
     student: studentId,
     status: "enrolled",
     isOverload: options.isOverload === true,
+    courseFeeCleared: options.courseFeeCleared === false ? false : true,
   });
   await repo.incrementEnrollmentCount(classId);
 
@@ -457,9 +459,55 @@ async function selfEnroll(userId, classId) {
     throw new Error(errors.join(" | "));
   }
 
-  return enrollStudent(classId, student._id, {
-    isOverload: eligibility.limits.overload.enrollingCourseIsOverload === true,
-  });
+  const clsForFee = await repo.findClassById(classId);
+  if (!clsForFee) {
+    throw new Error("Class section not found");
+  }
+
+  const subjectDoc = clsForFee.subject;
+  const subjectRef = subjectDoc?._id || subjectDoc;
+  const isRepeatCourse =
+    subjectRef &&
+    (await registrationService.hasSubjectEnrollmentHistory(student._id, subjectRef));
+
+  let repeatFeeCharged = 0;
+  try {
+    if (isRepeatCourse) {
+      if (!student.userId) {
+        throw new Error("Tài khoản chưa liên kết ví — không thể thanh toán học lại.");
+      }
+      const amount = Number(wallet.totalFee) || 0;
+      if (amount <= 0) {
+        throw new Error("Không xác định được học phí học lại cho môn này.");
+      }
+      await walletService.withdraw(student.userId, {
+        amount,
+        description: `Thanh toán học lại ${subjectDoc?.subjectCode || ""}`.trim(),
+      });
+      repeatFeeCharged = amount;
+    }
+
+    return await enrollStudent(classId, student._id, {
+      isOverload: eligibility.limits.overload.enrollingCourseIsOverload === true,
+      courseFeeCleared: true,
+    });
+  } catch (err) {
+    if (repeatFeeCharged > 0 && student.userId) {
+      try {
+        await walletService.deposit(student.userId, {
+          amount: repeatFeeCharged,
+          description: "Hoàn tiền: đăng ký học lại không hoàn tất",
+          paymentMethod: "adjustment",
+        });
+      } catch (refundErr) {
+        console.error(
+          "[selfEnroll] Hoàn tiền sau lỗi đăng ký:",
+          refundErr?.message || refundErr,
+        );
+      }
+    }
+    throw err;
+  }
 }
 
 async function getStudentEnrollments(studentId, status) {
@@ -735,6 +783,7 @@ async function getMyClasses(userId) {
   const enrollments = await ClassEnrollment.find({
     student: student._id,
     status: { $in: ["enrolled", "completed"] },
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: "classSection",
@@ -897,10 +946,11 @@ async function getClassDetails(classId, userId) {
     student: student._id,
     classSection: classId,
     status: { $in: ["enrolled", "completed"] },
+    courseFeeCleared: { $ne: false },
   });
 
   if (!enrollment) {
-    throw new Error("Bạn chưa đăng ký lớp học phần này");
+    throw new Error("Bạn chưa đăng ký lớp học phần này hoặc chưa hoàn tất thanh toán học phần");
   }
 
   // Get class with all related data
@@ -921,6 +971,7 @@ async function getClassDetails(classId, userId) {
   const classmates = await ClassEnrollment.find({
     classSection: classId,
     status: "enrolled",
+    courseFeeCleared: { $ne: false },
   })
     .populate("student", "studentCode fullName email")
     .limit(50);
@@ -974,16 +1025,18 @@ async function getClassRosterForStudent(classId, userId) {
     classSection: classId,
     student: student._id,
     status: { $in: ["enrolled", "completed"] },
+    courseFeeCleared: { $ne: false },
   }).lean();
 
   if (!myEnrollment) {
-    throw new Error("Bạn chỉ có thể xem danh sách lớp mà bạn đã đăng ký");
+    throw new Error("Bạn chỉ có thể xem danh sách lớp mà bạn đã đăng ký và đã hoàn tất thanh toán học phần");
   }
 
   // BR18: Chỉ trả sinh viên thuộc class section được chọn
   const enrollments = await ClassEnrollment.find({
     classSection: classId,
     status: { $in: ["enrolled", "completed"] },
+    courseFeeCleared: { $ne: false },
   })
     .populate("student", "studentCode fullName email")
     .sort({ createdAt: 1 })

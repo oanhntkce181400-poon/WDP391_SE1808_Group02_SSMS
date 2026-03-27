@@ -57,10 +57,16 @@ export default function ClassRegistrationPage() {
     }
   };
 
-  const fetchSemesters = async () => {
+  /** Load semesters + current registration period together so we never overwrite
+   *  the period's target semester with a stale `!targetSemesterId` check (race on mount). */
+  const fetchSemestersAndPeriod = async () => {
     try {
       const limit = 100;
-      const firstResponse = await registrationPeriodService.getSemesters({ limit, page: 1 });
+      const [firstResponse, periodResponse] = await Promise.all([
+        registrationPeriodService.getSemesters({ limit, page: 1 }),
+        registrationPeriodService.getCurrentPeriod(),
+      ]);
+
       const firstSemesters = firstResponse?.data?.data || [];
       const totalPages = Number(firstResponse?.data?.pagination?.totalPages || 1);
 
@@ -78,28 +84,20 @@ export default function ClassRegistrationPage() {
         });
       }
 
+      const period = periodResponse?.data?.data || null;
+      setCurrentRegistrationPeriod(period);
+
+      const periodSemesterId = getSemesterIdFromPeriod(period);
       setSemesterOptions(semesters);
 
-      if (!targetSemesterId && semesters.length > 0) {
+      if (periodSemesterId) {
+        setTargetSemesterId(periodSemesterId);
+      } else if (semesters.length > 0) {
         const current = semesters.find((item) => item.isCurrent);
         setTargetSemesterId(current?.id || semesters[0]?.id || '');
       }
     } catch (error) {
       setSemesterOptions([]);
-    }
-  };
-
-  const fetchCurrentRegistrationPeriod = async () => {
-    try {
-      const response = await registrationPeriodService.getCurrentPeriod();
-      const period = response?.data?.data || null;
-      setCurrentRegistrationPeriod(period);
-
-      const periodSemesterId = getSemesterIdFromPeriod(period);
-      if (periodSemesterId) {
-        setTargetSemesterId(periodSemesterId);
-      }
-    } catch (error) {
       setCurrentRegistrationPeriod(null);
     }
   };
@@ -151,8 +149,7 @@ export default function ClassRegistrationPage() {
   };
 
   useEffect(() => {
-    fetchSemesters();
-    fetchCurrentRegistrationPeriod();
+    fetchSemestersAndPeriod();
   }, []);
 
   useEffect(() => {
@@ -163,7 +160,7 @@ export default function ClassRegistrationPage() {
     if (!socket) return;
 
     const handleRegistrationPeriodUpdated = () => {
-      fetchCurrentRegistrationPeriod();
+      fetchSemestersAndPeriod();
     };
 
     socket.on('registration-period-updated', handleRegistrationPeriodUpdated);
@@ -337,6 +334,10 @@ export default function ClassRegistrationPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-2 text-xs text-slate-500">
+                Lớp học lại thường mở ở học kỳ hệ thống hiện tại (ví dụ Kỳ 2). Chọn đúng học kỳ trong dropdown;
+                nếu để Kỳ 1 trong khi lớp học lại thuộc Kỳ 2, danh sách sẽ trống.
+              </p>
             </div>
           </div>
 

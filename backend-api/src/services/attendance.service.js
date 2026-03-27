@@ -700,6 +700,7 @@ async function getMyAttendanceReport(userId, filters = {}) {
   const enrollments = await ClassEnrollment.find({
     student: student._id,
     status: { $in: ['enrolled', 'completed'] },
+    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: 'classSection',
@@ -1089,6 +1090,7 @@ async function applyWarningRule(classId) {
   const enrollments = await ClassEnrollment.find({
     classSection: classId,
     status: 'enrolled',
+    courseFeeCleared: { $ne: false },
   }).lean();
 
   for (const enrollment of enrollments) {
@@ -1117,7 +1119,13 @@ async function getTeachingClasses(userId) {
 
   const [enrollmentCounts, scheduleCounts] = await Promise.all([
     ClassEnrollment.aggregate([
-      { $match: { classSection: { $in: classIds }, status: { $in: ['enrolled', 'completed'] } } },
+      {
+        $match: {
+          classSection: { $in: classIds },
+          status: { $in: ['enrolled', 'completed'] },
+          courseFeeCleared: { $ne: false },
+        },
+      },
       { $group: { _id: '$classSection', count: { $sum: 1 } } },
     ]),
     Schedule.aggregate([
@@ -1215,6 +1223,7 @@ async function getClassPerformance(classId, userId) {
     ClassEnrollment.find({
       classSection: classId,
       status: { $in: ['enrolled', 'completed'] },
+      courseFeeCleared: { $ne: false },
     })
       .populate('student', 'studentCode fullName email')
       .lean(),
@@ -1429,6 +1438,7 @@ async function getSlotAttendance(classId, slotId, userId) {
   const enrollments = await ClassEnrollment.find({
     classSection: classId,
     status: 'enrolled',
+    courseFeeCleared: { $ne: false },
   })
     .populate('student', 'studentCode fullName email')
     .lean();
@@ -1499,6 +1509,7 @@ async function bulkSave(payload, userId) {
   const enrolledStudents = await ClassEnrollment.find({
     classSection: classId,
     status: 'enrolled',
+    courseFeeCleared: { $ne: false },
   })
     .select('student')
     .lean();
