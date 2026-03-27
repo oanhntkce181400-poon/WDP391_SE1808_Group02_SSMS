@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -21,6 +22,16 @@ function formatDate(value) {
     month: '2-digit',
     year: 'numeric',
   });
+}
+
+function getTermKey(exam) {
+  return `${exam.classSection?.semester || ''}-${exam.classSection?.academicYear || ''}`;
+}
+
+function getTermLabel(termKey) {
+  const [semester, academicYear] = String(termKey).split('-');
+  if (!semester || !academicYear) return 'KHÁC';
+  return `KỲ ${semester} - ${academicYear}`.toUpperCase();
 }
 
 function ExamCard({ exam }) {
@@ -73,6 +84,7 @@ export default function ExamScheduleScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [selectedTerm, setSelectedTerm] = useState('all');
 
   const loadExams = async (isRefresh = false) => {
     if (isRefresh) {
@@ -101,13 +113,30 @@ export default function ExamScheduleScreen() {
     loadExams(false);
   }, []);
 
+  const termOptions = useMemo(
+    () => Array.from(new Set(exams.map((item) => getTermKey(item)).filter(Boolean))),
+    [exams],
+  );
+
+  const filteredExams = useMemo(() => {
+    if (selectedTerm === 'all') return exams;
+    return exams.filter((item) => getTermKey(item) === selectedTerm);
+  }, [exams, selectedTerm]);
+
+  useEffect(() => {
+    if (selectedTerm === 'all') return;
+    if (!termOptions.includes(selectedTerm)) {
+      setSelectedTerm('all');
+    }
+  }, [selectedTerm, termOptions]);
+
   const stats = useMemo(() => {
-    const upcoming = exams.filter((item) => new Date(item.examDate) >= new Date()).length;
+    const upcoming = filteredExams.filter((item) => new Date(item.examDate) >= new Date()).length;
     return {
-      total: exams.length,
+      total: filteredExams.length,
       upcoming,
     };
-  }, [exams]);
+  }, [filteredExams]);
 
   if (loading) {
     return (
@@ -126,7 +155,7 @@ export default function ExamScheduleScreen() {
 
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Tổng lịch thi</Text>
+            <Text style={styles.statLabel}>Tổng lịch thi trong kỳ</Text>
             <Text style={styles.statValue}>{stats.total}</Text>
           </View>
           <View style={styles.statBox}>
@@ -134,6 +163,32 @@ export default function ExamScheduleScreen() {
             <Text style={styles.statValue}>{stats.upcoming}</Text>
           </View>
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.termRow}
+        >
+          <Pressable
+            onPress={() => setSelectedTerm('all')}
+            style={[styles.termChip, selectedTerm === 'all' && styles.termChipActive]}
+          >
+            <Text style={[styles.termChipText, selectedTerm === 'all' && styles.termChipTextActive]}>
+              TẤT CẢ
+            </Text>
+          </Pressable>
+          {termOptions.map((termKey) => (
+            <Pressable
+              key={termKey}
+              onPress={() => setSelectedTerm(termKey)}
+              style={[styles.termChip, selectedTerm === termKey && styles.termChipActive]}
+            >
+              <Text style={[styles.termChipText, selectedTerm === termKey && styles.termChipTextActive]}>
+                {getTermLabel(termKey)}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       {error ? (
@@ -146,7 +201,7 @@ export default function ExamScheduleScreen() {
       ) : null}
 
       <FlatList
-        data={exams}
+        data={filteredExams}
         keyExtractor={(item) => String(item._id)}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadExams(true)} />}
@@ -154,7 +209,11 @@ export default function ExamScheduleScreen() {
         ListEmptyComponent={
           <View style={styles.emptyCard}>
             <MaterialCommunityIcons name="calendar-remove" size={44} color="#94a3b8" />
-            <Text style={styles.emptyText}>Chưa có lịch thi được xếp.</Text>
+            <Text style={styles.emptyText}>
+              {selectedTerm === 'all'
+                ? 'Chưa có lịch thi được xếp.'
+                : 'Không có lịch thi trong kỳ đã chọn.'}
+            </Text>
           </View>
         }
       />
@@ -193,6 +252,32 @@ const styles = StyleSheet.create({
     marginTop: 12,
     flexDirection: 'row',
     gap: 10,
+  },
+  termRow: {
+    marginTop: 12,
+    gap: 8,
+    paddingBottom: 2,
+    paddingRight: 4,
+  },
+  termChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  termChipActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  termChipText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  termChipTextActive: {
+    color: '#ffffff',
   },
   statBox: {
     flex: 1,
