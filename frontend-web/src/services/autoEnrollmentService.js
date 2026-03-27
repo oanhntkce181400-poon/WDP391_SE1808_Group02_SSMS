@@ -31,9 +31,30 @@ const autoEnrollmentService = {
    * Dùng để admin biết vì sao sinh viên bị skip trước khi reset.
    */
   getEnrollmentStatus: (params) => {
-    const { semesterNum, academicYear, classGroup } = params;
+    const {
+      semesterNum,
+      academicYear,
+      classGroup,
+      curriculumId,
+      curriculumSemesterOrder,
+      majorCodes,
+    } = params;
+    const majorStr =
+      Array.isArray(majorCodes) && majorCodes.length
+        ? majorCodes.join(',')
+        : undefined;
     return axiosClient.get('/auto-enrollment/status', {
-      params: { semesterNum, academicYear, classGroup: classGroup || undefined },
+      params: {
+        semesterNum,
+        academicYear,
+        classGroup: classGroup || undefined,
+        curriculumId: curriculumId || undefined,
+        curriculumSemesterOrder:
+          curriculumSemesterOrder != null && curriculumSemesterOrder !== ''
+            ? curriculumSemesterOrder
+            : undefined,
+        majorCodes: majorStr,
+      },
     });
   },
 

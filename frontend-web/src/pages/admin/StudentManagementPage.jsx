@@ -422,17 +422,18 @@ export default function StudentManagementPage() {
 
   function handleEdit(student) {
     setSelectedStudent(student);
+    const ey = student.enrollmentYear;
     setFormData({
       fullName: student.fullName,
       email: student.email,
-      majorCode: student.majorCode,
-      cohort: student.cohort,
+      majorCode: student.majorCode || '',
+      cohort: student.cohort != null ? String(student.cohort) : '',
       identityNumber: student.identityNumber || '',
       dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split('T')[0] : '',
       phoneNumber: student.phoneNumber || '',
       address: student.address || '',
       gender: student.gender || 'other',
-      enrollmentYear: student.enrollmentYear || '',
+      enrollmentYear: ey != null && ey !== '' ? String(ey) : '',
     });
     setShowEditModal(true);
   }
@@ -861,10 +862,7 @@ function StudentFormModal({
                 type="text"
                 value={formData.identityNumber}
                 onChange={(e) => setFormData({ ...formData, identityNumber: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -876,10 +874,7 @@ function StudentFormModal({
               <select
                 value={formData.majorCode}
                 onChange={(e) => setFormData({ ...formData, majorCode: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="">Chọn ngành</option>
@@ -902,10 +897,7 @@ function StudentFormModal({
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -918,10 +910,7 @@ function StudentFormModal({
               <select
                 value={formData.gender}
                 onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="male">Nam</option>
@@ -958,10 +947,7 @@ function StudentFormModal({
                   setFormData({ ...formData, enrollmentYear: year, cohort: cohort });
                 }}
                 placeholder="VD: 2026"
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               />
               {formData.enrollmentYear && (

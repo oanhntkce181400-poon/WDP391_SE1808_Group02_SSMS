@@ -235,6 +235,265 @@ async function remove(req, res) {
 }
 
 /**
+ * Thêm sinh viên vào snapshot: tìm tất cả classSection trong logs,
+ * enroll SV vào từng classSection, rồi cập nhật logs + summary.
+ * body: { studentCodes: string[] }
+ */
+async function addStudentsToSnapshot(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid snapshot id" });
+    }
+
+    const { studentCodes } = req.body || {};
+    if (!Array.isArray(studentCodes) || studentCodes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "studentCodes (array) is required",
+      });
+    }
+
+    const doc = await EnrollmentSnapshot.findById(id).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Snapshot not found" });
+    }
+
+    if (doc.dryRun) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể thêm sinh viên vào bản snapshot Dry run",
+      });
+    }
+
+    // 1. Collect unique classSections from logs
+    const classSectionMap = new Map();
+    for (const row of doc.logs || []) {
+      for (const e of row.enrolled || []) {
+        const csId = String(e.classSectionId || "");
+        if (!csId) continue;
+        if (!classSectionMap.has(csId)) {
+          classSectionMap.set(csId, {
+            classSectionId: csId,
+            classCode: e.classCode || "",
+            subjectCode: e.subjectCode || "",
+            subjectName: e.subjectName || "",
+            className: e.className || e.classCode || "",
+          });
+        }
+      }
+    }
+
+    const classSections = [...classSectionMap.values()];
+    if (classSections.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Snapshot không chứa classSection nào trong logs",
+      });
+    }
+
+    // 2. Resolve student codes to documents
+    const normalizedCodes = studentCodes.map((c) => String(c).trim().toUpperCase());
+    const students = await Student.find({
+      studentCode: { $in: normalizedCodes },
+    })
+      .select("_id fullName email studentCode")
+      .lean();
+
+    const notFound = normalizedCodes.filter(
+      (code) => !students.find((s) => s.studentCode?.toUpperCase() === code),
+    );
+
+    // Load models lazily to avoid circular deps
+    // eslint-disable-next-line global-require
+    const ClassSection = require("../../models/classSection.model");
+    // eslint-disable-next-line global-require
+    const ClassEnrollment = require("../../models/classEnrollment.model");
+    // eslint-disable-next-line global-require
+    const Waitlist = require("../../models/waitlist.model");
+
+    const newLogs = [];
+    let totalEnrollments = 0;
+    let totalWaitlisted = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+
+    for (const student of students) {
+      const studentIdStr = String(student._id);
+      const existingLog = (doc.logs || []).find(
+        (l) => String(l.studentId) === studentIdStr,
+      );
+
+      const enrolled = existingLog ? [...(existingLog.enrolled || [])] : [];
+      const waitlisted = existingLog ? [...(existingLog.waitlisted || [])] : [];
+      const skipped = existingLog ? [...(existingLog.skipped || [])] : [];
+      const errors = existingLog ? [...(existingLog.errors || [])] : [];
+
+      for (const cs of classSections) {
+        const csId = cs.classSectionId;
+
+        // Skip if already enrolled in this classSection (check from existing log)
+        if (enrolled.some((e) => String(e.classSectionId) === csId)) {
+          skipped.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            reason: "Đã đăng ký trước đó",
+          });
+          totalSkipped += 1;
+          continue;
+        }
+
+        try {
+          const csDoc = await ClassSection.findById(csId).lean();
+          if (!csDoc) {
+            errors.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              reason: "ClassSection không tồn tại trong DB",
+            });
+            totalErrors += 1;
+            continue;
+          }
+
+          if (csDoc.currentEnrollment >= csDoc.maxCapacity) {
+            skipped.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Lớp đã đầy",
+            });
+            totalSkipped += 1;
+            continue;
+          }
+
+          const existingEnrollment = await ClassEnrollment.findOne({
+            classSection: csId,
+            student: studentIdStr,
+          }).lean();
+
+          if (existingEnrollment) {
+            skipped.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Đã có enrollment thực tế trong DB",
+            });
+            totalSkipped += 1;
+            continue;
+          }
+
+          // Check waitlist
+          const waitlistEntry = await Waitlist.findOne({
+            student: studentIdStr,
+            subject: csDoc.subject,
+            targetSemester: csDoc.semester,
+            targetAcademicYear: csDoc.academicYear,
+            status: "WAITING",
+          }).lean();
+
+          if (waitlistEntry) {
+            waitlisted.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Đang trong danh sách chờ",
+            });
+            totalWaitlisted += 1;
+            continue;
+          }
+
+          // Enroll
+          await ClassEnrollment.create({
+            classSection: csId,
+            student: studentIdStr,
+            status: "enrolled",
+            isOverload: false,
+          });
+          await ClassSection.findByIdAndUpdate(csId, {
+            $inc: { currentEnrollment: 1 },
+          });
+
+          enrolled.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            subjectName: cs.subjectName,
+            className: cs.className,
+            enrolledAt: new Date().toISOString(),
+            source: "manual-add-to-snapshot",
+          });
+          totalEnrollments += 1;
+        } catch (err) {
+          errors.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            reason: err.message,
+          });
+          totalErrors += 1;
+        }
+      }
+
+      newLogs.push({
+        studentId: studentIdStr,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        email: student.email,
+        enrolled,
+        waitlisted,
+        skipped,
+        errors,
+        addedAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. Build updated summary
+    const originalSummary = doc.summary || {};
+    const updatedSummary = {
+      ...originalSummary,
+      totalStudents: (originalSummary.totalStudents || 0) + students.length,
+      totalEnrollments: (originalSummary.totalEnrollments || 0) + totalEnrollments,
+      waitlisted: (originalSummary.waitlisted || 0) + totalWaitlisted,
+      duplicates: (originalSummary.duplicates || 0) + totalSkipped,
+      failed: (originalSummary.failed || 0) + totalErrors,
+    };
+
+    // 4. Update snapshot
+    const timestamp = new Date().toLocaleString("vi-VN");
+    await EnrollmentSnapshot.findByIdAndUpdate(id, {
+      $push: { logs: { $each: newLogs } },
+      $set: {
+        summary: updatedSummary,
+        description:
+          (doc.description || "")
+          + `\n[${timestamp}] Thêm ${students.length} SV (${normalizedCodes.join(", ")}): `
+          + `${totalEnrollments} enroll, ${totalSkipped} skip, ${totalErrors} lỗi.`,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        studentsFound: students.length,
+        studentsNotFound: notFound,
+        summary: updatedSummary,
+        classSectionsCount: classSections.length,
+        details: newLogs.map((l) => ({
+          studentCode: l.studentCode,
+          fullName: l.fullName,
+          enrolled: l.enrolled.length,
+          skipped: l.skipped.length,
+          errors: l.errors.length,
+        })),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
  * Trả về danh sách classSection duy nhất xuất hiện trong snapshot cùng sĩ số.
  * Dùng cho điểm danh: giáo viên chọn lớp từ snapshot → lấy roster từ logs.
  */
@@ -384,4 +643,5 @@ module.exports = {
   create,
   update,
   remove,
+  addStudentsToSnapshot,
 };

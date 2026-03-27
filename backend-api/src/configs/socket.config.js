@@ -1,6 +1,13 @@
 const { Server } = require('socket.io');
 const { socketAuthMiddleware } = require('../middlewares/socket.middleware');
 
+/** Tham chiếu tới Server sau khi khởi tạo — dùng cho service gửi push (payment reminder, …) */
+let ioSingleton = null;
+
+function getIO() {
+  return ioSingleton;
+}
+
 function initializeSocketIO(httpServer) {
   function parseCorsOrigins() {
     const raw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN;
@@ -91,9 +98,11 @@ function initializeSocketIO(httpServer) {
 
   console.log('✅ Socket.IO initialized with JWT authentication');
 
+  ioSingleton = io;
   return io;
 }
 
 module.exports = {
   initializeSocketIO,
+  getIO,
 };

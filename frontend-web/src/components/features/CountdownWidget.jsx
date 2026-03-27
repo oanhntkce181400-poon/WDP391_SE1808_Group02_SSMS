@@ -31,11 +31,13 @@ const CountdownWidget = ({ className = '', onCountdownUpdate }) => {
   };
 
   const formatCurrency = (amount) => {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return '0 ₫';
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(n);
   };
 
   // Loading
@@ -86,14 +88,14 @@ const CountdownWidget = ({ className = '', onCountdownUpdate }) => {
           </div>
           <div className="min-w-0 flex-1">
             <p className={`text-sm leading-relaxed font-medium ${textClass}`}>{countdown?.message}</p>
-            {!isPaid && countdown?.outstandingAmount > 0 && (
+            {!isPaid && Number(countdown?.outstandingAmount) > 0 && (
               <p className={`mt-1 text-sm ${debtClass}`}>
                 Còn nợ: {formatCurrency(countdown.outstandingAmount)}
               </p>
             )}
             {!isPaid && (
               <a
-                href="/student/payment"
+                href="/student/finance"
                 className={`inline-flex items-center mt-2 px-3 py-1.5 text-white text-xs font-semibold rounded-lg transition ${btnClass}`}
               >
                 {isLapsed ? 'Chi tiết học phí' : 'Thanh toán ngay'}
@@ -119,7 +121,7 @@ const CountdownWidget = ({ className = '', onCountdownUpdate }) => {
             <p className="font-semibold text-red-800">Đã quá hạn thanh toán!</p>
             <p className="text-sm text-red-600">Hạn: {countdown.deadline.formattedDate}</p>
             <a
-              href="/student/payment"
+              href="/student/finance"
               className="inline-flex items-center mt-2 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition"
             >
               Thanh toán ngay
@@ -173,15 +175,15 @@ const CountdownWidget = ({ className = '', onCountdownUpdate }) => {
         />
       </div>
 
-      {countdown.outstandingAmount > 0 && (
+      {Number(countdown.outstandingAmount) > 0 && (
         <p className={`text-center mt-2 text-sm font-medium ${countdown.timeRemaining.isUrgent ? 'text-red-600' : 'text-blue-600'}`}>
           Số tiền còn nợ: {formatCurrency(countdown.outstandingAmount)}
         </p>
       )}
 
-      {countdown.outstandingAmount > 0 && (
+      {Number(countdown.outstandingAmount) > 0 && (
         <a
-          href="/student/payment"
+          href="/student/finance"
           className={`block text-center mt-3 px-4 py-2 rounded-lg text-sm font-semibold transition ${
             countdown.timeRemaining.isUrgent
               ? 'bg-red-600 text-white hover:bg-red-700'

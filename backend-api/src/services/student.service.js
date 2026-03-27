@@ -832,6 +832,46 @@ async function updateStudent(studentId, payload, updatedById) {
     student.identityNumber = undefined;
   }
 
+  // Ngành học + majorId (đồng bộ khi đổi ngành hoặc bản ghi cũ chưa có majorId)
+  if (payload.majorCode !== undefined && String(payload.majorCode).trim() !== '') {
+    const nextMajor = String(payload.majorCode).trim();
+    if (nextMajor !== student.majorCode || !student.majorId) {
+      const major = await Major.findOne({ majorCode: nextMajor, isActive: true });
+      if (!major) {
+        const error = new Error('Ngành học không tồn tại hoặc đã bị vô hiệu hóa');
+        error.statusCode = 400;
+        throw error;
+      }
+      student.majorCode = nextMajor;
+      student.majorId = major._id;
+    }
+  }
+
+  // Năm nhập học + khóa (cohort) — MSSV không đổi khi sửa
+  if (
+    payload.enrollmentYear !== undefined &&
+    payload.enrollmentYear !== null &&
+    String(payload.enrollmentYear).trim() !== ''
+  ) {
+    const y = parseInt(String(payload.enrollmentYear).trim(), 10);
+    if (!Number.isNaN(y)) {
+      student.enrollmentYear = y;
+      let nextCohort;
+      if (
+        payload.cohort !== undefined &&
+        payload.cohort !== null &&
+        String(payload.cohort).trim() !== ''
+      ) {
+        nextCohort = parseInt(String(payload.cohort).trim(), 10);
+      } else {
+        nextCohort = parseInt(calculateCohort(y), 10);
+      }
+      if (!Number.isNaN(nextCohort)) {
+        student.cohort = nextCohort;
+      }
+    }
+  }
+
   // Cập nhật các field
   allowedUpdates.forEach(field => {
     if (payload[field] !== undefined && field !== 'identityNumber') {

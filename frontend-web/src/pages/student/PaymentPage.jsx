@@ -196,8 +196,9 @@ export default function PaymentPage() {
     }
   };
 
-  // Thanh toán theo kỳ curriculum
-  const handleCurriculumPayment = async () => {
+  // Thanh toán theo kỳ curriculum → chuyển sang trang Tài chính (TuitionPage)
+  // TuitionPage có modal chọn Ví / Ngân hàng + PayOS đầy đủ hơn
+  const handleCurriculumPayment = () => {
     if (!curriculumPaymentStatus || curriculumPaymentStatus.hasPaid) {
       toast.warning('Bạn đã thanh toán học phí kỳ này rồi!');
       return;
@@ -206,73 +207,7 @@ export default function PaymentPage() {
       toast.error('Bạn đã quá hạn để thanh toán.');
       return;
     }
-
-    setIsCreatingPayment(true);
-    try {
-      const response = await financeService.createCurriculumPayment();
-
-      if (response.data.success) {
-        const paymentResult = response.data.data;
-        
-        if (paymentResult.checkoutUrl) {
-          // Mở cổng thanh toán PayOS
-          const script = document.createElement('script');
-          script.src = PAYOS_SCRIPT_URL;
-          script.onload = () => {
-            if (window.PayOSCheckout) {
-              let url = paymentResult.checkoutUrl;
-              if (paymentResult.checkoutUrl.startsWith('https://dev.pay.payos.vn')) {
-                url = paymentResult.checkoutUrl.replace('https://dev.pay.payos.vn', 'https://next.dev.pay.payos.vn');
-              }
-              if (paymentResult.checkoutUrl.startsWith('https://pay.payos.vn')) {
-                url = paymentResult.checkoutUrl.replace('https://pay.payos.vn', 'https://next.pay.payos.vn');
-              }
-
-              const { open } = window.PayOSCheckout.usePayOS({
-                RETURN_URL: `${window.location.origin}/student/payment/result`,
-                ELEMENT_ID: 'payos-checkout-container',
-                CHECKOUT_URL: url,
-                onExit: (eventData) => {
-                  console.log('Payment exit:', eventData);
-                },
-                onSuccess: async (eventData) => {
-                  console.log('Payment success:', eventData);
-                  // Xác nhận thanh toán và auto-enrollment
-                  try {
-                    await financeService.confirmPaymentWithEnrollment({
-                      orderCode: eventData.orderCode,
-                      amount: paymentResult.amount,
-                      status: 'PAID'
-                    });
-                    toast.success('Thanh toán thành công! Các môn học đang được đăng ký...');
-                    // Reload dữ liệu
-                    loadCurriculumPaymentStatus();
-                    loadSummary();
-                    loadPaymentHistory();
-                  } catch (confirmErr) {
-                    console.error('Error confirming payment:', confirmErr);
-                  }
-                  window.location.href = `${window.location.origin}/student/payment/result?orderCode=${eventData.orderCode}`;
-                },
-                onCancel: (eventData) => {
-                  console.log('Payment cancel:', eventData);
-                  window.location.href = `${window.location.origin}/student/payment?canceled=true`;
-                },
-              });
-              open();
-            }
-          };
-          document.body.appendChild(script);
-        }
-      } else {
-        toast.error(response.data.message || 'Có lỗi xảy ra khi tạo thanh toán');
-      }
-    } catch (error) {
-      console.error('Curriculum payment error:', error);
-      toast.error('Có lỗi xảy ra khi tạo thanh toán');
-    } finally {
-      setIsCreatingPayment(false);
-    }
+    navigate('/student/finance?pay=1');
   };
 
   const openPayOSCheckout = () => {

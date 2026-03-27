@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  Search,
+  UserPlus,
+  Users,
+  X,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import enrollmentSnapshotService from "../../services/enrollmentSnapshotService";
+import studentService from "../../services/studentService";
 import {
   collectUniqueEnrolledSubjectCodes,
   formatEnrollmentLogDetail,
@@ -27,6 +39,16 @@ export default function EnrollmentSnapshotsPage() {
   const [editDescription, setEditDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Add student to snapshot state
+  const [showAddStudents, setShowAddStudents] = useState(false);
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedForAdd, setSelectedForAdd] = useState([]);
+  const [addingStudents, setAddingStudents] = useState(false);
+  const [addResult, setAddResult] = useState(null);
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
   const limit = 15;
 
   const load = useCallback(async () => {
@@ -50,12 +72,26 @@ export default function EnrollmentSnapshotsPage() {
 
   const openDetail = async (id) => {
     setError("");
+    setShowAddStudents(false);
+    setStudentSearchQuery("");
+    setSearchResults([]);
+    setSelectedForAdd([]);
+    setAddResult(null);
     try {
       const res = await enrollmentSnapshotService.getById(id);
       setDetail(res?.data?.data || null);
     } catch (e) {
       setError(e?.response?.data?.message || "Không tải chi tiết");
     }
+  };
+
+  const closeDetail = () => {
+    setDetail(null);
+    setShowAddStudents(false);
+    setStudentSearchQuery("");
+    setSearchResults([]);
+    setSelectedForAdd([]);
+    setAddResult(null);
   };
 
   const openEdit = (row) => {
@@ -95,6 +131,68 @@ export default function EnrollmentSnapshotsPage() {
       await load();
     } catch (e) {
       setError(e?.response?.data?.message || "Xóa thất bại");
+    }
+  };
+
+  // ── Student search & add ──
+  const handleStudentSearchChange = (e) => {
+    const value = e.target.value;
+    setStudentSearchQuery(value);
+    if (searchTimeout) clearTimeout(searchTimeout);
+    if (value.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await studentService.getStudents({
+          search: value.trim(),
+          academicStatus: "enrolled",
+          limit: 20,
+        });
+        const data = res.data?.data || [];
+        // Filter out students already in snapshot
+        const existingIds = new Set(
+          (detail?.logs || []).map((l) => String(l.studentId))
+        );
+        setSearchResults(data.filter((s) => !existingIds.has(String(s._id))));
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    setSearchTimeout(t);
+  };
+
+  const toggleStudentForAdd = (id) => {
+    setSelectedForAdd((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleAddStudents = async () => {
+    if (selectedForAdd.length === 0 || !detail?._id) return;
+    setAddingStudents(true);
+    setAddResult(null);
+    setError("");
+    try {
+      const res = await enrollmentSnapshotService.addStudentsToSnapshot(
+        detail._id,
+        selectedForAdd
+      );
+      setAddResult(res.data?.data || {});
+      setSelectedForAdd([]);
+      setStudentSearchQuery("");
+      setSearchResults([]);
+      // Refresh detail
+      const fresh = await enrollmentSnapshotService.getById(detail._id);
+      setDetail(fresh?.data?.data || null);
+    } catch (e) {
+      setError(e?.response?.data?.message || "Thêm sinh viên thất bại");
+    } finally {
+      setAddingStudents(false);
     }
   };
 
@@ -272,14 +370,178 @@ export default function EnrollmentSnapshotsPage() {
                   {formatDate(detail.createdAt)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setDetail(null)}
-                className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center gap-2">
+                {!detail.dryRun && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddStudents((v) => !v)}
+                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5"
+                  >
+                    <UserPlus size={14} />
+                    {showAddStudents ? "Ẩn" : "Thêm SV"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => closeDetail()}
+                  className="rounded-lg border border-slate-300 px-3 py-1 text-sm"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
+
+            {/* ── Add Students Section ── */}
+            {showAddStudents && !detail.dryRun && (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <UserPlus size={16} className="text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">
+                      Thêm sinh viên vào bản lưu này
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      SV sẽ được ghi danh vào <strong>tất cả học phần</strong> trong
+                      snapshot cùng lúc.
+                    </p>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
+                    <AlertCircle size={14} className="shrink-0" />
+                    {error}
+                  </div>
+                )}
+
+                {addResult && (
+                  <div className="mb-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-emerald-700 font-medium mb-1">
+                      <CheckCircle size={14} className="shrink-0" />
+                      Thêm thành công!
+                    </div>
+                    <p className="text-xs text-emerald-600 ml-5">
+                      {addResult.studentsFound} SV tìm thấy ·{" "}
+                      {addResult.classSectionsCount} học phần ·{" "}
+                      {addResult.summary?.totalEnrollments} enroll ·{" "}
+                      {addResult.summary?.duplicates} skip ·{" "}
+                      {addResult.summary?.failed} lỗi
+                      {addResult.studentsNotFound?.length > 0 && (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <span className="text-red-600">
+                            {addResult.studentsNotFound.length} không tìm thấy:{" "}
+                            {addResult.studentsNotFound.join(", ")}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mb-2">
+                  <div className="relative flex-1">
+                    <Search
+                      size={14}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      type="text"
+                      value={studentSearchQuery}
+                      onChange={handleStudentSearchChange}
+                      placeholder="Nhập mã SV hoặc tên (ít nhất 2 ký tự)..."
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-400 outline-none"
+                    />
+                    {searching && (
+                      <Loader2
+                        size={14}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 animate-spin"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {searchResults.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg bg-white mb-2">
+                    {searchResults.map((s) => {
+                      const isSelected = selectedForAdd.includes(s.studentCode);
+                      return (
+                        <div
+                          key={s._id}
+                          className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer border-b border-slate-100 last:border-0 ${
+                            isSelected
+                              ? "bg-emerald-50"
+                              : "hover:bg-slate-50"
+                          }`}
+                          onClick={() => toggleStudentForAdd(s.studentCode)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="shrink-0 w-3.5 h-3.5 rounded border-slate-300 text-emerald-600"
+                          />
+                          <span className="font-medium text-slate-800">
+                            {s.fullName}
+                          </span>
+                          <span className="font-mono text-xs text-slate-500">
+                            {s.studentCode}
+                          </span>
+                          {s.majorCode && (
+                            <span className="text-xs text-slate-400">
+                              · {s.majorCode}
+                            </span>
+                          )}
+                          {s.cohort && (
+                            <span className="text-xs text-slate-400">
+                              · K{s.cohort}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {studentSearchQuery.length >= 2 && searchResults.length === 0 && !searching && (
+                  <p className="text-xs text-slate-500 mb-2">
+                    Không tìm thấy sinh viên phù hợp hoặc tất cả đã nằm trong
+                    snapshot.
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
+                    {selectedForAdd.length > 0 ? (
+                      <span className="text-emerald-600 font-medium">
+                        {selectedForAdd.length} sinh viên được chọn
+                      </span>
+                    ) : (
+                      "Chọn sinh viên để thêm vào snapshot"
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={selectedForAdd.length === 0 || addingStudents}
+                    onClick={handleAddStudents}
+                    className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    {addingStudents ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        Đang thêm...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={12} />
+                        Thêm {selectedForAdd.length > 0 ? `${selectedForAdd.length} SV` : ""}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {detail.summary && (
               <div className="mb-4 grid gap-2 sm:grid-cols-3">

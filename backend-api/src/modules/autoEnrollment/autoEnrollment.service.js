@@ -6,6 +6,10 @@ const curriculumService = require("../../services/curriculum.service");
 const paymentValidationService = require("../../services/paymentValidation.service");
 const repo = require("./autoEnrollment.repository");
 
+// DEBUG: bật=true để trace, tắt=false khi hoàn thiện
+const _DEBUG_SVC = false;
+function _svc(...a) { if (_DEBUG_SVC) console.log('[Service]', ...a); }
+
 // Service này là "bộ não" của chức năng auto-enrollment.
 // Nhiệm vụ chính:
 // 1. Tìm sinh viên đủ điều kiện trong học kỳ
@@ -1207,10 +1211,30 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         majorCodes: requestedMajorCodes,
         studentCodes: requestedStudentCodes,
         curriculumId: curriculumIdFilter,
+        classGroup: classGroupFilter,
       }),
       repo.findActiveCurriculums(),
       paymentValidationService.resolveTermsPerYear(semester),
     ]);
+
+  _svc(
+    `findEligibleStudents returned ${candidateStudents.length} candidates`,
+    '(check [Repo] logs above for classSection values)',
+  );
+  // In thử 5 SV đầu tiên — tìm Trần Minh Thật
+  const debugNames = candidateStudents
+    .filter((s) => /thật/i.test(s.fullName))
+    .map((s) => `FOUND: ${s.studentCode} ${s.fullName} classSection="${s.classSection}"`);
+  if (debugNames.length) {
+    debugNames.forEach((m) => _svc(m));
+  } else {
+    _svc('Trần Minh Thật NOT in candidate list — showing top 5:');
+    candidateStudents.slice(0, 5).forEach((s) =>
+      _svc(
+        `  ${s.studentCode} | ${s.fullName} | major=${s.majorCode} | classSection="${s.classSection}"`,
+      ),
+    );
+  }
 
   // Chặng 2b: Load classSections.
   // - Normal mode: load ALL open class sections (sẽ match bằng classGroup)
@@ -1348,7 +1372,15 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   }
 
   let excludedAlreadyAssignedInSemester = 0;
-  if (excludeStudentsAlreadyAssignedInSemester && students.length > 0) {
+  // Khi đã lọc "chưa xếp đủ môn kỳ khung" (onlyStudentsWithoutEnrollments), SV vẫn có thể
+  // có 1–2 enrollment trong HK → không được loại hết batch bằng "đã có bất kỳ lớp nào trong HK".
+  // Trùng môn vẫn được xử lý trong vòng lặp (skip duplicate). Gộp hai filter trước đây làm
+  // mất toàn bộ ứng viên (40 skipped) dù Lớp SH trống / chưa xếp đủ môn.
+  if (
+    excludeStudentsAlreadyAssignedInSemester &&
+    students.length > 0 &&
+    !onlyStudentsWithoutEnrollments
+  ) {
     const primaryAy = String(semester.academicYear || "").trim();
     const excludeExtraYears = institutionalSemesterYearUnion.filter(
       (y) => y !== primaryAy,
@@ -1754,13 +1786,40 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 // Enrollment Management — service wrappers
 // ─────────────────────────────────────────────
 
-async function getEnrollmentStatus({ semesterNum, academicYear, classGroup }) {
+function parseMajorCodesQuery(value) {
+  if (value == null || value === '') return [];
+  return String(value)
+    .split(/[\s,;\n]+/)
+    .map((x) => x.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+async function getEnrollmentStatus({
+  semesterNum,
+  academicYear,
+  classGroup,
+  curriculumId,
+  curriculumSemesterOrder,
+  majorCodes,
+}) {
   if (semesterNum == null || !academicYear) {
     const err = new Error('semesterNum and academicYear are required');
     err.statusCode = 400;
     throw err;
   }
-  return repo.getEnrollmentStatus({ semesterNum, academicYear, classGroup });
+  const csOrder =
+    curriculumSemesterOrder != null && String(curriculumSemesterOrder).trim() !== ''
+      ? Number(curriculumSemesterOrder)
+      : undefined;
+  return repo.getEnrollmentStatus({
+    semesterNum,
+    academicYear,
+    classGroup,
+    curriculumId,
+    curriculumSemesterOrder:
+      csOrder != null && Number.isFinite(csOrder) && csOrder >= 1 ? csOrder : undefined,
+    majorCodes: Array.isArray(majorCodes) ? majorCodes : parseMajorCodesQuery(majorCodes),
+  });
 }
 
 async function deleteEnrollments({ semesterNum, academicYear, classGroup, studentId }) {
