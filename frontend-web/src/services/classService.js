@@ -5,7 +5,8 @@ const classService = {
 
   getClassById: (classId) => axiosClient.get(`/classes/${classId}`),
 
-  getClassEnrollments: (classId) => axiosClient.get(`/classes/${classId}/enrollments`),
+  getClassEnrollments: (classId, params = {}) =>
+    axiosClient.get(`/classes/${classId}/enrollments`, { params }),
 
   getStudentEnrollments: (studentId, status) => {
     const params = status ? { status } : {};
@@ -57,6 +58,10 @@ const classService = {
 
   // Get distinct classGroups for filtering
   getClassGroups: (params) => axiosClient.get('/classes/groups', { params }),
+
+  /** Nhóm lớp + các lớp học phần (môn, GV) trong nhóm */
+  getClassGroupsOverview: (params) =>
+    axiosClient.get('/classes/groups/overview', { params }),
 };
 
 export default classService;

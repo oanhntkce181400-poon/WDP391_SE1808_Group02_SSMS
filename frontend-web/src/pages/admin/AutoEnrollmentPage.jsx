@@ -262,7 +262,8 @@ function dedupeInstitutionalSemesters(semesters) {
 export default function AutoEnrollmentPage() {
   const [semesters, setSemesters] = useState([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
-  const [dryRun, setDryRun] = useState(false);
+  /** Mặc định true: «Chạy» chỉ mô phỏng — ghi ClassEnrollment/waitlist khi bấm «Ghi enrollment vào CSDL». */
+  const [dryRun, setDryRun] = useState(true);
   const [limit, setLimit] = useState("");
   const [majorCodesInput, setMajorCodesInput] = useState("");
   const [onlyStudentsWithoutEnrollments, setOnlyStudentsWithoutEnrollments] =
@@ -291,6 +292,17 @@ export default function AutoEnrollmentPage() {
   const [snapshotNote, setSnapshotNote] = useState("");
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState("");
+  /** Khi lưu snapshot (sau Live): cập nhật maxCapacity các ClassSection cùng nhóm + HK */
+  const [applyMaxCapacityOnSnapshot, setApplyMaxCapacityOnSnapshot] =
+    useState(true);
+
+  /** Xếp lớp thủ công: danh sách SV + chọn + ghi danh vào lớp có sẵn trong nhóm */
+  const [eligibleStudents, setEligibleStudents] = useState([]);
+  const [eligibleMeta, setEligibleMeta] = useState(null);
+  const [loadingEligible, setLoadingEligible] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState({});
+  const [assignMessage, setAssignMessage] = useState("");
+  const [assignError, setAssignError] = useState("");
 
   // ── Trạng thái xếp lớp ─────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("enrollment"); // "enrollment" | "status"
@@ -304,6 +316,10 @@ export default function AutoEnrollmentPage() {
   const [deletingWaitlists, setDeletingWaitlists] = useState(false);
   const [promotingId, setPromotingId] = useState(null); // waitlistId đang promote
   const [actionMessage, setActionMessage] = useState({ type: "", text: "" }); // { type: "success"|"error", text }
+  const [statusCurriculumId, setStatusCurriculumId] = useState("");
+  const [statusCurriculumSemRows, setStatusCurriculumSemRows] = useState([]);
+  const [loadingStatusCurriculumSemesters, setLoadingStatusCurriculumSemesters] =
+    useState(false);
 
   useEffect(() => {
     const loadSemesters = async () => {
@@ -351,6 +367,32 @@ export default function AutoEnrollmentPage() {
   }, []);
 
   useEffect(() => {
+    if (!statusCurriculumId) {
+      setStatusCurriculumSemRows([]);
+      return;
+    }
+    let cancelled = false;
+    setStatusCurriculumSemRows([]);
+    setLoadingStatusCurriculumSemesters(true);
+    curriculumService
+      .getSemesters(statusCurriculumId)
+      .then((res) => {
+        if (!cancelled) {
+          setStatusCurriculumSemRows(res?.data?.data || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStatusCurriculumSemRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStatusCurriculumSemesters(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [statusCurriculumId]);
+
+  useEffect(() => {
     if (enrollmentMode !== "normal" || !selectedCurriculumId) {
       setCurriculumSemRows([]);
       return;
@@ -376,10 +418,11 @@ export default function AutoEnrollmentPage() {
     };
   }, [enrollmentMode, selectedCurriculumId]);
 
-  // Load classGroups khi đổi HK hoặc khung CT.
+  // Load classGroups khi đổi HK hoặc khung CT (tab Chạy).
   // Lưu ý: ClassSection.academicYear thường là niên khóa khung CT (vd 2026-2030),
   // còn Semester.academicYear của HK hệ thống có thể là 2025-2026 → lọc sai sẽ ra 0 nhóm.
   useEffect(() => {
+    if (activeTab !== "enrollment") return;
     const selectedSem = semesters.find(
       (s) => String(s.id) === String(selectedSemesterId),
     );
@@ -419,13 +462,111 @@ export default function AutoEnrollmentPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSemesterId, semesters, selectedCurriculumId, curriculums]);
+  }, [activeTab, selectedSemesterId, semesters, selectedCurriculumId, curriculums]);
+
+  // Cùng logic nhóm lớp cho tab Trạng thái (HK + khung CT trên tab đó).
+  useEffect(() => {
+    if (activeTab !== "status") return;
+    const selectedSem = semesters.find(
+      (s) => String(s.id) === String(statusSemester),
+    );
+    if (!selectedSem) {
+      setClassGroups([]);
+      return;
+    }
+    const cur = curriculums.find(
+      (c) => String(c._id || c.id) === String(statusCurriculumId),
+    );
+    const academicYearForGroups =
+      statusCurriculumId && cur?.academicYear
+        ? cur.academicYear
+        : selectedSem.academicYear;
+
+    let cancelled = false;
+    setLoadingClassGroups(true);
+    setClassGroups([]);
+    setStatusClassGroup("");
+    classService
+      .getClassGroups({
+        semester: selectedSem.semesterNum,
+        academicYear: academicYearForGroups,
+        ...(statusCurriculumId ? { curriculumId: statusCurriculumId } : {}),
+      })
+      .then((res) => {
+        if (!cancelled) setClassGroups(res?.data?.data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setClassGroups([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingClassGroups(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, statusSemester, semesters, statusCurriculumId, curriculums]);
 
   const selectedCurriculum = useMemo(
     () =>
       curriculums.find((c) => String(c._id || c.id) === selectedCurriculumId),
     [curriculums, selectedCurriculumId],
   );
+
+  const statusSelectedCurriculum = useMemo(
+    () =>
+      curriculums.find(
+        (c) => String(c._id || c.id) === String(statusCurriculumId),
+      ),
+    [curriculums, statusCurriculumId],
+  );
+
+  const statusSemesterOptions = useMemo(() => {
+    if (!statusCurriculumId) {
+      return dedupeInstitutionalSemesters(semesters).map((s) => {
+        const id = semesterOptionId(s);
+        return {
+          ...s,
+          id,
+          optionKey: `${id}_${s.academicYear}`,
+          curriculumSemesterOrder: undefined,
+          curriculumSlotName: undefined,
+          optionLabel: undefined,
+        };
+      });
+    }
+    if (loadingStatusCurriculumSemesters) {
+      return [];
+    }
+    if (!statusCurriculumSemRows.length) {
+      return [];
+    }
+    return buildSemesterOptionsFromCurriculum(
+      semesters,
+      statusCurriculumSemRows,
+      statusSelectedCurriculum,
+    );
+  }, [
+    semesters,
+    statusCurriculumId,
+    statusCurriculumSemRows,
+    statusSelectedCurriculum,
+    loadingStatusCurriculumSemesters,
+  ]);
+
+  useEffect(() => {
+    if (!statusSemesterOptions.length) return;
+    const valid = statusSemesterOptions.some(
+      (s) => String(s.id) === String(statusSemester),
+    );
+    if (valid) return;
+    const current = semesters.find((item) => item.isCurrent);
+    const nextId =
+      current &&
+      statusSemesterOptions.some((s) => String(s.id) === String(current.id))
+        ? semesterOptionId(current)
+        : statusSemesterOptions[0].id;
+    setStatusSemester(nextId);
+  }, [statusSemesterOptions, semesters]);
 
   const semesterOptions = useMemo(() => {
     if (enrollmentMode === "retake") {
@@ -473,6 +614,106 @@ export default function AutoEnrollmentPage() {
     [semesterOptions, semesters, selectedSemesterId],
   );
 
+  const buildTriggerPayload = (dryRunFlag, opts = {}) => {
+    const selectedCodes = Array.isArray(opts.selectedStudentCodes)
+      ? opts.selectedStudentCodes
+          .map((c) => String(c || "").trim().toUpperCase())
+          .filter(Boolean)
+      : [];
+    const selectedOnly = selectedCodes.length > 0;
+    return {
+      dryRun: dryRunFlag === true,
+      limit: selectedOnly ? undefined : limit ? Number(limit) : undefined,
+      majorCodes: majorCodesInput
+        .split(/[\s,;\n]+/)
+        .map((item) => item.trim().toUpperCase())
+        .filter(Boolean),
+      ...(selectedOnly ? { studentCodes: selectedCodes } : {}),
+      onlyStudentsWithoutEnrollments,
+      excludeStudentsAlreadyAssignedInSemester,
+      mode: enrollmentMode,
+      curriculumId: selectedCurriculumId || undefined,
+      classGroup: selectedClassGroup || undefined,
+    };
+  };
+
+  /** Cùng filter với trigger nhưng không gửi limit — server trả về đủ SV để chọn tay. */
+  const buildEligiblePayload = () => {
+    const cso = selectedSemester?.curriculumSemesterOrder;
+    return {
+      majorCodes: majorCodesInput
+        .split(/[\s,;\n]+/)
+        .map((item) => item.trim().toUpperCase())
+        .filter(Boolean),
+      onlyStudentsWithoutEnrollments,
+      excludeStudentsAlreadyAssignedInSemester,
+      mode: enrollmentMode,
+      curriculumId: selectedCurriculumId || undefined,
+      classGroup: selectedClassGroup || undefined,
+      curriculumSemesterOrder:
+        cso != null && Number(cso) >= 1 ? Number(cso) : undefined,
+    };
+  };
+
+  const handleLoadEligibleStudents = async () => {
+    if (!selectedSemesterId) return;
+    setLoadingEligible(true);
+    setAssignError("");
+    setAssignMessage("");
+    try {
+      const response = await autoEnrollmentService.listEligibleStudents(
+        selectedSemesterId,
+        buildEligiblePayload(),
+      );
+      const data = response?.data?.data;
+      const list = data?.students || [];
+      setEligibleStudents(list);
+      setEligibleMeta(data?.filters || null);
+      const next = {};
+      list.forEach((s) => {
+        next[String(s._id)] = false;
+      });
+      setSelectedStudentIds(next);
+      const excludedSub =
+        data?.filters?.excludedAlreadyEnrolledInSubject ?? 0;
+      const tmplCode = data?.filters?.templateClassCodeForList;
+      if (list.length === 0) {
+        setAssignMessage(
+          excludedSub > 0
+            ? `Không còn sinh viên hiển thị sau khi loại ${excludedSub} SV đã có môn trong học kỳ này (theo lớp mẫu${tmplCode ? ` ${tmplCode}` : ""}).`
+            : "Không có sinh viên nào khớp bộ lọc hiện tại.",
+        );
+      } else if (excludedSub > 0) {
+        setAssignMessage(
+          `Đã ẩn ${excludedSub} sinh viên đã học môn của lớp mẫu trong kỳ này${tmplCode ? ` (${tmplCode})` : ""} — chỉ còn SV chưa ghi danh môn đó.`,
+        );
+      }
+    } catch (err) {
+      setEligibleStudents([]);
+      setEligibleMeta(null);
+      setAssignError(
+        err?.response?.data?.message || "Không tải được danh sách sinh viên",
+      );
+    } finally {
+      setLoadingEligible(false);
+    }
+  };
+
+  const handleToggleStudent = (id) => {
+    const key = String(id);
+    setSelectedStudentIds((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSelectAllEligible = (checked) => {
+    setSelectedStudentIds((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        next[k] = checked;
+      });
+      return next;
+    });
+  };
+
   const handleRun = async () => {
     if (!selectedSemesterId) return;
 
@@ -480,19 +721,101 @@ export default function AutoEnrollmentPage() {
     setError("");
 
     try {
-      const response = await autoEnrollmentService.trigger(selectedSemesterId, {
-        dryRun,
-        limit: limit ? Number(limit) : undefined,
-        majorCodes: majorCodesInput
-          .split(/[\s,;\n]+/)
-          .map((item) => item.trim().toUpperCase())
-          .filter(Boolean),
-        onlyStudentsWithoutEnrollments,
-        excludeStudentsAlreadyAssignedInSemester,
-        mode: enrollmentMode,
-        curriculumId: selectedCurriculumId || undefined,
-        classGroup: selectedClassGroup || undefined,
-      });
+      const response = await autoEnrollmentService.trigger(
+        selectedSemesterId,
+        buildTriggerPayload(dryRun),
+      );
+      setResult(response?.data?.data || null);
+      setSnapshotMessage("");
+    } catch (err) {
+      setError(
+        err?.response?.data?.message || "Failed to trigger auto enrollment",
+      );
+      setResult(null);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  /**
+   * Ghi ClassEnrollment vào các lớp đã có trong nhóm — không tạo ClassSection.
+   * @param {boolean} dryRunFlag - true = không ghi DB → sĩ số trên trang lớp không đổi.
+   */
+  const runSelectedIntoExistingSections = async (dryRunFlag) => {
+    if (!selectedSemesterId) return;
+    if (!selectedClassGroup) {
+      setAssignError(
+        'Chọn «Nhóm lớp học phần» — hệ thống mới biết pool các lớp sẵn có để tăng sĩ số.',
+      );
+      return;
+    }
+    const codes = eligibleStudents
+      .filter((s) => selectedStudentIds[String(s._id)])
+      .map((s) => String(s.studentCode || "").trim().toUpperCase())
+      .filter(Boolean);
+    if (codes.length === 0) {
+      setAssignError("Chọn ít nhất một sinh viên trong bảng.");
+      return;
+    }
+    setAssignError("");
+    setRunning(true);
+    setError("");
+
+    try {
+      const response = await autoEnrollmentService.trigger(
+        selectedSemesterId,
+        buildTriggerPayload(dryRunFlag === true, { selectedStudentCodes: codes }),
+      );
+      setResult(response?.data?.data || null);
+      setSnapshotMessage("");
+      setAssignMessage(
+        dryRunFlag
+          ? `Xem trước (${codes.length} SV): không ghi CSDL — sĩ số / danh sách lớp sẽ không đổi cho đến khi bạn bấm «Ghi vào CSDL…».`
+          : `Đã ghi CSDL cho ${codes.length} SV — ClassEnrollment đã tạo, sĩ số lớp đã cập nhật. Tải lại trang «Nhóm lớp học phần» hoặc Quản lý lớp để xem.`,
+      );
+    } catch (err) {
+      setError(
+        err?.response?.data?.message || "Failed to trigger auto enrollment",
+      );
+      setResult(null);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handlePreviewSelectedIntoExistingSections = () =>
+    runSelectedIntoExistingSections(true);
+
+  const handleApplySelectedIntoExistingSections = async () => {
+    const codes = eligibleStudents
+      .filter((s) => selectedStudentIds[String(s._id)])
+      .map((s) => String(s.studentCode || "").trim().toUpperCase())
+      .filter(Boolean);
+    const ok = window.confirm(
+      `Ghi thật vào CSDL: gán ${codes.length} sinh viên đã chọn vào các lớp có sẵn trong nhóm «${selectedClassGroup || "?"}»?\n\n` +
+        "Sĩ số (currentEnrollment) sẽ tăng sau thao tác này. «Xem trước» không làm bước này.",
+    );
+    if (!ok) return;
+    await runSelectedIntoExistingSections(false);
+  };
+
+  /** Bước 2: ghi enrollment/waitlist thật (sau khi đã xem trước với dry run). */
+  const handleApplyLive = async () => {
+    if (!selectedSemesterId) return;
+    const ok = window.confirm(
+      "Ghi enrollment và waitlist vào CSDL theo bộ lọc hiện tại trên form?\n\n" +
+        "Đảm bảo HK / khung CT / nhóm lớp giống lần xem trước. Thao tác này không thể hoàn tác bằng «Lưu bản log».",
+    );
+    if (!ok) return;
+
+    setRunning(true);
+    setError("");
+
+    try {
+      const response = await autoEnrollmentService.trigger(
+        selectedSemesterId,
+        buildTriggerPayload(false),
+      );
       setResult(response?.data?.data || null);
       setSnapshotMessage("");
     } catch (err) {
@@ -526,6 +849,8 @@ export default function AutoEnrollmentPage() {
               .join(" — ")
           : "",
         result,
+        applyMaxCapacityToClassSections:
+          applyMaxCapacityOnSnapshot && result?.dryRun !== true,
       });
       setSnapshotMessage("Đã lưu. Xem tại mục Lịch sử xếp lớp.");
     } catch (err) {
@@ -541,6 +866,12 @@ export default function AutoEnrollmentPage() {
         <h1 className="text-2xl font-bold text-slate-900">Auto Enrollment</h1>
         <p className="mt-1 text-sm text-slate-600">
           Assign active students to class sections for the selected semester.
+        </p>
+        <p className="mt-2 text-sm text-slate-700">
+          <span className="font-medium">Luồng đề xuất:</span> bấm chạy xem trước
+          (mặc định không ghi CSDL) → xem cột Enrolled / Skipped → nếu
+          đúng thì bấm «Ghi enrollment vào CSDL». «Lưu bản log» chỉ lưu snapshot
+          để tra cứu, không gán lớp.
         </p>
       </div>
 
@@ -698,9 +1029,12 @@ export default function AutoEnrollmentPage() {
                   })}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  Chọn một khung để chỉ xếp SV đang gắn khung đó (theo trường
-                  curriculumId). Để trống = mọi SV đủ điều kiện theo bộ lọc bên
-                  dưới.
+                  Chọn khung → chỉ xét sinh viên thuộc{" "}
+                  <span className="font-medium">ngành của khung</span> và{" "}
+                  <span className="font-medium">năm nhập học</span> nằm trong khoảng
+                  niên khóa trên khung (vd 2018–2023 cho K18), trừ khi SV đã gán đúng{" "}
+                  <span className="font-medium">curriculumId</span> của khung này. SV chưa gán
+                  khung: cần <span className="font-medium">majorCode</span> đúng ngành.
                 </p>
               </div>
             )}
@@ -736,8 +1070,11 @@ export default function AutoEnrollmentPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
-                  Chọn một nhóm để chỉ xếp SV vào lớp thuộc nhóm đó. Để trống =
-                  xếp cho mọi nhóm (SV sẽ được ghép đúng classGroup của mình).
+                  Khi chọn nhóm: SV đang có ít nhất một lớp HP{" "}
+                  <span className="font-medium">enrolled</span> với{" "}
+                  <span className="font-medium">classGroup</span> trùng nhóm đó, hoặc SV{" "}
+                  <span className="font-medium">chưa có</span> lớp HP enrolled nào có nhóm
+                  (và chưa ghi Lớp SH thủ công trên hồ sơ). Để trống = không lọc theo nhóm.
                 </p>
               </div>
             )}
@@ -756,6 +1093,10 @@ export default function AutoEnrollmentPage() {
                 placeholder="Leave empty to process all"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
               />
+              <p className="mt-1 text-xs text-slate-500">
+                Để trống = không giới hạn số sinh viên khi bấm «Chạy Auto Enrollment» phía
+                trên. Nhập số nguyên ≥ 1 = chỉ xử lý tối đa nhiêu SV (theo thứ tự lọc).
+              </p>
             </div>
 
             <div>
@@ -767,21 +1108,39 @@ export default function AutoEnrollmentPage() {
                 value={majorCodesInput}
                 onChange={(e) => setMajorCodesInput(e.target.value)}
                 disabled={running}
-                placeholder="SE, CE, CA"
+                placeholder={
+                  enrollmentMode === "normal" && selectedCurriculumId
+                    ? "SE"
+                    : "SE, AI, CE…"
+                }
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
               />
+              <p className="mt-1 text-xs text-slate-500">
+                {enrollmentMode === "normal" && selectedCurriculumId
+                  ? "Tùy chọn — để trống = chạy tất cả ngành trong khung. Nhập mã để thu hẹp còn mã đó (phải nằm trong khung đã chọn)."
+                  : "Bắt buộc khi không chọn khung — cách nhau bằng dấu phẩy hoặc khoảng trắng."}
+              </p>
             </div>
           </div>
 
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-                disabled={running}
-              />
-              Dry run only
+            <div style={{ display: "none" }}>
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={dryRun}
+                  onChange={(e) => setDryRun(e.target.checked)}
+                  disabled={running}
+                />
+                Chỉ xem trước (dry run — không ghi ClassEnrollment / waitlist)
+              </span>
+              {!dryRun && (
+                <span className="ml-6 text-xs text-amber-800">
+                  Đang tắt dry run: mỗi lần bấm nút chạy bên dưới sẽ ghi thật vào
+                  CSDL.
+                </span>
+              )}
             </label>
 
             <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -796,36 +1155,239 @@ export default function AutoEnrollmentPage() {
               Chỉ sinh viên chưa hoàn thành kỳ hiện tại
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={excludeStudentsAlreadyAssignedInSemester}
-                onChange={(e) =>
-                  setExcludeStudentsAlreadyAssignedInSemester(e.target.checked)
-                }
-                disabled={running}
-              />
-              Bỏ qua SV đã có lớp trong HK hệ thống đang chọn (tránh trùng)
+            <label className="flex flex-col gap-1 text-sm text-slate-600">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={excludeStudentsAlreadyAssignedInSemester}
+                  onChange={(e) =>
+                    setExcludeStudentsAlreadyAssignedInSemester(e.target.checked)
+                  }
+                  disabled={running}
+                />
+                Bỏ qua SV đã có lớp trong HK hệ thống đang chọn (tránh trùng)
+              </span>
+              {onlyStudentsWithoutEnrollments && (
+                <span className="ml-6 text-xs text-slate-500">
+                  Khi đã tick &quot;chưa hoàn thành kỳ&quot; phía trên, tùy chọn này được bỏ qua
+                  trên server để vẫn xếp thêm môn cho SV đã có một phần lớp trong HK.
+                </span>
+              )}
             </label>
+          </div>
 
-            <button
-              onClick={handleRun}
-              disabled={
-                !selectedSemesterId ||
-                running ||
-                semesterOptions.length === 0 ||
-                !semesterOptions.some((s) => s.id === selectedSemesterId)
-              }
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {running
-                ? "Running..."
-                : dryRun
-                  ? "Run dry check"
-                  : "Run auto enrollment"}
-            </button>
+            <div className="hidden flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleRun}
+                disabled={
+                  !selectedSemesterId ||
+                  running ||
+                  semesterOptions.length === 0 ||
+                  !semesterOptions.some((s) => s.id === selectedSemesterId)
+                }
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {running
+                  ? "Đang chạy..."
+                  : dryRun
+                    ? "Chạy xem trước (không ghi CSDL)"
+                    : "Chạy và ghi ngay vào CSDL"}
+              </button>
+              <p className="max-w-xl text-xs text-slate-600">
+                <span className="font-medium text-slate-700">Chỉ ghi danh (ClassEnrollment)</span> vào
+                các lớp học phần đã tồn tại —{" "}
+                <span className="font-medium">không tạo</span> ClassSection mới. Khi đã chọn{" "}
+                <span className="font-medium">Nhóm lớp học phần</span>, hệ thống gán SV vào{" "}
+                <span className="font-medium">mọi môn</span> có lớp mở (Published/Scheduled) trong nhóm đó
+                (ví dụ 2 lớp → 2 môn → 2 enrollment).
+              </p>
+            </div>
           </div>
         </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <h3 className="text-sm font-semibold text-slate-800">
+              Xếp lớp thủ công
+            </h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Dùng đúng bộ lọc phía trên (học kỳ, khung CT, nhóm lớp, checkbox…).{" "}
+              <span className="font-medium">Student limit</span> chỉ áp cho nút «Chạy Auto Enrollment» phía trên
+              (toàn bộ SV khớp lọc). Danh sách dưới đây là toàn bộ sau lọc (không cắt theo limit).{" "}
+              <span className="font-medium text-emerald-800">
+                Để tăng sĩ số thật trên CSDL
+              </span>
+              , chọn SV rồi bấm{" "}
+              <span className="font-medium">«Ghi vào CSDL — tăng sĩ số lớp»</span> trong khối
+              xanh lá (nút «Xem trước» không làm sĩ số đổi).
+            </p>
+            <p className="mt-2 text-xs text-amber-900/90 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5">
+              <span className="font-medium">Lọc nhóm</span> khớp với cột Lớp SH ở Quản lý
+              sinh viên: dựa trên <span className="font-medium">nhóm (classGroup)</span>{" "}
+              trên các lớp học phần đang <span className="font-medium">enrolled</span> (và
+              cùng quy tắc &quot;chưa có nhóm&quot; như form). SV đã có enrollment với nhóm
+              khác sẽ không vào danh sách khi chọn nhóm không trùng. Muốn xem rộng: để trống
+              dropdown nhóm lớp. Khi đã chọn nhóm + HK map khung CT, danh sách còn{" "}
+              <span className="font-medium">ẩn SV đã có môn đó trong kỳ</span> (đã enrolled/
+              completed lớp cùng môn + kỳ như lớp mẫu trong nhóm) để chỉ còn người chưa tham
+              gia môn đó.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLoadEligibleStudents}
+                disabled={
+                  loadingEligible ||
+                  !selectedSemesterId ||
+                  semesterOptions.length === 0 ||
+                  !semesterOptions.some((s) => s.id === selectedSemesterId)
+                }
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loadingEligible ? "Đang tải…" : "Xem tất cả sinh viên (sau lọc)"}
+              </button>
+            </div>
+
+            {eligibleStudents.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
+                  <span>
+                    <span className="font-medium">{eligibleStudents.length}</span>{" "}
+                    sinh viên
+                    {eligibleMeta?.curriculumEnrollmentYearRange != null && (
+                      <span className="ml-2 text-xs text-slate-500">
+                        (niên khóa SV:{" "}
+                        {typeof eligibleMeta.curriculumEnrollmentYearRange ===
+                        "object" &&
+                        eligibleMeta.curriculumEnrollmentYearRange != null &&
+                        "startYear" in eligibleMeta.curriculumEnrollmentYearRange
+                          ? `${eligibleMeta.curriculumEnrollmentYearRange.startYear}–${eligibleMeta.curriculumEnrollmentYearRange.endYear}`
+                          : String(eligibleMeta.curriculumEnrollmentYearRange)}
+                        )
+                      </span>
+                    )}
+                  </span>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={
+                        eligibleStudents.length > 0 &&
+                        eligibleStudents.every(
+                          (s) => selectedStudentIds[String(s._id)],
+                        )
+                      }
+                      onChange={(e) =>
+                        handleSelectAllEligible(e.target.checked)
+                      }
+                    />
+                    Chọn tất cả
+                  </label>
+                </div>
+
+                <div className="max-h-72 overflow-auto rounded-lg border border-slate-200 bg-white">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-100">
+                      <tr>
+                        <th className="w-10 px-2 py-2 text-left" />
+                        <th className="px-2 py-2 text-left font-semibold text-slate-700">
+                          Mã SV
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-slate-700">
+                          Họ tên
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-slate-700">
+                          Ngành
+                        </th>
+                        <th className="px-2 py-2 text-left font-semibold text-slate-700">
+                          Khóa
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {eligibleStudents.map((s) => (
+                        <tr key={String(s._id)} className="hover:bg-slate-50">
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={!!selectedStudentIds[String(s._id)]}
+                              onChange={() => handleToggleStudent(s._id)}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 font-mono text-xs">
+                            {s.studentCode}
+                          </td>
+                          <td className="px-2 py-1.5">{s.fullName}</td>
+                          <td className="px-2 py-1.5">{s.majorCode ?? "—"}</td>
+                          <td className="px-2 py-1.5">
+                            {s.enrollmentYear ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/90 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-emerald-950">
+                    Ghi danh vào các lớp học phần đã có trong nhóm (không tạo lớp mới)
+                  </p>
+                  <p className="text-xs text-emerald-900/90 leading-relaxed">
+                    <span className="font-medium">Xem trước</span> chỉ mô phỏng kết quả —{" "}
+                    <span className="font-medium">không ghi ClassEnrollment</span>, nên sĩ số
+                    trên trang lớp / nhóm học phần{" "}
+                    <span className="font-medium">sẽ không tăng</span>. Để sĩ số tăng, bấm nút{" "}
+                    <span className="font-medium">«Ghi vào CSDL…»</span> bên dưới (hoặc tắt «Chỉ
+                    xem trước» phía trên rồi dùng «Chạy Auto Enrollment» / «Ghi enrollment vào
+                    CSDL»).
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePreviewSelectedIntoExistingSections}
+                      disabled={
+                        running ||
+                        !selectedSemesterId ||
+                        !selectedClassGroup ||
+                        !eligibleStudents.some(
+                          (s) => selectedStudentIds[String(s._id)],
+                        ) ||
+                        semesterOptions.length === 0 ||
+                        !semesterOptions.some((s) => s.id === selectedSemesterId)
+                      }
+                      className="rounded-lg border border-emerald-700 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {running ? "Đang chạy…" : "Xem trước (không đổi sĩ số)"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplySelectedIntoExistingSections}
+                      disabled={
+                        running ||
+                        !selectedSemesterId ||
+                        !selectedClassGroup ||
+                        !eligibleStudents.some(
+                          (s) => selectedStudentIds[String(s._id)],
+                        ) ||
+                        semesterOptions.length === 0 ||
+                        !semesterOptions.some((s) => s.id === selectedSemesterId)
+                      }
+                      className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {running ? "Đang chạy…" : "Ghi vào CSDL — tăng sĩ số lớp"}
+                    </button>
+                  </div>
+                </div>
+
+                {assignError && (
+                  <p className="text-sm text-red-600">{assignError}</p>
+                )}
+                {assignMessage && (
+                  <p className="text-sm text-emerald-800">{assignMessage}</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {selectedSemester && (
             <p className="mt-3 text-xs text-slate-500">
               Selected:{" "}
@@ -854,7 +1416,13 @@ export default function AutoEnrollmentPage() {
       {activeTab === "status" && (
         <EnrollmentStatusTab
           semesters={semesters}
+          curriculums={curriculums}
+          loadingCurriculums={loadingCurriculums}
           classGroups={classGroups}
+          statusCurriculumId={statusCurriculumId}
+          setStatusCurriculumId={setStatusCurriculumId}
+          statusSemesterOptions={statusSemesterOptions}
+          loadingStatusCurriculumSemesters={loadingStatusCurriculumSemesters}
           statusSemester={statusSemester}
           setStatusSemester={setStatusSemester}
           setStatusSemesterInfo={setStatusSemesterInfo}
@@ -880,14 +1448,46 @@ export default function AutoEnrollmentPage() {
       {/* Result sections — always visible when result exists, outside tabs */}
       {result && (
         <div className="mt-6 space-y-4">
+          {result.dryRun ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+              <p className="font-semibold">Đây là xem trước — chưa ghi vào CSDL</p>
+              <p className="mt-1 text-amber-900">
+                Cột Enrolled / Waitlisted / Skipped phản ánh kết quả mô phỏng. Nếu
+                muốn tạo ClassEnrollment và waitlist thật, bấm nút bên dưới (dùng
+                đúng bộ lọc hiện tại trên form).
+              </p>
+              <button
+                type="button"
+                onClick={handleApplyLive}
+                disabled={running}
+                className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {running ? "Đang ghi..." : "Ghi enrollment vào CSDL (Live)"}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+              <p className="font-semibold">Lần chạy này đã ghi vào CSDL (Live)</p>
+              <p className="mt-1 text-emerald-900">
+                Enrollment và waitlist (nếu có) đã được lưu. Bản «Lưu bản log»
+                phía dưới chỉ là snapshot tra cứu, không phải bước gán lớp.
+              </p>
+            </div>
+          )}
           {/* Lưu kết quả form */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900">
-              Lưu kết quả (lớp / bản chạy)
+              Lưu bản log (snapshot)
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Lưu bản sao danh sách log bên dưới để tra cứu, đổi tên hoặc xóa
-              sau này — không thay thế dữ liệu đăng ký thực (ClassEnrollment).
+              Lưu vào Lịch sử xếp lớp kèm{" "}
+              <span className="font-medium text-slate-800">
+                nhóm lớp (classGroup)
+              </span>{" "}
+              lấy từ ClassSection trong log — hỗ trợ điểm danh theo lớp. Không tạo
+              ClassEnrollment mới (đã có sau bước Live). Có thể đồng bộ{" "}
+              <span className="font-medium text-slate-800">sĩ số tối đa</span>{" "}
+              (Student limit) lên các ClassSection cùng nhóm và HK hệ thống.
             </p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -915,6 +1515,29 @@ export default function AutoEnrollmentPage() {
                 />
               </div>
             </div>
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={applyMaxCapacityOnSnapshot}
+                onChange={(e) => setApplyMaxCapacityOnSnapshot(e.target.checked)}
+                disabled={savingSnapshot || result?.dryRun === true}
+                className="mt-0.5"
+              />
+              <span>
+                Áp dụng{" "}
+                <span className="font-medium text-slate-800">Student limit</span>{" "}
+                làm{" "}
+                <span className="font-medium text-slate-800">maxCapacity</span>{" "}
+                cho mọi ClassSection cùng{" "}
+                <span className="font-medium text-slate-800">classGroup</span> và
+                học kỳ hệ thống đang chọn (không giảm dưới sĩ số hiện có).
+                {result?.dryRun === true ? (
+                  <span className="block text-xs text-amber-700">
+                    Tắt dry run và chạy Live trước khi lưu nếu muốn đồng bộ sĩ số.
+                  </span>
+                ) : null}
+              </span>
+            </label>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -922,7 +1545,7 @@ export default function AutoEnrollmentPage() {
                 disabled={savingSnapshot}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
               >
-                {savingSnapshot ? "Đang lưu..." : "Lưu lớp / lưu bản chạy"}
+                {savingSnapshot ? "Đang lưu..." : "Lưu bản log"}
               </button>
               <Link
                 to="/admin/enrollment-snapshots"
@@ -1144,7 +1767,13 @@ export default function AutoEnrollmentPage() {
 // ── EnrollmentStatusTab ───────────────────────────────────────────────────────────
 function EnrollmentStatusTab({
   semesters,
+  curriculums,
+  loadingCurriculums,
   classGroups,
+  statusCurriculumId,
+  setStatusCurriculumId,
+  statusSemesterOptions,
+  loadingStatusCurriculumSemesters,
   statusSemester,
   setStatusSemester,
   setStatusSemesterInfo,
@@ -1165,7 +1794,9 @@ function EnrollmentStatusTab({
   actionMessage,
   setActionMessage,
 }) {
-  const selectedSem = semesters.find((s) => String(s.id) === String(statusSemester));
+  const selectedSem =
+    statusSemesterOptions.find((s) => String(s.id) === String(statusSemester)) ||
+    semesters.find((s) => String(s.id) === String(statusSemester));
 
   const loadStatus = async () => {
     if (!selectedSem) return;
@@ -1174,10 +1805,16 @@ function EnrollmentStatusTab({
     setEnrollmentStatus(null);
     setActionMessage({ type: "", text: "" });
     try {
+      const csOrder = selectedSem?.curriculumSemesterOrder;
       const res = await autoEnrollmentService.getEnrollmentStatus({
         semesterNum: selectedSem.semesterNum,
         academicYear: selectedSem.academicYear,
         classGroup: statusClassGroup || undefined,
+        curriculumId: statusCurriculumId || undefined,
+        curriculumSemesterOrder:
+          csOrder != null && Number.isFinite(Number(csOrder)) && Number(csOrder) >= 1
+            ? Number(csOrder)
+            : undefined,
       });
       if (res.data?.success) {
         setEnrollmentStatus(res.data.data);
@@ -1251,12 +1888,17 @@ function EnrollmentStatusTab({
     }
   };
 
-  const semesterOptions = semesters.map((s) => ({
-    ...s,
-    optionKey: `${s._id ?? s.id}_${s.academicYear}`,
-  }));
-
   const summary = enrollmentStatus?.summary || {};
+
+  const statusFilterHint = [
+    statusCurriculumId ? "khung CT đã chọn" : null,
+    selectedSem?.curriculumSemesterOrder != null
+      ? `kỳ ${selectedSem.curriculumSemesterOrder} trong khung`
+      : null,
+    statusClassGroup ? `nhóm ${statusClassGroup}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="space-y-5">
@@ -1269,12 +1911,53 @@ function EnrollmentStatusTab({
           Xem sinh viên nào đã <span className="font-medium text-green-700">enrolled</span>, đang{" "}
           <span className="font-medium text-amber-700">waitlisted</span>, hoặc{" "}
           <span className="font-medium text-slate-700">chưa có gì</span> trong học kỳ này —
-          trước khi reset hoặc promote.
+          trước khi reset hoặc promote. Chọn{" "}
+          <span className="font-medium">khung chương trình</span> để lọc giống tab Chạy (kỳ trong
+          khung map sang HK hệ thống — cùng nguồn với{" "}
+          <Link to="/admin/semesters" className="text-blue-600 underline hover:text-blue-800">
+            Quản lý học kỳ
+          </Link>
+          ).
         </p>
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">
+            Khung chương trình <span className="font-normal text-slate-400">(tùy chọn)</span>
+          </label>
+          <select
+            value={statusCurriculumId}
+            onChange={(e) => {
+              setStatusCurriculumId(e.target.value);
+              setEnrollmentStatus(null);
+              setStatusSemesterInfo(null);
+            }}
+            disabled={loadingCurriculums}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="">
+              {loadingCurriculums
+                ? "Đang tải..."
+                : "— Không lọc theo khung — (tất cả HK hệ thống)"}
+            </option>
+            {curriculums.map((c) => {
+              const id = String(c._id || c.id);
+              const label = [c.code, c.name].filter(Boolean).join(" — ") || id;
+              return (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              );
+            })}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            Khi chọn khung: dropdown học kỳ chỉ còn các kỳ của khung (map tới HK hệ thống); kết quả
+            lọc thêm theo <span className="font-medium">curriculum</span> trên lớp học phần và{" "}
+            <span className="font-medium">kỳ trong khung</span> (curriculumSemesterOrder).
+          </p>
+        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Học kỳ
+              Học kỳ hệ thống / kỳ trong khung
             </label>
             <select
               value={statusSemester}
@@ -1283,15 +1966,33 @@ function EnrollmentStatusTab({
                 setEnrollmentStatus(null);
                 setStatusSemesterInfo(null);
               }}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              disabled={
+                !statusSemesterOptions.length ||
+                (Boolean(statusCurriculumId) && loadingStatusCurriculumSemesters)
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
             >
-              <option value="">— Chọn học kỳ —</option>
-              {semesterOptions.map((s) => (
-                <option key={s.optionKey} value={s.id}>
-                  {s.name} ({s.academicYear})
+              {!statusSemesterOptions.length ? (
+                <option value="">
+                  {statusCurriculumId && loadingStatusCurriculumSemesters
+                    ? "Đang tải kỳ theo khung..."
+                    : statusCurriculumId
+                      ? "Không map được HK cho khung này."
+                      : "— Chọn học kỳ —"}
                 </option>
-              ))}
+              ) : (
+                statusSemesterOptions.map((s) => (
+                  <option key={s.optionKey ?? s.id} value={s.id}>
+                    {s.optionLabel ?? `${s.name} (${s.academicYear})`}
+                  </option>
+                ))
+              )}
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {statusCurriculumId
+                ? "Mỗi dòng = một kỳ trong khung CT → HK hệ thống tương ứng."
+                : "Danh sách HK hệ thống đã gộp trùng (cùng nguồn với trang Quản lý học kỳ)."}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -1501,7 +2202,8 @@ function EnrollmentStatusTab({
           {enrollmentStatus.enrolled?.length === 0 && enrollmentStatus.waitlisted?.length === 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <p className="text-sm text-slate-500">
-                Chưa có enrollment hoặc waitlist nào cho HK này{statusClassGroup ? ` (nhóm ${statusClassGroup})` : ""}.
+                Chưa có enrollment hoặc waitlist nào cho HK này
+                {statusFilterHint ? ` (${statusFilterHint})` : ""}.
               </p>
             </div>
           )}

@@ -3,6 +3,7 @@ import feedbackService from '../../services/feedbackService';
 import feedbackSubmissionService from '../../services/feedbackSubmissionService';
 
 const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const FEEDBACK_STATUS_STORAGE_KEY = 'student_feedback_submission_state';
 
 function formatDateTime(value) {
   const date = new Date(value);
@@ -90,6 +91,32 @@ function getSubmissionScore(submission) {
   return Number.isFinite(score) ? score.toFixed(2) : '0.00';
 }
 
+function getSubmissionClassId(submission) {
+  return String(submission?.classSection?._id || submission?.classSection || '');
+}
+
+function readStoredSubmissionState() {
+  try {
+    const raw = window.localStorage.getItem(FEEDBACK_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function writeStoredSubmissionState(value) {
+  try {
+    window.localStorage.setItem(
+      FEEDBACK_STATUS_STORAGE_KEY,
+      JSON.stringify(value && typeof value === 'object' ? value : {}),
+    );
+  } catch (error) {
+    // Ignore storage write failures and keep in-memory state.
+  }
+}
+
 function RatingInput({ value, onChange, readOnly = false }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -138,12 +165,17 @@ export default function StudentFeedbackCampaignPage() {
   const [availability, setAvailability] = useState(null);
   const [classes, setClasses] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [localSubmissionMap, setLocalSubmissionMap] = useState({});
   const [selectedClassId, setSelectedClassId] = useState('');
   const [responses, setResponses] = useState([]);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [now, setNow] = useState(() => new Date());
 
   const template = useMemo(() => availability?.template || null, [availability]);
+  const templateStoragePrefix = useMemo(
+    () => `template:${String(template?._id || 'default')}:class:`,
+    [template?._id],
+  );
 
   const liveAvailability = useMemo(() => {
     if (!availability) {
@@ -215,12 +247,20 @@ export default function StudentFeedbackCampaignPage() {
   );
 
   const submissionByClassId = useMemo(() => {
-    return new Map(
+    const merged = new Map(
       submissions
-        .filter((submission) => submission.classSection?._id)
-        .map((submission) => [String(submission.classSection._id), submission]),
+        .map((submission) => [getSubmissionClassId(submission), submission])
+        .filter(([classId]) => Boolean(classId)),
     );
-  }, [submissions]);
+
+    Object.entries(localSubmissionMap).forEach(([classId, submission]) => {
+      if (classId) {
+        merged.set(classId, submission);
+      }
+    });
+
+    return merged;
+  }, [submissions, localSubmissionMap]);
 
   const currentSubmission = useMemo(() => {
     return selectedClassId ? submissionByClassId.get(String(selectedClassId)) || null : null;
@@ -274,9 +314,21 @@ export default function StudentFeedbackCampaignPage() {
           feedbackTemplateId: nextAvailability.template._id,
           evaluationType: 'teacher',
         });
-        setSubmissions(Array.isArray(submissionRes?.data?.data) ? submissionRes.data.data : []);
+        const fetchedSubmissions = Array.isArray(submissionRes?.data?.data) ? submissionRes.data.data : [];
+        setSubmissions(fetchedSubmissions);
+        setLocalSubmissionMap((current) => {
+          const next = { ...current };
+          fetchedSubmissions.forEach((submission) => {
+            const classId = getSubmissionClassId(submission);
+            if (classId && next[classId]) {
+              delete next[classId];
+            }
+          });
+          return next;
+        });
       } else {
         setSubmissions([]);
+        setLocalSubmissionMap({});
       }
     } catch (error) {
       console.error('Error loading student feedback page:', error);
@@ -290,6 +342,36 @@ export default function StudentFeedbackCampaignPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const stored = readStoredSubmissionState();
+    const scopedEntries = Object.entries(stored).filter(([key]) => key.startsWith(templateStoragePrefix));
+    const nextMap = scopedEntries.reduce((acc, [key, value]) => {
+      const classId = key.slice(templateStoragePrefix.length);
+      if (classId) {
+        acc[classId] = value;
+      }
+      return acc;
+    }, {});
+    setLocalSubmissionMap(nextMap);
+  }, [templateStoragePrefix]);
+
+  useEffect(() => {
+    const stored = readStoredSubmissionState();
+    const withoutCurrentTemplate = Object.fromEntries(
+      Object.entries(stored).filter(([key]) => !key.startsWith(templateStoragePrefix)),
+    );
+    const withCurrentTemplate = Object.fromEntries(
+      Object.entries(localSubmissionMap).map(([classId, value]) => [
+        `${templateStoragePrefix}${classId}`,
+        value,
+      ]),
+    );
+    writeStoredSubmissionState({
+      ...withoutCurrentTemplate,
+      ...withCurrentTemplate,
+    });
+  }, [localSubmissionMap, templateStoragePrefix]);
 
   useEffect(() => {
     loadPageData();
@@ -381,7 +463,7 @@ export default function StudentFeedbackCampaignPage() {
     setMessage({ type: '', text: '' });
 
     try {
-      await feedbackSubmissionService.submitFeedback({
+      const submitResponse = await feedbackSubmissionService.submitFeedback({
         feedbackTemplateId: template._id,
         evaluatedEntityId: selectedClass.teacherId,
         evaluationType: 'teacher',
@@ -389,7 +471,42 @@ export default function StudentFeedbackCampaignPage() {
         responses: responses.filter((response) => response.answer),
       });
 
-      await loadPageData();
+      const savedSubmission = submitResponse?.data?.data;
+      if (savedSubmission) {
+        const classId = getSubmissionClassId(savedSubmission) || String(selectedClass.id);
+        setSubmissions((current) => {
+          const normalizedSubmission = getSubmissionClassId(savedSubmission)
+            ? savedSubmission
+            : {
+                ...savedSubmission,
+                classSection: {
+                  _id: selectedClass.id,
+                  classCode: selectedClass.classCode,
+                  className: selectedClass.className,
+                },
+              };
+
+          return [
+            normalizedSubmission,
+            ...current.filter((item) => getSubmissionClassId(item) !== classId),
+          ];
+        });
+        setLocalSubmissionMap((current) => ({
+          ...current,
+          [classId]: getSubmissionClassId(savedSubmission)
+            ? savedSubmission
+            : {
+                ...savedSubmission,
+                classSection: {
+                  _id: selectedClass.id,
+                  classCode: selectedClass.classCode,
+                  className: selectedClass.className,
+                },
+              },
+        }));
+      }
+
+      loadPageData();
 
       setMessage({
         type: 'success',
@@ -726,3 +843,4 @@ export default function StudentFeedbackCampaignPage() {
     </div>
   );
 }
+

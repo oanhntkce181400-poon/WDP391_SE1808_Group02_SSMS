@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -39,6 +39,7 @@ const PAYMENT_METHOD = {
 
 export default function TuitionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [curriculumStatus, setCurriculumStatus] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +57,19 @@ export default function TuitionPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Khi bấm "Thanh toán ngay" từ PaymentPage / CountdownWidget → tự mở modal chọn hình thức
+  useEffect(() => {
+    if (!isLoading && curriculumStatus && searchParams.get('pay') === '1') {
+      if (curriculumStatus.hasPaid) {
+        toast.info('Bạn đã thanh toán học phí kỳ này rồi.');
+      } else {
+        setShowPaymentChoiceModal(true);
+      }
+      // Xóa param khỏi URL để refresh không tự mở lại
+      navigate('/student/finance', { replace: true });
+    }
+  }, [isLoading, curriculumStatus, searchParams]);
 
   useEffect(() => {
     const script = document.createElement('script');

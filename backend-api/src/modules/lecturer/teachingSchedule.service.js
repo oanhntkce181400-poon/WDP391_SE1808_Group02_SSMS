@@ -152,16 +152,24 @@ async function resolveSemesterContext(filters, includeAllClasses) {
 }
 
 async function getTeachingSchedule(userId, filters = {}) {
-  const teacher = await resolveTeacher({
-    userId,
-    teacherId: filters.teacherId,
-    teacherCode: filters.teacherCode,
-  });
-  if (!teacher) {
+  const user = await User.findById(userId).select('role').lean();
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const isAdminOrStaff = normalizedRole === 'admin' || normalizedRole === 'staff';
+  const showAllTeachers = isAdminOrStaff && !filters.teacherId && !filters.teacherCode;
+
+  const teacher = showAllTeachers
+    ? null
+    : await resolveTeacher({
+        userId,
+        teacherId: filters.teacherId,
+        teacherCode: filters.teacherCode,
+      });
+
+  if (!showAllTeachers && !teacher) {
     const error = new Error(
       filters.teacherId || filters.teacherCode
         ? 'Teacher not found'
-        : 'Teacher profile not found for this account. Please select a lecturer.',
+        : 'Teacher profile not found for this account.',
     );
     error.statusCode = 404;
     throw error;
@@ -171,9 +179,12 @@ async function getTeachingSchedule(userId, filters = {}) {
   const semesterContext = await resolveSemesterContext(filters, includeAllClasses);
 
   const classFilter = {
-    teacher: teacher._id,
     status: { $ne: 'cancelled' },
   };
+
+  if (teacher?._id) {
+    classFilter.teacher = teacher._id;
+  }
 
   if (semesterContext.semesterNum != null) {
     classFilter.semester = Number(semesterContext.semesterNum);
@@ -181,6 +192,7 @@ async function getTeachingSchedule(userId, filters = {}) {
 
   const rawClasses = await ClassSection.find(classFilter)
     .populate('subject', 'subjectCode subjectName credits')
+    .populate('teacher', 'teacherCode fullName department')
     .populate('room', 'roomCode roomName roomNumber')
     .populate('timeslot', 'groupName startTime endTime startPeriod endPeriod')
     .sort({ semester: -1, classCode: 1 })
@@ -227,10 +239,10 @@ async function getTeachingSchedule(userId, filters = {}) {
 
   return {
     teacher: {
-      id: teacher._id,
-      teacherCode: teacher.teacherCode,
-      fullName: teacher.fullName,
-      department: teacher.department,
+      id: teacher?._id || null,
+      teacherCode: teacher?.teacherCode || (showAllTeachers ? 'ALL' : ''),
+      fullName: teacher?.fullName || (showAllTeachers ? 'Tất cả giảng viên' : ''),
+      department: teacher?.department || (showAllTeachers ? 'Toàn trường' : ''),
     },
     semester: {
       id: semesterContext.semesterDoc?._id || null,
@@ -253,6 +265,7 @@ async function getTeachingSchedule(userId, filters = {}) {
         currentEnrollment: cls.currentEnrollment,
         maxCapacity: cls.maxCapacity,
         subject: cls.subject,
+        teacher: cls.teacher || null,
         room: cls.room || primarySchedule?.room || null,
         timeslot: cls.timeslot || primarySchedule?.timeslot || null,
         schedules: classSchedules,

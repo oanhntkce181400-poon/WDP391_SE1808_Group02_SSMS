@@ -48,6 +48,31 @@ const createStudent = async (req, res) => {
     });
   } catch (error) {
     console.error('[StudentController] createStudent error:', error);
+    const msg = String(error.message || '');
+    if (
+      error.code === 11000 ||
+      msg.includes('E11000 duplicate key')
+    ) {
+      if (msg.includes('studentCode')) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'Mã sinh viên (MSSV) đã tồn tại trong hệ thống. Vui lòng thử tạo lại — hệ thống sẽ cấp mã mới tự động.',
+        });
+      }
+      if (msg.includes('identityNumber') || msg.includes('identitynumber')) {
+        return res.status(409).json({
+          success: false,
+          message: 'Số CCCD/CMND đã được sử dụng.',
+        });
+      }
+      if (msg.includes('email')) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email đã tồn tại.',
+        });
+      }
+    }
     const statusCode = error.statusCode || 500;
     return res.status(statusCode).json({
       success: false,

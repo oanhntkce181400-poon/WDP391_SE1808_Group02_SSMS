@@ -16,6 +16,16 @@ const getMyWeekSchedule = async (req, res) => {
     // Gọi service để lấy dữ liệu
     const data = await scheduleService.getMyWeekSchedule(userId, weekStart);
 
+    // Nếu bị chặn do học phí
+    if (data.paymentRequired) {
+      return res.status(403).json({
+        success: true,
+        message: data.tuitionBlock?.message || 'Bạn chưa thanh toán học phí',
+        data: data,
+        paymentRequired: true,
+      });
+    }
+
     // Trả về kết quả thành công
     return res.status(200).json({
       success: true,

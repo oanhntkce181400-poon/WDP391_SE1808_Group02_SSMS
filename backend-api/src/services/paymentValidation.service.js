@@ -8,6 +8,22 @@ const Payment = require("../models/payment.model");
 const TuitionFee = require("../models/tuitionFee.model");
 const ClassEnrollment = require("../models/classEnrollment.model");
 const curriculumService = require("./curriculum.service");
+const CurriculumSemester = require("../models/curriculumSemester.model");
+
+/**
+ * Ngày bắt đầu kỳ trên khung chương trình (admin board — Lưu thay đổi).
+ * Dùng làm hạn thanh toán ưu tiên trước Semester.startDate để đồng bộ UI khung CT.
+ */
+async function getCurriculumSemesterStartDate(curriculumId, semesterOrder) {
+  if (!curriculumId || semesterOrder == null || semesterOrder < 1) return null;
+  const doc = await CurriculumSemester.findOne({
+    curriculum: curriculumId,
+    semesterOrder: Number(semesterOrder),
+  })
+    .select("startDate")
+    .lean();
+  return doc?.startDate ? new Date(doc.startDate) : null;
+}
 
 /**
  * Tính kỳ trong khung theo năm học hệ thống + năm nhập học:
@@ -367,10 +383,18 @@ async function checkSemesterPaymentRequirement(studentId) {
   const paymentSemesterDisplayName =
     cohortSemester?.name ||
     `Học kỳ ${teachingCtx.semesterNum} năm học ${teachingCtx.academicYear}`;
+
+  const curriculumBoardStart =
+    curriculum?._id != null
+      ? await getCurriculumSemesterStartDate(curriculum._id, curriculumSemesterOrder)
+      : null;
+
+  // Ưu tiên ngày trên khung CT (CurriculumSemester); không có thì dùng lịch học kỳ hệ thống (Semester)
   const deadline =
-    cohortSemester?.startDate ||
-    teachingCtx.startDate ||
-    currentSemester.startDate;
+    curriculumBoardStart ||
+    (cohortSemester?.startDate ? new Date(cohortSemester.startDate) : null) ||
+    (teachingCtx.startDate ? new Date(teachingCtx.startDate) : null) ||
+    (currentSemester.startDate ? new Date(currentSemester.startDate) : null);
 
   // Kiểm tra deadline đã qua chưa
   const now = new Date();

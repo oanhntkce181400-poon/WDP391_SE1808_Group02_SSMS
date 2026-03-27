@@ -1,0 +1,161 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="ShowFeeCountdown" name="Show Fee Countdown">
+    <mxGraphModel dx="1400" dy="950" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="950">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Class Diagram: UC141 Show Fee Countdown" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="500" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- CountdownRouter -->
+        <mxCell id="R1" value="CountdownRouter" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="R1r" value="GET /api/finance/countdown" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=4;spacingRight=4;fontSize=10;" vertex="1" parent="R1">
+          <mxGeometry y="30" width="280" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- CountdownController -->
+        <mxCell id="C1" value="CountdownController" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="360" y="50" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="C1m" value="+getFeeCountdown(req): Response" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="C1">
+          <mxGeometry y="30" width="320" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- FinanceService -->
+        <mxCell id="Sfin" value="FinanceService" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Sfinm" value="+getMyTuitionSummary(userId, semesterId?): TuitionSummary" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Sfin">
+          <mxGeometry y="30" width="320" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- PaymentValidationService -->
+        <mxCell id="Spay" value="PaymentValidationService" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="160" width="360" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Spaym" value="+checkSemesterPaymentRequirement(studentId): SemesterPayInfo" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Spay">
+          <mxGeometry y="30" width="360" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Semester -->
+        <mxCell id="Sem" value="Semester" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="160" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Sema" value="-id: ObjectId&#xa;-code: string&#xa;-name: string&#xa;-semesterNum: number&#xa;-academicYear: string&#xa;-isCurrent: boolean&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Sem">
+          <mxGeometry y="30" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Student -->
+        <mxCell id="Stu" value="Student" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="Stua" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-cohort: number&#xa;-currentCurriculumSemester: number" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Stu">
+          <mxGeometry y="30" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- TuitionBill -->
+        <mxCell id="Bill" value="TuitionBill" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="280" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Billa" value="-id: ObjectId&#xa;-student: ObjectId&#xa;-totalAmount: number&#xa;-paidAmount: number&#xa;-dueDate: Date&#xa;-status: string&#xa;-semesterCode: string" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Bill">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- RegistrationPeriod -->
+        <mxCell id="Reg" value="RegistrationPeriod" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="580" y="280" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="Rega" value="-periodName: string&#xa;-startDate: Date&#xa;-endDate: Date&#xa;-status: string&#xa;-allowedCohorts: number[]" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="Reg">
+          <mxGeometry y="30" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- CurriculumSemester -->
+        <mxCell id="CurSem" value="CurriculumSemester" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="880" y="280" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="CurSema" value="-id: ObjectId&#xa;-curriculum: ObjectId&#xa;-semesterOrder: number&#xa;-startDate: Date&#xa;-endDate: Date" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="CurSem">
+          <mxGeometry y="30" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- TuitionFee -->
+        <mxCell id="TuitionFee" value="TuitionFee" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="580" y="440" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="TuitionFeetA" value="-id: ObjectId&#xa;-baseFeePerCredit: number&#xa;-semester: string&#xa;-majorCode: string" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="TuitionFee">
+          <mxGeometry y="30" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- FeeCountdownDTO -->
+        <mxCell id="DTO" value="FeeCountdownDTO" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="580" width="340" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="DTOa" value="+success: boolean&#xa;+status: enum&#xa;  - curriculum_payment_lapsed&#xa;  - paid&#xa;  - no_deadline&#xa;  - hasUpcomingDeadline&#xa;+deadline?: object&#xa;+timeRemaining?: object&#xa;+outstandingAmount?: number&#xa;+message?: string&#xa;+curriculumSemester?: object" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="DTO">
+          <mxGeometry y="30" width="340" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- SemPayInfoDTO -->
+        <mxCell id="SemPayDTO" value="SemesterPayInfoDTO" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="440" width="280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="SemPayDTOa" value="+mustPay: boolean&#xa;+hasPaid: boolean&#xa;+isOverdue: boolean&#xa;+currentCurriculumSemester: number&#xa;+semesterCode: string&#xa;+schoolWideSemester: Semester&#xa;+tuitionFee: TuitionFee" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;" vertex="1" parent="SemPayDTO">
+          <mxGeometry y="30" width="280" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Edges: Router -> Controller -->
+        <mxCell id="e1" style="endArrow=open;endFill=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="R1r" target="C1m"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Edges: Controller -> Services -->
+        <mxCell id="e2" style="endArrow=open;endFill=1;html=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="Sfin"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=open;endFill=1;html=1;exitX=0.8;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="Spay"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Edges: Controller -> Entities -->
+        <mxCell id="e4" style="endArrow=open;endFill=1;html=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="Stu"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=open;endFill=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="Bill"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="endArrow=open;endFill=1;html=1;exitX=0.8;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="Reg"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Edges: PaymentValidationService -> Semester -->
+        <mxCell id="e7" style="endArrow=open;endFill=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="Spay" target="Sem"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Edges: PaymentValidationService -> CurriculumSemester -->
+        <mxCell id="e8" style="endArrow=open;endFill=1;html=1;exitX=0.9;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="Spay" target="CurSem"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Edge: Controller -> FeeCountdownDTO -->
+        <mxCell id="e9" style="endArrow=open;endFill=1;dashed=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="C1" target="DTO"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9l" value="returns" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="e9"><mxGeometry relative="1" as="geometry"><mxPoint y="-6" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Edge: PaymentValidationService -> SemesterPayInfoDTO -->
+        <mxCell id="e10" style="endArrow=open;endFill=1;dashed=1;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="Spaym" target="SemPayDTOa"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10l" value="returns" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="e10"><mxGeometry relative="1" as="geometry"><mxPoint y="-6" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Edge: SemesterPayInfoDTO -> TuitionFee -->
+        <mxCell id="e11" style="endArrow=open;endFill=1;dashed=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="SemPayDTO" target="TuitionFee"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11l" value="contains" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="e11"><mxGeometry relative="1" as="geometry"><mxPoint y="-6" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Edge: SemesterPayInfoDTO -> Semester -->
+        <mxCell id="e12" style="endArrow=open;endFill=1;dashed=1;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="SemPayDTO" target="Sem"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12l" value="contains" style="edgeLabel;html=1;align=center;fontSize=9;" vertex="1" connectable="0" parent="e12"><mxGeometry relative="1" as="geometry"><mxPoint y="-6" as="offset" /></mxGeometry></mxCell>
+
+        <!-- Note: AuthMiddleware -->
+        <mxCell id="n1" value="AuthMiddleware (student)" style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="140" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n1e" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="R1" target="n1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Note: Kỳ hiện tại -->
+        <mxCell id="n2" value="Semester (isCurrent=true) la kỳ&#xa;hệ thống hiện tại" style="shape=note;whiteSpace=wrap;html=1;fillColor=#e1f5fe;strokeColor=#01579b;fontSize=9;align=center;" vertex="1" parent="1">
+          <mxGeometry x="800" y="120" width="140" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n2e" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="Sem" target="n2"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Note: Conditions -->
+        <mxCell id="n3" value="Status conditions:&#xa;(7.1) Invalid JWT → 401&#xa;(7.2) Valid JWT&#xa;(11.1) Student not found → 404&#xa;(11.2) Student found&#xa;(23.1) Curriculum lapsed&#xa;(23.2) No debt&#xa;(23.3) Debt + no deadline&#xa;(23.4) Debt + has deadline&#xa;(30.1) Success&#xa;(30.2) Failure" style="shape=note;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="50" width="180" height="160" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const EnrollmentSnapshot = require("../../models/enrollmentSnapshot.model");
 const Student = require("../../models/student.model");
 const Attendance = require("../../models/attendance.model");
+const ClassSection = require("../../models/classSection.model");
+const Semester = require("../../models/semester.model");
 
 function getUserId(req) {
   return req.auth?.sub || req.auth?.id || null;
@@ -56,6 +58,88 @@ async function enrichSnapshotLogs(logs) {
   });
 }
 
+/**
+ * Bổ sung classGroup / className / maxCapacity từ ClassSection vào từng mục enrolled trong logs.
+ */
+async function enrichEnrollmentLogsWithClassSections(logs) {
+  if (!Array.isArray(logs) || logs.length === 0) return logs;
+  const ids = new Set();
+  for (const row of logs) {
+    for (const e of row.enrolled || []) {
+      const id = e?.classSectionId;
+      if (id != null && mongoose.Types.ObjectId.isValid(String(id))) {
+        ids.add(String(id));
+      }
+    }
+  }
+  if (ids.size === 0) return logs;
+
+  const oidList = [...ids].map((i) => new mongoose.Types.ObjectId(i));
+  const sections = await ClassSection.find({ _id: { $in: oidList } })
+    .select("classCode className classGroup maxCapacity currentEnrollment")
+    .lean();
+  const byId = Object.fromEntries(sections.map((d) => [String(d._id), d]));
+
+  return logs.map((row) => ({
+    ...row,
+    enrolled: (row.enrolled || []).map((e) => {
+      const cs = byId[String(e.classSectionId)];
+      if (!cs) return { ...e };
+      return {
+        ...e,
+        classGroup: e.classGroup || cs.classGroup || "",
+        className: e.className || cs.className || "",
+        maxCapacity:
+          e.maxCapacity != null ? e.maxCapacity : cs.maxCapacity,
+      };
+    }),
+  }));
+}
+
+/**
+ * Đặt maxCapacity cho mọi ClassSection cùng classGroup và HK hệ thống (semester + academicYear).
+ * Không giảm maxCapacity dưới currentEnrollment.
+ */
+async function syncMaxCapacityForClassGroup({
+  semesterId,
+  classGroup,
+  targetCapacity,
+}) {
+  const g = String(classGroup || "").trim();
+  if (!g || !mongoose.Types.ObjectId.isValid(String(semesterId))) {
+    return { updated: 0, matched: 0 };
+  }
+  const cap = Math.floor(Number(targetCapacity));
+  if (!Number.isFinite(cap) || cap < 1) {
+    return { updated: 0, matched: 0 };
+  }
+
+  const sem = await Semester.findById(semesterId).lean();
+  if (!sem) return { updated: 0, matched: 0 };
+
+  const sections = await ClassSection.find({
+    classGroup: g,
+    semester: sem.semesterNum,
+    academicYear: String(sem.academicYear || "").trim(),
+  })
+    .select("_id maxCapacity currentEnrollment")
+    .lean();
+
+  let updated = 0;
+  for (const sec of sections) {
+    const enrolled = Number(sec.currentEnrollment) || 0;
+    const newMax = Math.max(cap, enrolled, 1);
+    if (Number(sec.maxCapacity) !== newMax) {
+      await ClassSection.updateOne(
+        { _id: sec._id },
+        { $set: { maxCapacity: newMax } },
+      );
+      updated += 1;
+    }
+  }
+  return { updated, matched: sections.length };
+}
+
 async function list(req, res) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -71,7 +155,7 @@ async function list(req, res) {
         .skip(skip)
         .limit(limit)
         .select(
-          "title description semesterId curriculumId semesterSnapshot curriculumCode curriculumSemester dryRun summary filters createdAt updatedAt",
+          "title description semesterId curriculumId semesterSnapshot curriculumCode curriculumSemester dryRun summary filters classGroup studentLimit maxCapacityAppliedToClassSections createdAt updatedAt",
         )
         .lean(),
       EnrollmentSnapshot.countDocuments(),
@@ -117,6 +201,8 @@ async function create(req, res) {
       curriculumId,
       curriculumCode,
       result,
+      /** Nếu true: cập nhật maxCapacity trên mọi ClassSection cùng classGroup + HK (theo student limit) */
+      applyMaxCapacityToClassSections,
     } = req.body || {};
     if (!title || !String(title).trim()) {
       return res
@@ -148,6 +234,50 @@ async function create(req, res) {
 
     const userId = getUserId(req);
 
+    const filters = result.filters && typeof result.filters === "object" ? result.filters : {};
+    const classGroupRaw = filters.classGroup != null ? String(filters.classGroup).trim() : "";
+    const classGroup = classGroupRaw || null;
+
+    let studentLimit = null;
+    if (filters.limit != null && filters.limit !== "") {
+      const n = Number(filters.limit);
+      if (Number.isFinite(n) && n >= 1) studentLimit = Math.floor(n);
+    }
+
+    let logs = Array.isArray(result.logs) ? [...result.logs] : [];
+    logs = await enrichEnrollmentLogsWithClassSections(logs);
+
+    let resolvedClassGroup = classGroup;
+    if (!resolvedClassGroup) {
+      for (const row of logs) {
+        for (const e of row.enrolled || []) {
+          const cg = String(e.classGroup || "").trim();
+          if (cg) {
+            resolvedClassGroup = cg;
+            break;
+          }
+        }
+        if (resolvedClassGroup) break;
+      }
+    }
+
+    let maxCapacityAppliedToClassSections = false;
+    const shouldSync =
+      applyMaxCapacityToClassSections === true &&
+      resolvedClassGroup &&
+      studentLimit != null &&
+      result.dryRun !== true;
+
+    if (shouldSync) {
+      const syncResult = await syncMaxCapacityForClassGroup({
+        semesterId,
+        classGroup: resolvedClassGroup,
+        targetCapacity: studentLimit,
+      });
+      maxCapacityAppliedToClassSections = syncResult.matched > 0;
+      logs = await enrichEnrollmentLogsWithClassSections(logs);
+    }
+
     const doc = await EnrollmentSnapshot.create({
       title: String(title).trim(),
       description: description != null ? String(description).trim() : "",
@@ -160,12 +290,15 @@ async function create(req, res) {
           ? Number(result.curriculumSemester)
           : null,
       semesterSnapshot: result.semester || {},
-      filters: result.filters || {},
+      filters,
+      classGroup: resolvedClassGroup,
+      studentLimit,
+      maxCapacityAppliedToClassSections,
       dryRun: result.dryRun === true,
       durationMs: result.durationMs,
       summary: result.summary,
       preflight: result.preflight,
-      logs: Array.isArray(result.logs) ? result.logs : [],
+      logs,
       createdBy:
         userId && mongoose.Types.ObjectId.isValid(String(userId))
           ? userId
@@ -235,6 +368,267 @@ async function remove(req, res) {
 }
 
 /**
+ * Thêm sinh viên vào snapshot: tìm tất cả classSection trong logs,
+ * enroll SV vào từng classSection, rồi cập nhật logs + summary.
+ * body: { studentCodes: string[] }
+ */
+async function addStudentsToSnapshot(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid snapshot id" });
+    }
+
+    const { studentCodes } = req.body || {};
+    if (!Array.isArray(studentCodes) || studentCodes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "studentCodes (array) is required",
+      });
+    }
+
+    const doc = await EnrollmentSnapshot.findById(id).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Snapshot not found" });
+    }
+
+    if (doc.dryRun) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể thêm sinh viên vào bản snapshot Dry run",
+      });
+    }
+
+    // 1. Collect unique classSections from logs
+    const classSectionMap = new Map();
+    for (const row of doc.logs || []) {
+      for (const e of row.enrolled || []) {
+        const csId = String(e.classSectionId || "");
+        if (!csId) continue;
+        if (!classSectionMap.has(csId)) {
+          classSectionMap.set(csId, {
+            classSectionId: csId,
+            classCode: e.classCode || "",
+            subjectCode: e.subjectCode || "",
+            subjectName: e.subjectName || "",
+            className: e.className || e.classCode || "",
+          });
+        }
+      }
+    }
+
+    const classSections = [...classSectionMap.values()];
+    if (classSections.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Snapshot không chứa classSection nào trong logs",
+      });
+    }
+
+    // 2. Resolve student codes to documents
+    const normalizedCodes = studentCodes.map((c) => String(c).trim().toUpperCase());
+    const students = await Student.find({
+      studentCode: { $in: normalizedCodes },
+    })
+      .select("_id fullName email studentCode")
+      .lean();
+
+    const notFound = normalizedCodes.filter(
+      (code) => !students.find((s) => s.studentCode?.toUpperCase() === code),
+    );
+
+    // Load models lazily to avoid circular deps
+    // eslint-disable-next-line global-require
+    const ClassSection = require("../../models/classSection.model");
+    // eslint-disable-next-line global-require
+    const ClassEnrollment = require("../../models/classEnrollment.model");
+    // eslint-disable-next-line global-require
+    const Waitlist = require("../../models/waitlist.model");
+
+    const newLogs = [];
+    let totalEnrollments = 0;
+    let totalWaitlisted = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+
+    for (const student of students) {
+      const studentIdStr = String(student._id);
+      const existingLog = (doc.logs || []).find(
+        (l) => String(l.studentId) === studentIdStr,
+      );
+
+      const enrolled = existingLog ? [...(existingLog.enrolled || [])] : [];
+      const waitlisted = existingLog ? [...(existingLog.waitlisted || [])] : [];
+      const skipped = existingLog ? [...(existingLog.skipped || [])] : [];
+      const errors = existingLog ? [...(existingLog.errors || [])] : [];
+
+      for (const cs of classSections) {
+        const csId = cs.classSectionId;
+
+        // Skip if already enrolled in this classSection (check from existing log)
+        if (enrolled.some((e) => String(e.classSectionId) === csId)) {
+          skipped.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            reason: "Đã đăng ký trước đó",
+          });
+          totalSkipped += 1;
+          continue;
+        }
+
+        try {
+          const csDoc = await ClassSection.findById(csId).lean();
+          if (!csDoc) {
+            errors.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              reason: "ClassSection không tồn tại trong DB",
+            });
+            totalErrors += 1;
+            continue;
+          }
+
+          if (csDoc.currentEnrollment >= csDoc.maxCapacity) {
+            skipped.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Lớp đã đầy",
+            });
+            totalSkipped += 1;
+            continue;
+          }
+
+          const existingEnrollment = await ClassEnrollment.findOne({
+            classSection: csId,
+            student: studentIdStr,
+          }).lean();
+
+          if (existingEnrollment) {
+            skipped.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Đã có enrollment thực tế trong DB",
+            });
+            totalSkipped += 1;
+            continue;
+          }
+
+          // Check waitlist
+          const waitlistEntry = await Waitlist.findOne({
+            student: studentIdStr,
+            subject: csDoc.subject,
+            targetSemester: csDoc.semester,
+            targetAcademicYear: csDoc.academicYear,
+            status: "WAITING",
+          }).lean();
+
+          if (waitlistEntry) {
+            waitlisted.push({
+              classSectionId: csId,
+              classCode: cs.classCode,
+              subjectCode: cs.subjectCode,
+              reason: "Đang trong danh sách chờ",
+            });
+            totalWaitlisted += 1;
+            continue;
+          }
+
+          // Enroll
+          await ClassEnrollment.create({
+            classSection: csId,
+            student: studentIdStr,
+            status: "enrolled",
+            isOverload: false,
+          });
+          await ClassSection.findByIdAndUpdate(csId, {
+            $inc: { currentEnrollment: 1 },
+          });
+
+          enrolled.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            subjectName: cs.subjectName,
+            className: cs.className || csDoc.className,
+            classGroup: csDoc.classGroup || "",
+            maxCapacity: csDoc.maxCapacity,
+            enrolledAt: new Date().toISOString(),
+            source: "manual-add-to-snapshot",
+          });
+          totalEnrollments += 1;
+        } catch (err) {
+          errors.push({
+            classSectionId: csId,
+            classCode: cs.classCode,
+            subjectCode: cs.subjectCode,
+            reason: err.message,
+          });
+          totalErrors += 1;
+        }
+      }
+
+      newLogs.push({
+        studentId: studentIdStr,
+        studentCode: student.studentCode,
+        fullName: student.fullName,
+        email: student.email,
+        enrolled,
+        waitlisted,
+        skipped,
+        errors,
+        addedAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. Build updated summary
+    const originalSummary = doc.summary || {};
+    const updatedSummary = {
+      ...originalSummary,
+      totalStudents: (originalSummary.totalStudents || 0) + students.length,
+      totalEnrollments: (originalSummary.totalEnrollments || 0) + totalEnrollments,
+      waitlisted: (originalSummary.waitlisted || 0) + totalWaitlisted,
+      duplicates: (originalSummary.duplicates || 0) + totalSkipped,
+      failed: (originalSummary.failed || 0) + totalErrors,
+    };
+
+    // 4. Update snapshot
+    const timestamp = new Date().toLocaleString("vi-VN");
+    await EnrollmentSnapshot.findByIdAndUpdate(id, {
+      $push: { logs: { $each: newLogs } },
+      $set: {
+        summary: updatedSummary,
+        description:
+          (doc.description || "")
+          + `\n[${timestamp}] Thêm ${students.length} SV (${normalizedCodes.join(", ")}): `
+          + `${totalEnrollments} enroll, ${totalSkipped} skip, ${totalErrors} lỗi.`,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        studentsFound: students.length,
+        studentsNotFound: notFound,
+        summary: updatedSummary,
+        classSectionsCount: classSections.length,
+        details: newLogs.map((l) => ({
+          studentCode: l.studentCode,
+          fullName: l.fullName,
+          enrolled: l.enrolled.length,
+          skipped: l.skipped.length,
+          errors: l.errors.length,
+        })),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
  * Trả về danh sách classSection duy nhất xuất hiện trong snapshot cùng sĩ số.
  * Dùng cho điểm danh: giáo viên chọn lớp từ snapshot → lấy roster từ logs.
  */
@@ -272,9 +666,31 @@ async function getClassSections(req, res) {
       }
     }
 
-    const classSections = [...map.values()].sort((a, b) =>
+    let classSections = [...map.values()].sort((a, b) =>
       (a.classCode || "").localeCompare(b.classCode || ""),
     );
+
+    const csIds = classSections
+      .map((x) => x.classSectionId)
+      .filter((id) => mongoose.Types.ObjectId.isValid(String(id)));
+    if (csIds.length > 0) {
+      const oids = csIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+      const dbSecs = await ClassSection.find({ _id: { $in: oids } })
+        .select("classGroup maxCapacity currentEnrollment className")
+        .lean();
+      const dbById = Object.fromEntries(dbSecs.map((d) => [String(d._id), d]));
+      classSections = classSections.map((row) => {
+        const db = dbById[String(row.classSectionId)];
+        if (!db) return row;
+        return {
+          ...row,
+          classGroup: row.classGroup || db.classGroup || "",
+          className: row.className || db.className || "",
+          maxCapacity: db.maxCapacity,
+          currentEnrollment: db.currentEnrollment,
+        };
+      });
+    }
 
     return res.json({ success: true, data: classSections });
   } catch (error) {
@@ -364,7 +780,7 @@ async function getRoster(req, res) {
         studentCode,
         fullName,
         email,
-        status: attendance?.status || "",
+        status: attendance?.status === 'Late' ? 'Present' : (attendance?.status || 'Absent'),
         note: attendance?.note || "",
         absenceWarning: attendance?.absenceWarning || false,
       };
@@ -384,4 +800,5 @@ module.exports = {
   create,
   update,
   remove,
+  addStudentsToSnapshot,
 };

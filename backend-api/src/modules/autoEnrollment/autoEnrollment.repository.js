@@ -6,8 +6,18 @@ const Major = require('../../models/major.model');
 const ClassSection = require('../../models/classSection.model');
 const ClassEnrollment = require('../../models/classEnrollment.model');
 const Waitlist = require('../../models/waitlist.model');
+const {
+  getNonEmptyClassGroupsListsByStudentIds,
+  studentMatchesClassGroupFilter,
+} = require('../../utils/studentHomeroomFromEnrollments');
 
 const ACTIVE_ENROLLMENT_STATUSES = ['enrolled', 'completed'];
+
+// Debug flag: bật=true khi cần trace, tắt=false khi hoàn thiện
+const _DEBUG = false;
+function _log(...args) {
+  if (_DEBUG) console.log('[Repo]', ...args);
+}
 
 // Repository chỉ phụ trách truy vấn / ghi dữ liệu.
 // Mọi quyết định nghiệp vụ như: sinh viên nào được xếp, khi nào waitlist,
@@ -40,6 +50,10 @@ function normalizeCodeList(values = []) {
   );
 }
 
+/**
+ * Normalize a list of academic year strings — deduplicate, trim, remove blanks.
+ * Used when querying ClassSection across multiple academic years simultaneously.
+ */
 function normalizeAcademicYearList(values = []) {
   if (!Array.isArray(values)) {
     return [];
@@ -54,15 +68,191 @@ function normalizeAcademicYearList(values = []) {
   );
 }
 
+function escapeRegex(str) {
+  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Parse "2018-2023", "2026/2034" → { startYear, endYear } */
+function parseAcademicYearRangeString(academicYear) {
+  if (!academicYear || typeof academicYear !== "string") return null;
+  const parts = academicYear
+    .trim()
+    .split(/[-/]/)
+    .map((p) => parseInt(p, 10))
+    .filter((n) => !Number.isNaN(n));
+  if (parts.length < 2) return null;
+  return { startYear: parts[0], endYear: parts[1] };
+}
+
+/** Giống logic findEligibleStudents: đúng curriculumId hoặc chưa gán khung nhưng majorCode khớp + năm nhập học trong khoảng khung. */
+function studentMatchesStatusFilter(
+  student,
+  curriculumOid,
+  majorCodesForFilter,
+  enrollmentYearRange = null,
+) {
+  const codes = majorCodesForFilter && majorCodesForFilter.length ? majorCodesForFilter : null;
+  const mc = String(student?.majorCode || "").trim().toUpperCase();
+  if (!curriculumOid && !codes) return true;
+
+  if (curriculumOid) {
+    const rawC = student?.curriculumId;
+    const hasC =
+      rawC != null &&
+      String(rawC).trim() !== "" &&
+      String(rawC) !== "null";
+    if (hasC) {
+      if (String(rawC) !== String(curriculumOid)) return false;
+      if (codes && mc && !codes.includes(mc)) return false;
+      return true;
+    }
+    if (codes) {
+      if (
+        enrollmentYearRange &&
+        enrollmentYearRange.startYear != null &&
+        enrollmentYearRange.endYear != null
+      ) {
+        const ey = Number.parseInt(student?.enrollmentYear, 10);
+        if (!Number.isFinite(ey)) return false;
+        if (ey < enrollmentYearRange.startYear || ey > enrollmentYearRange.endYear) {
+          return false;
+        }
+      }
+      return codes.includes(mc);
+    }
+    return false;
+  }
+
+  return codes.includes(mc);
+}
+
+/**
+ * Gợi ý mã ngành từ mã / tên khung (CURR_SE_18 → SE, K28_AI_2026 → AI).
+ */
+function inferMajorCodeHintsFromCurriculum(cur) {
+  const hints = new Set();
+  const code = String(cur?.code || "").toUpperCase();
+  if (code) {
+    const m1 = code.match(/CURR_([A-Z]{2,4})_/);
+    if (m1) hints.add(m1[1]);
+    const m2 = code.match(/_([A-Z]{2})_/);
+    if (m2) hints.add(m2[1]);
+    const m3 = code.match(/K\d+_([A-Z]{2,4})_/i);
+    if (m3) hints.add(m3[1].toUpperCase());
+  }
+  return [...hints];
+}
+
+/**
+ * Mã ngành (SE, AI, …) gắn với khung CT: ưu tiên majorId → Major.majorCode,
+ * fallback tên Major theo curriculum.major, mã khung (CURR_SE_18), rồi gợi ý từ code.
+ */
+async function resolveMajorCodesFromCurriculumDoc(cur) {
+  if (!cur) return [];
+
+  if (cur.majorId) {
+    const m = await Major.findById(cur.majorId).select("majorCode").lean();
+    if (m?.majorCode) return normalizeCodeList([m.majorCode]);
+  }
+
+  const name = String(cur.major || "").trim();
+  if (name) {
+    const escaped = escapeRegex(name);
+    const byName = await Major.findOne({
+      isActive: true,
+      $or: [
+        { majorName: new RegExp(`^${escaped}$`, "i") },
+        { majorName: new RegExp(escaped, "i") },
+      ],
+    })
+      .select("majorCode")
+      .lean();
+    if (byName?.majorCode) return normalizeCodeList([byName.majorCode]);
+  }
+
+  const hints = inferMajorCodeHintsFromCurriculum(cur);
+  for (const hint of hints) {
+    const mc = String(hint || "")
+      .trim()
+      .toUpperCase();
+    if (!mc || mc.length < 2) continue;
+    const m = await Major.findOne({ isActive: true, majorCode: mc })
+      .select("majorCode")
+      .lean();
+    if (m?.majorCode) return normalizeCodeList([m.majorCode]);
+  }
+
+  return [];
+}
+
+async function resolveMajorCodesFromCurriculumId(curriculumOid) {
+  if (!curriculumOid || !mongoose.Types.ObjectId.isValid(String(curriculumOid))) {
+    return [];
+  }
+  const cur = await Curriculum.findById(curriculumOid)
+    .select("majorId major code name")
+    .lean();
+  return resolveMajorCodesFromCurriculumDoc(cur);
+}
+
 async function findEligibleStudents(filters = {}) {
   const query = {
     isActive: true,
     $or: [{ academicStatus: 'enrolled' }, { academicStatus: { $exists: false } }],
   };
 
-  const majorCodes = normalizeCodeList(filters.majorCodes);
-  if (majorCodes.length > 0) {
-    query.majorCode = { $in: majorCodes };
+  const requestedMajorCodes = normalizeCodeList(filters.majorCodes);
+  const curriculumIdRaw = filters.curriculumId;
+  const hasCurriculum =
+    curriculumIdRaw != null &&
+    String(curriculumIdRaw).trim() !== "" &&
+    mongoose.Types.ObjectId.isValid(String(curriculumIdRaw));
+
+  let curriculumDoc = null;
+  let curriculumMajorCodes = [];
+  let curriculumEnrollmentYearRange = null;
+
+  if (hasCurriculum) {
+    curriculumDoc = await Curriculum.findById(curriculumIdRaw)
+      .select("academicYear majorId major code name")
+      .lean();
+    curriculumMajorCodes = await resolveMajorCodesFromCurriculumDoc(curriculumDoc);
+    if (curriculumDoc?.academicYear) {
+      curriculumEnrollmentYearRange = parseAcademicYearRangeString(
+        curriculumDoc.academicYear,
+      );
+    }
+  }
+
+  /** Khi có khung CT: chỉ SV đúng ngành của khung (giao với majorCodes form nếu có). */
+  let effectiveMajorCodes = [];
+  if (hasCurriculum) {
+    if (curriculumMajorCodes.length > 0) {
+      effectiveMajorCodes = requestedMajorCodes.length
+        ? requestedMajorCodes.filter((c) => curriculumMajorCodes.includes(c))
+        : curriculumMajorCodes.slice();
+    } else {
+      effectiveMajorCodes = requestedMajorCodes.slice();
+      if (effectiveMajorCodes.length === 0) {
+        _log(
+          "findEligibleStudents: có curriculumId nhưng không suy ra được mã ngành và không có majorCodes — 0 SV",
+        );
+        return {
+          students: [],
+          meta: {
+            curriculumMajorCodes: [],
+            effectiveMajorCodes: [],
+            curriculumEnrollmentYearRange,
+          },
+        };
+      }
+    }
+  } else {
+    effectiveMajorCodes = requestedMajorCodes.slice();
+  }
+
+  if (effectiveMajorCodes.length > 0) {
+    query.majorCode = { $in: effectiveMajorCodes };
   }
 
   const studentCodes = normalizeCodeList(filters.studentCodes);
@@ -70,24 +260,86 @@ async function findEligibleStudents(filters = {}) {
     query.studentCode = { $in: studentCodes };
   }
 
-  const curriculumId = filters.curriculumId;
-  if (curriculumId && mongoose.Types.ObjectId.isValid(String(curriculumId))) {
-    query.curriculumId = new mongoose.Types.ObjectId(String(curriculumId));
+  if (hasCurriculum) {
+    const oid = new mongoose.Types.ObjectId(String(curriculumIdRaw));
+    if (!query.$and) query.$and = [];
+
+    const unassignedCurriculum = {
+      $and: [
+        {
+          $or: [
+            { curriculumId: { $exists: false } },
+            { curriculumId: null },
+          ],
+        },
+      ],
+    };
+    if (
+      curriculumEnrollmentYearRange &&
+      Number.isFinite(Number(curriculumEnrollmentYearRange.startYear)) &&
+      Number.isFinite(Number(curriculumEnrollmentYearRange.endYear))
+    ) {
+      unassignedCurriculum.$and.push({
+        enrollmentYear: {
+          $gte: curriculumEnrollmentYearRange.startYear,
+          $lte: curriculumEnrollmentYearRange.endYear,
+        },
+      });
+    }
+
+    query.$and.push({
+      $or: [{ curriculumId: oid }, unassignedCurriculum],
+    });
   }
 
-  // Filter by classGroup: student.classSection chứa giá trị như "SE1808-01"
-  // Dùng exact match vì classSection trên Student là string group name
-  const classGroup = filters.classGroup;
-  if (classGroup && typeof classGroup === 'string' && classGroup.trim() !== '') {
-    query.classSection = classGroup.trim();
-  }
+  const classGroupFilter =
+    filters.classGroup && typeof filters.classGroup === 'string' && filters.classGroup.trim() !== ''
+      ? filters.classGroup.trim()
+      : '';
 
-  return Student.find(query)
+  // Debug: log query thực tế
+  _log('findEligibleStudents filters:', JSON.stringify(filters, null, 2));
+  _log('findEligibleStudents query:', JSON.stringify(query, null, 2));
+
+  let results = await Student.find(query)
     .select(
       'studentCode fullName email majorCode cohort enrollmentYear currentCurriculumSemester curriculumId academicStatus isActive userId classSection',
     )
     .sort({ studentCode: 1, _id: 1 })
     .lean();
+
+  // Nhóm lớp: đồng bộ với Lớp SH suy từ ClassSection.classGroup (enrollment enrolled),
+  // không chỉ trường Student.classSection (legacy).
+  if (classGroupFilter) {
+    const listsMap = await getNonEmptyClassGroupsListsByStudentIds(
+      results.map((r) => r._id),
+    );
+    results = results.filter((s) =>
+      studentMatchesClassGroupFilter(
+        listsMap.get(String(s._id)) || [],
+        s.classSection,
+        classGroupFilter,
+      ),
+    );
+  }
+
+  _log(`findEligibleStudents => found ${results.length} students`);
+  // Log first 3 to see classSection values
+  for (let i = 0; i < Math.min(5, results.length); i++) {
+    const s = results[i];
+    _log(
+      `  [${i + 1}] ${s.studentCode} | ${s.fullName} | major=${s.majorCode} | classSection="${s.classSection}" | curriculumId=${s.curriculumId}`,
+    );
+  }
+
+  return {
+    students: results,
+    meta: {
+      curriculumMajorCodes,
+      effectiveMajorCodes,
+      curriculumEnrollmentYearRange,
+    },
+  };
 }
 
 async function findActiveCurriculums() {
@@ -120,7 +372,7 @@ async function findOpenClassSections({ semesterNum, academicYear, statuses, clas
   }
   return ClassSection.find(query)
     .select(
-      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex',
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex curriculum curriculumSemesterOrder',
     )
     .lean();
 }
@@ -160,7 +412,26 @@ async function findOpenClassSectionsAllSemesters({ statuses, classGroup }) {
   }
   return ClassSection.find(query)
     .select(
-      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex',
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex curriculum curriculumSemesterOrder',
+    )
+    .lean();
+}
+
+// Lớp mẫu để copy môn/GV khi tạo lớp thủ công — gồm cả draft/locked (không dùng làm pool xếp tự động).
+const TEMPLATE_CLASS_STATUSES = ['draft', 'scheduled', 'published', 'locked'];
+
+async function findClassSectionsByGroupForTemplate(classGroup) {
+  const cg =
+    classGroup && typeof classGroup === 'string' ? classGroup.trim() : '';
+  if (!cg) {
+    return [];
+  }
+  return ClassSection.find({
+    classGroup: cg,
+    status: { $in: TEMPLATE_CLASS_STATUSES },
+  })
+    .select(
+      '_id classCode className subject semester academicYear currentEnrollment maxCapacity status teacher room timeslot classGroup groupIndex curriculum curriculumSemesterOrder',
     )
     .lean();
 }
@@ -183,6 +454,57 @@ async function findSemesterEnrollments(studentIds, classSectionIds, options = {}
   return ClassEnrollment.find(query)
     .select('student classSection status isOverload grade enrollmentDate')
     .lean();
+}
+
+/**
+ * Sinh viên đã có enrollment (enrolled/completed) vào bất kỳ lớp nào cùng môn + kỳ trên ClassSection.
+ * Dùng để ẩn SV khỏi danh sách «tạo lớp mới / gán tay» khi đã học môn đó trong cùng học kỳ khung|hệ thống.
+ */
+async function findStudentIdsWithEnrollmentForSubjectPeriod(
+  studentIds,
+  subjectId,
+  semester,
+  academicYear,
+) {
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return [];
+  }
+  const sid = mongoose.Types.ObjectId.isValid(String(subjectId))
+    ? new mongoose.Types.ObjectId(String(subjectId))
+    : null;
+  if (!sid) {
+    return [];
+  }
+
+  const sem = Number(semester);
+  if (Number.isNaN(sem)) {
+    return [];
+  }
+  const ay = String(academicYear || '').trim();
+  if (!ay) {
+    return [];
+  }
+
+  const sectionIds = await ClassSection.find({
+    subject: sid,
+    semester: sem,
+    academicYear: ay,
+  })
+    .select('_id')
+    .lean()
+    .then((rows) => rows.map((r) => r._id));
+
+  if (sectionIds.length === 0) {
+    return [];
+  }
+
+  return ClassEnrollment.find({
+    student: { $in: studentIds },
+    classSection: { $in: sectionIds },
+    status: { $in: ACTIVE_ENROLLMENT_STATUSES },
+  })
+    .distinct('student')
+    .then((ids) => ids.map((id) => String(id)));
 }
 
 async function findSemesterWaitlists(
@@ -425,27 +747,113 @@ async function findClassSectionById(id) {
  * Trả về danh sách gộp, mỗi dòng gắn nhãn "enrolled" hoặc "waitlisted".
  * Dùng cho admin xem trước khi quyết định reset / promote.
  */
-async function getEnrollmentStatus({ semesterNum, academicYear, classGroup, curriculumId }) {
-  // 1. Tìm classSection thuộc HK này
-  const csQuery = {
-    semester: Number(semesterNum),
-    academicYear: String(academicYear),
-  };
-  if (classGroup && typeof classGroup === 'string') {
-    csQuery.classGroup = classGroup.trim();
+async function getEnrollmentStatus({
+  semesterNum,
+  academicYear,
+  classGroup,
+  curriculumId,
+  curriculumSemesterOrder,
+  majorCodes: majorCodesParam = [],
+}) {
+  const majorCodesFromClient = normalizeCodeList(
+    Array.isArray(majorCodesParam) ? majorCodesParam : [],
+  );
+
+  let curriculumOid = null;
+  if (curriculumId && mongoose.Types.ObjectId.isValid(String(curriculumId))) {
+    curriculumOid = new mongoose.Types.ObjectId(String(curriculumId));
   }
+
+  let majorCodesForFilter = [...majorCodesFromClient];
+  let enrollmentYearRangeForStatus = null;
+  if (curriculumOid) {
+    const curLean = await Curriculum.findById(curriculumOid)
+      .select("academicYear majorId major code name")
+      .lean();
+    if (curLean?.academicYear) {
+      enrollmentYearRangeForStatus = parseAcademicYearRangeString(curLean.academicYear);
+    }
+    const fromCur = await resolveMajorCodesFromCurriculumDoc(curLean);
+    if (fromCur.length > 0) {
+      majorCodesForFilter = majorCodesFromClient.length
+        ? majorCodesFromClient.filter((c) => fromCur.includes(c))
+        : fromCur;
+    } else if (majorCodesForFilter.length === 0) {
+      majorCodesForFilter = [];
+    }
+  }
+
+  // 1. Tìm classSection thuộc HK này (+ khung / kỳ trong khung nếu có)
+  const csOrderRaw =
+    curriculumSemesterOrder != null && curriculumSemesterOrder !== ''
+      ? Number(curriculumSemesterOrder)
+      : null;
+  const csOrder =
+    csOrderRaw != null && Number.isFinite(csOrderRaw) && csOrderRaw >= 1
+      ? csOrderRaw
+      : null;
+
+  const semNum = Number(semesterNum);
+  const ay = String(academicYear);
+
+  /**
+   * ClassSection.academicYear thường là niên khóa khung CT (vd 2026–2030), không trùng
+   * Semester.academicYear (vd 2025–2026). Khi lọc theo khung, bắt buộc dùng cùng ý tưởng
+   * với getDistinctClassGroups: nhánh curriculum không ép academicYear; nhánh legacy
+   * (lớp chưa gắn curriculum) vẫn theo HK hệ thống.
+   */
+  let csQuery;
+  if (curriculumOid) {
+    const branchCurriculum = {
+      semester: semNum,
+      curriculum: curriculumOid,
+    };
+    if (classGroup && typeof classGroup === 'string' && classGroup.trim()) {
+      branchCurriculum.classGroup = classGroup.trim();
+    }
+    if (csOrder != null) {
+      branchCurriculum.curriculumSemesterOrder = csOrder;
+    }
+
+    const noCurriculum = {
+      $or: [{ curriculum: null }, { curriculum: { $exists: false } }],
+    };
+    const branchLegacy = {
+      $and: [
+        { semester: semNum },
+        { academicYear: ay },
+        noCurriculum,
+        ...(classGroup && typeof classGroup === 'string' && classGroup.trim()
+          ? [{ classGroup: classGroup.trim() }]
+          : []),
+      ],
+    };
+
+    csQuery = { $or: [branchCurriculum, branchLegacy] };
+  } else {
+    csQuery = {
+      semester: semNum,
+      academicYear: ay,
+    };
+    if (classGroup && typeof classGroup === 'string' && classGroup.trim()) {
+      csQuery.classGroup = classGroup.trim();
+    }
+    if (csOrder != null) {
+      csQuery.curriculumSemesterOrder = csOrder;
+    }
+  }
+
   const classSections = await ClassSection.find(csQuery)
-    .select('_id classCode className subject semester academicYear classGroup')
+    .select('_id classCode className subject semester academicYear classGroup curriculum curriculumSemesterOrder')
     .lean();
   const csIds = classSections.map((cs) => cs._id);
-  const csMap = Object.fromEntries(classSections.map((cs) => [String(cs._id), cs]));
 
   // 2. Lấy enrollment (chỉ enrolled, không lấy dropped/completed)
   const enrollmentDocs = await ClassEnrollment.find({
     classSection: { $in: csIds },
     status: 'enrolled',
   })
-    .populate('student', 'studentCode fullName')
+    .populate('student', 'studentCode fullName curriculumId majorCode')
     .populate({
       path: 'classSection',
       select: 'classCode className subject',
@@ -471,37 +879,55 @@ async function getEnrollmentStatus({ semesterNum, academicYear, classGroup, curr
     };
   }
   const waitlistDocs = await Waitlist.find(waitlistQuery)
-    .populate('student', 'studentCode fullName')
+    .populate('student', 'studentCode fullName curriculumId majorCode')
     .populate('subject', 'subjectCode subjectName')
     .lean();
 
-  // 4. Build kết quả
-  const enrolledRows = enrollmentDocs.map((e) => ({
-    type: 'enrolled',
-    studentCode: e.student?.studentCode,
-    studentName: e.student?.fullName,
-    studentId: e.student?._id,
-    subjectCode: e.classSection?.subject?.subjectCode,
-    subjectName: e.classSection?.subject?.subjectName,
-    classCode: e.classSection?.classCode,
-    classSectionId: e.classSection?._id,
-    status: e.status,
-    enrolledAt: e.enrollmentDate,
-  }));
+  // 4. Build kết quả + lọc theo khung / major (waitlist không gắn classSection)
+  const enrolledRows = enrollmentDocs
+    .filter((e) =>
+      studentMatchesStatusFilter(
+        e.student,
+        curriculumOid,
+        majorCodesForFilter,
+        enrollmentYearRangeForStatus,
+      ),
+    )
+    .map((e) => ({
+      type: 'enrolled',
+      studentCode: e.student?.studentCode,
+      studentName: e.student?.fullName,
+      studentId: e.student?._id,
+      subjectCode: e.classSection?.subject?.subjectCode,
+      subjectName: e.classSection?.subject?.subjectName,
+      classCode: e.classSection?.classCode,
+      classSectionId: e.classSection?._id,
+      status: e.status,
+      enrolledAt: e.enrollmentDate,
+    }));
 
-  const waitlistedRows = waitlistDocs.map((w) => ({
-    type: 'waitlisted',
-    studentCode: w.student?.studentCode,
-    studentName: w.student?.fullName,
-    studentId: w.student?._id,
-    subjectCode: w.subject?.subjectCode,
-    subjectName: w.subject?.subjectName,
-    waitlistId: w._id,
-    targetSemester: w.targetSemester,
-    targetAcademicYear: w.targetAcademicYear,
-    status: w.status,
-    createdAt: w.createdAt,
-  }));
+  const waitlistedRows = waitlistDocs
+    .filter((w) =>
+      studentMatchesStatusFilter(
+        w.student,
+        curriculumOid,
+        majorCodesForFilter,
+        enrollmentYearRangeForStatus,
+      ),
+    )
+    .map((w) => ({
+      type: 'waitlisted',
+      studentCode: w.student?.studentCode,
+      studentName: w.student?.fullName,
+      studentId: w.student?._id,
+      subjectCode: w.subject?.subjectCode,
+      subjectName: w.subject?.subjectName,
+      waitlistId: w._id,
+      targetSemester: w.targetSemester,
+      targetAcademicYear: w.targetAcademicYear,
+      status: w.status,
+      createdAt: w.createdAt,
+    }));
 
   return {
     summary: {
@@ -694,12 +1120,15 @@ module.exports = {
   findCurrentSemester,
   findStudentById,
   findEligibleStudents,
+  resolveMajorCodesFromCurriculumId,
   findActiveCurriculums,
   findMajorsByCodes,
   findOpenClassSections,
   findOpenClassSectionsBySemesterYears,
   findOpenClassSectionsAllSemesters,
+  findClassSectionsByGroupForTemplate,
   findSemesterEnrollments,
+  findStudentIdsWithEnrollmentForSubjectPeriod,
   findSemesterWaitlists,
   findStudentIdsWithEnrollmentInSystemSemester,
   bulkUpsertEnrollments,

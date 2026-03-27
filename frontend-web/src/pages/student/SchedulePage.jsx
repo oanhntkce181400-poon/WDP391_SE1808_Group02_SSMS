@@ -157,6 +157,7 @@ export default function SchedulePage() {
 
   // State cho modal Waitlist
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [paymentRequired, setPaymentRequired] = useState(null);
 
   useEffect(() => {
     fetchSchedule();
@@ -166,8 +167,15 @@ export default function SchedulePage() {
     try {
       setLoading(true);
       setError(null);
+      setPaymentRequired(null);
       const response = await scheduleService.getMySchedule(weekStart);
-      setSchedules(response.data.data?.schedules || []);
+      const data = response.data.data;
+      setSchedules(data?.schedules || []);
+
+      // Kiểm tra nếu bị chặn do học phí
+      if (data?.paymentRequired && data?.tuitionBlock) {
+        setPaymentRequired(data.tuitionBlock);
+      }
     } catch (err) {
       console.error('Lỗi tải lịch học:', err);
 
@@ -177,6 +185,12 @@ export default function SchedulePage() {
         'Không thể tải lịch học. Vui lòng thử lại.';
       setError(msg);
       setSchedules([]);
+
+      // 403 = bị chặn do học phí
+      if (err.response?.status === 403 && err.response?.data?.data?.tuitionBlock) {
+        setPaymentRequired(err.response.data.data.tuitionBlock);
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -313,6 +327,44 @@ export default function SchedulePage() {
         Lịch học cá nhân
       </h1>
 
+      {/* ── Cảnh báo bị chặn do học phí ── */}
+      {paymentRequired && (
+        <div className="mb-6 bg-red-50 border border-red-300 rounded-xl p-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-red-800">
+                Bạn chưa thanh toán học phí
+              </h3>
+              <p className="mt-1 text-sm text-red-700">
+                {paymentRequired.message}
+              </p>
+              {paymentRequired.outstandingAmount > 0 && (
+                <p className="mt-2 text-sm font-semibold text-red-900">
+                  Số tiền còn nợ:{' '}
+                  {new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND',
+                    maximumFractionDigits: 0,
+                  }).format(paymentRequired.outstandingAmount)}
+                </p>
+              )}
+              <a
+                href="/student/finance"
+                className="inline-flex items-center mt-3 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition"
+              >
+                Thanh toán ngay
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button
@@ -371,7 +423,7 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && !paymentRequired && (
         <div className="overflow-x-auto rounded-xl shadow bg-white">
           <table className="w-full border-collapse text-sm">
             <thead>

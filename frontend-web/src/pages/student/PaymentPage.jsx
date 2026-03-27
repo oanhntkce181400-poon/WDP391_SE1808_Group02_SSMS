@@ -196,79 +196,18 @@ export default function PaymentPage() {
     }
   };
 
-  // Thanh toán theo kỳ curriculum
-  const handleCurriculumPayment = async () => {
+  // Thanh toán theo kỳ curriculum → chuyển sang trang Tài chính (TuitionPage)
+  // TuitionPage có modal chọn Ví / Ngân hàng + PayOS đầy đủ hơn
+  const handleCurriculumPayment = () => {
     if (!curriculumPaymentStatus || curriculumPaymentStatus.hasPaid) {
       toast.warning('Bạn đã thanh toán học phí kỳ này rồi!');
       return;
     }
-
-    setIsCreatingPayment(true);
-    try {
-      const response = await financeService.createCurriculumPayment();
-
-      if (response.data.success) {
-        const paymentResult = response.data.data;
-        
-        if (paymentResult.checkoutUrl) {
-          // Mở cổng thanh toán PayOS
-          const script = document.createElement('script');
-          script.src = PAYOS_SCRIPT_URL;
-          script.onload = () => {
-            if (window.PayOSCheckout) {
-              let url = paymentResult.checkoutUrl;
-              if (paymentResult.checkoutUrl.startsWith('https://dev.pay.payos.vn')) {
-                url = paymentResult.checkoutUrl.replace('https://dev.pay.payos.vn', 'https://next.dev.pay.payos.vn');
-              }
-              if (paymentResult.checkoutUrl.startsWith('https://pay.payos.vn')) {
-                url = paymentResult.checkoutUrl.replace('https://pay.payos.vn', 'https://next.pay.payos.vn');
-              }
-
-              const { open } = window.PayOSCheckout.usePayOS({
-                RETURN_URL: `${window.location.origin}/student/payment/result`,
-                ELEMENT_ID: 'payos-checkout-container',
-                CHECKOUT_URL: url,
-                onExit: (eventData) => {
-                  console.log('Payment exit:', eventData);
-                },
-                onSuccess: async (eventData) => {
-                  console.log('Payment success:', eventData);
-                  // Xác nhận thanh toán và auto-enrollment
-                  try {
-                    await financeService.confirmPaymentWithEnrollment({
-                      orderCode: eventData.orderCode,
-                      amount: paymentResult.amount,
-                      status: 'PAID'
-                    });
-                    toast.success('Thanh toán thành công! Các môn học đang được đăng ký...');
-                    // Reload dữ liệu
-                    loadCurriculumPaymentStatus();
-                    loadSummary();
-                    loadPaymentHistory();
-                  } catch (confirmErr) {
-                    console.error('Error confirming payment:', confirmErr);
-                  }
-                  window.location.href = `${window.location.origin}/student/payment/result?orderCode=${eventData.orderCode}`;
-                },
-                onCancel: (eventData) => {
-                  console.log('Payment cancel:', eventData);
-                  window.location.href = `${window.location.origin}/student/payment?canceled=true`;
-                },
-              });
-              open();
-            }
-          };
-          document.body.appendChild(script);
-        }
-      } else {
-        toast.error(response.data.message || 'Có lỗi xảy ra khi tạo thanh toán');
-      }
-    } catch (error) {
-      console.error('Curriculum payment error:', error);
-      toast.error('Có lỗi xảy ra khi tạo thanh toán');
-    } finally {
-      setIsCreatingPayment(false);
+    if (curriculumPaymentStatus.isOverdue) {
+      toast.error('Bạn đã quá hạn để thanh toán.');
+      return;
     }
+    navigate('/student/finance?pay=1');
   };
 
   const openPayOSCheckout = () => {
@@ -409,29 +348,46 @@ export default function PaymentPage() {
                     )}
                   </p>
                 )}
+
+                {curriculumPaymentStatus.isOverdue && (
+                  <p className="mt-3 rounded-lg border border-red-200 bg-red-100/90 px-3 py-2.5 text-sm font-medium text-red-800">
+                    Bạn đã quá hạn để thanh toán học phí kỳ này. Hiện không thể thanh toán trực tuyến; vui lòng
+                    theo dõi kỳ đăng ký mới hoặc liên hệ phòng Đào tạo để được hướng dẫn.
+                  </p>
+                )}
                 
-                {/* Nút thanh toán */}
-                <button
-                  onClick={handleCurriculumPayment}
-                  disabled={isCreatingPayment}
-                  className={`mt-4 flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium text-white ${
-                    curriculumPaymentStatus.isNewStudent 
-                      ? 'bg-red-600 hover:bg-red-700' 
-                      : 'bg-yellow-600 hover:bg-yellow-700'
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                {/* Nút thanh toán — vô hiệu + làm mờ khi quá hạn */}
+                <div
+                  className={`mt-4 inline-block ${curriculumPaymentStatus.isOverdue ? 'opacity-50 saturate-0' : ''}`}
                 >
-                  {isCreatingPayment ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                      Đang tạo thanh toán...
-                    </>
-                  ) : (
-                    <>
-                      <span>💳</span>
-                      Thanh toán ngay
-                    </>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleCurriculumPayment}
+                    disabled={isCreatingPayment || curriculumPaymentStatus.isOverdue}
+                    title={
+                      curriculumPaymentStatus.isOverdue
+                        ? 'Đã quá hạn thanh toán'
+                        : undefined
+                    }
+                    className={`flex items-center gap-2 rounded-lg px-5 py-2.5 font-medium text-white transition ${
+                      curriculumPaymentStatus.isNewStudent
+                        ? 'bg-red-600 enabled:hover:bg-red-700'
+                        : 'bg-yellow-600 enabled:hover:bg-yellow-700'
+                    } disabled:cursor-not-allowed disabled:opacity-40 disabled:blur-[0.5px]`}
+                  >
+                    {isCreatingPayment ? (
+                      <>
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                        Đang tạo thanh toán...
+                      </>
+                    ) : (
+                      <>
+                        <span aria-hidden>💳</span>
+                        Thanh toán ngay
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -53,6 +53,8 @@ import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
+import AdminClassDetailPage from "./pages/admin/AdminClassDetailPage";
+import RecentClassesPage from "./pages/admin/RecentClassesPage";
 import EnrollmentSnapshotsPage from "./pages/admin/EnrollmentSnapshotsPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
@@ -61,6 +63,10 @@ import EmailTemplateManagementPage from "./pages/admin/EmailTemplateManagementPa
 import ViewGradesPage from "./pages/student/ViewGradesPage";
 import AttendanceReportPage from "./pages/student/AttendanceReportPage";
 import LecturerGradesEntryPage from "./pages/lecturer/LecturerGradesEntryPage";
+import TranscriptPage from "./pages/student/TranscriptPage";
+import PaymentReminderPage from "./pages/admin/PaymentReminderPage";
+import RevenueReportPage from "./pages/admin/RevenueReportPage";
+import PerformanceReportPage from "./pages/admin/PerformanceReportPage";
 import LecturerAcademicCalendarPage from "./pages/lecturer/LecturerAcademicCalendarPage";
 import LecturerHomePage from "./pages/lecturer/LecturerHomePage";
 import LecturerClassStudentsPage from "./pages/lecturer/LecturerClassStudentsPage";
@@ -120,10 +126,12 @@ export default function App() {
           />
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="attendance" element={<AttendancePage />} />
+          <Route path="classes" element={<ClassManagement />} />
+          <Route path="classes/:classSectionId" element={<AdminClassDetailPage />} />
           <Route path="class-performance" element={<ClassPerformancePage />} />
           <Route path="grade-distribution-report" element={<GradeDistributionReportPage />} />
           <Route path="honor-roll-students" element={<HonorRollStudentsPage />} />
-          <Route path="classes" element={<ClassManagement />} />
+          <Route path="recent-classes" element={<RecentClassesPage />} />
           <Route path="lecturers" element={<LecturerManagement />} />
           <Route path="students" element={<StudentManagementPage />} />
           <Route path="announcements" element={<AnnouncementManagement />} />
@@ -144,6 +152,9 @@ export default function App() {
           <Route path="teaching-schedule" element={<TeachingSchedulePage />} />
           <Route path="transactions" element={<AdminTransactionsPage />} />
           <Route path="payment-summary" element={<AdminPaymentSummaryPage />} />
+          <Route path="payment-reminders" element={<PaymentReminderPage />} />
+          <Route path="revenue-report" element={<RevenueReportPage />} />
+          <Route path="performance-report" element={<PerformanceReportPage />} />
           <Route
             path="email-templates"
             element={<EmailTemplateManagementPage />}
@@ -174,6 +185,7 @@ export default function App() {
           <Route path="waitlist" element={<CourseWishlistPage />} />
           <Route path="applications" element={<StudentRequestsPage />} />
           <Route path="finance" element={<TuitionPage />} />
+          <Route path="transcript" element={<TranscriptPage />} />
           <Route path="payment" element={<PaymentPage />} />
           <Route path="payment/result" element={<PaymentResultPage />} />
           <Route path="wallet" element={<WalletPage />} />

@@ -422,17 +422,18 @@ export default function StudentManagementPage() {
 
   function handleEdit(student) {
     setSelectedStudent(student);
+    const ey = student.enrollmentYear;
     setFormData({
       fullName: student.fullName,
       email: student.email,
-      majorCode: student.majorCode,
-      cohort: student.cohort,
+      majorCode: student.majorCode || '',
+      cohort: student.cohort != null ? String(student.cohort) : '',
       identityNumber: student.identityNumber || '',
       dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split('T')[0] : '',
       phoneNumber: student.phoneNumber || '',
       address: student.address || '',
       gender: student.gender || 'other',
-      enrollmentYear: student.enrollmentYear || '',
+      enrollmentYear: ey != null && ey !== '' ? String(ey) : '',
     });
     setShowEditModal(true);
   }
@@ -604,7 +605,10 @@ export default function StudentManagementPage() {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                         Mật khẩu đăng nhập
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                      <th
+                        className="px-4 py-3 text-left text-sm font-semibold text-slate-700"
+                        title="Nhóm (classGroup) trên lớp học phần đang đăng ký (enrolled)"
+                      >
                         Lớp SH
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
@@ -845,10 +849,15 @@ function StudentFormModal({
             {/* Email - Auto generated */}
             {!isEdit && (
               <div className="md:col-span-2">
-                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu đăng nhập sẽ được tự động tạo.
-                  <span className="font-mono text-indigo-600"> Email: tên + họ viết tắt + MSSV@fpt.edu.vn</span>
-                  <span className="font-mono text-indigo-600"> | Mật khẩu: 6 số random</span>
+                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                  <p>
+                    <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu sẽ được tự động tạo theo định dạng:{" "}
+                    <span className="font-mono text-indigo-600">tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                  </p>
+                  <p className="text-slate-600">
+                    <span className="font-medium">Lớp sinh hoạt / nhóm học phần</span> không gán lúc tạo tài khoản — hãy xếp lớp qua
+                    trang <span className="font-medium">Tự động xếp lớp</span> (Auto Enrollment) sau khi đã mở lớp học phần và chọn đúng nhóm.
+                  </p>
                 </div>
               </div>
             )}
@@ -862,10 +871,7 @@ function StudentFormModal({
                 type="text"
                 value={formData.identityNumber}
                 onChange={(e) => setFormData({ ...formData, identityNumber: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -877,10 +883,7 @@ function StudentFormModal({
               <select
                 value={formData.majorCode}
                 onChange={(e) => setFormData({ ...formData, majorCode: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="">Chọn ngành</option>
@@ -903,10 +906,7 @@ function StudentFormModal({
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -919,10 +919,7 @@ function StudentFormModal({
               <select
                 value={formData.gender}
                 onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="male">Nam</option>
@@ -959,10 +956,7 @@ function StudentFormModal({
                   setFormData({ ...formData, enrollmentYear: year, cohort: cohort });
                 }}
                 placeholder="VD: 2026"
-                className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isEdit ? 'bg-slate-100 cursor-not-allowed' : ''
-                }`}
-                disabled={isEdit}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 required
               />
               {formData.enrollmentYear && (
@@ -1052,7 +1046,10 @@ function StudentDetailModal({ student, onClose }) {
               <div className="space-y-3">
                 <InfoRow label="Ngành học" value={student.majorCode} />
                 <InfoRow label="Khóa" value={`K${student.cohort}`} />
-                <InfoRow label="Lớp sinh hoạt" value={student.classSection || '-'} />
+                <InfoRow
+                  label="Lớp SH (nhóm lớp học phần)"
+                  value={student.classSection || '-'}
+                />
                 <InfoRow label="Năm nhập học" value={student.enrollmentYear || '-'} />
                 <InfoRow
                   label="Trạng thái"

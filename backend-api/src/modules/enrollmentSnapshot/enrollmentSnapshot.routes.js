@@ -41,6 +41,12 @@ router.put(
   rbacMiddleware(["admin", "staff"]),
   controller.update,
 );
+router.post(
+  "/:id/add-students",
+  authMiddleware,
+  rbacMiddleware(["admin", "staff"]),
+  controller.addStudentsToSnapshot,
+);
 router.delete(
   "/:id",
   authMiddleware,

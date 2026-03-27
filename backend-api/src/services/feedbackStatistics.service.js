@@ -1,6 +1,6 @@
 const FeedbackSubmission = require('../models/feedbackSubmission.model');
 const FeedbackTemplate = require('../models/feedbackTemplate.model');
-const User = require('../models/user.model');
+const Teacher = require('../models/teacher.model');
 
 class FeedbackStatisticsService {
   /**
@@ -14,11 +14,17 @@ class FeedbackStatisticsService {
         status: 'submitted'
       };
 
-      const submissions = await FeedbackSubmission.find(query).populate('feedbackTemplate');
+      const [teacherProfile, submissions] = await Promise.all([
+        Teacher.findById(teacherId).select('fullName teacherCode department').lean(),
+        FeedbackSubmission.find(query).populate('feedbackTemplate'),
+      ]);
 
       if (submissions.length === 0) {
         return {
           teacherId,
+          teacherName: teacherProfile?.fullName || 'Chưa có tên giảng viên',
+          teacherCode: teacherProfile?.teacherCode || '',
+          department: teacherProfile?.department || '',
           gpa: 0,
           totalFeedback: 0,
           categoryDistribution: {},
@@ -26,7 +32,7 @@ class FeedbackStatisticsService {
         };
       }
 
-      return this.processTeacherStatistics(teacherId, submissions);
+      return this.processTeacherStatistics(teacherId, teacherProfile, submissions);
     } catch (error) {
       console.error('Error calculating teacher GPA:', error);
       throw error;
@@ -36,7 +42,7 @@ class FeedbackStatisticsService {
   /**
    * Xử lý thống kê của giáo viên
    */
-  processTeacherStatistics(teacherId, submissions) {
+  processTeacherStatistics(teacherId, teacherProfile, submissions) {
     const categoryCount = { 'Rất tốt': 0, 'Tốt': 0, 'Trung bình': 0, 'Cần cải thiện': 0 };
     const ratings = [];
     let totalSum = 0;
@@ -73,6 +79,9 @@ class FeedbackStatisticsService {
 
     return {
       teacherId,
+      teacherName: teacherProfile?.fullName || 'Chưa có tên giảng viên',
+      teacherCode: teacherProfile?.teacherCode || '',
+      department: teacherProfile?.department || '',
       gpa: parseFloat(gpa),
       satisfactionPercentage: satisfactionPercentage.toFixed(2),
       totalFeedback: submissions.length,
@@ -288,15 +297,29 @@ class FeedbackStatisticsService {
         }
       }
 
+      const teacherIds = Object.keys(teacherMap);
+      const teacherProfiles = teacherIds.length
+        ? await Teacher.find({ _id: { $in: teacherIds } })
+            .select('fullName teacherCode department')
+            .lean()
+        : [];
+      const teacherProfileMap = new Map(
+        teacherProfiles.map((teacher) => [String(teacher._id), teacher]),
+      );
+
       // Tính GPA cho mỗi giáo viên
       const teacherStats = [];
 
       for (const [teacherId, scores] of Object.entries(teacherMap)) {
         const totalScore = scores.reduce((a, b) => a + b, 0);
         const gpa = (totalScore / scores.length).toFixed(2);
+        const teacherProfile = teacherProfileMap.get(teacherId);
 
         teacherStats.push({
           teacherId,
+          teacherName: teacherProfile?.fullName || 'Chưa có tên giảng viên',
+          teacherCode: teacherProfile?.teacherCode || '',
+          department: teacherProfile?.department || '',
           gpa: parseFloat(gpa),
           totalFeedback: scores.length,
           satisfactionCount: scores.filter(s => s >= 4).length
@@ -304,9 +327,17 @@ class FeedbackStatisticsService {
       }
 
       // Sắp xếp theo GPA giảm dần
-      teacherStats.sort((a, b) => b.gpa - a.gpa);
+      teacherStats.sort((a, b) => {
+        if (b.gpa !== a.gpa) return b.gpa - a.gpa;
+        if (b.totalFeedback !== a.totalFeedback) return b.totalFeedback - a.totalFeedback;
+        return String(a.teacherName || '').localeCompare(String(b.teacherName || ''));
+      });
 
-      return teacherStats.slice(0, limit);
+      return teacherStats.slice(0, limit).map((teacher, index) => ({
+        ...teacher,
+        rank: index + 1,
+        rankLabel: `Top ${index + 1}`,
+      }));
     } catch (error) {
       console.error('Error getting teacher comparison:', error);
       throw error;

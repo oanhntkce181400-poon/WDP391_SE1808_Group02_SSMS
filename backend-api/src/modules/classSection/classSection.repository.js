@@ -26,6 +26,7 @@ async function findClassById(id) {
   return ClassSection.findById(id)
     .populate("subject")
     .populate("teacher")
+    .populate("curriculum", "code name academicYear status")
     .populate("room")
     .populate("timeslot")
     .exec();
@@ -105,7 +106,10 @@ async function findEnrollmentsByClass(classId, status) {
   const query = { classSection: classId };
   if (status) query.status = status;
   return ClassEnrollment.find(query)
-    .populate("student", "studentCode fullName email")
+    .populate(
+      "student",
+      "studentCode fullName email majorCode enrollmentYear classSection",
+    )
     .exec();
 }
 

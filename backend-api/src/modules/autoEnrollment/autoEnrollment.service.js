@@ -1,10 +1,16 @@
 const ClassSection = require("../../models/classSection.model");
 const ClassEnrollment = require("../../models/classEnrollment.model");
 const Waitlist = require("../../models/waitlist.model");
+const Subject = require("../../models/subject.model");
 const mongoose = require("mongoose");
 const curriculumService = require("../../services/curriculum.service");
 const paymentValidationService = require("../../services/paymentValidation.service");
 const repo = require("./autoEnrollment.repository");
+const classSectionService = require("../classSection/classSection.service");
+
+// DEBUG: bật=true để trace, tắt=false khi hoàn thiện
+const _DEBUG_SVC = false;
+function _svc(...a) { if (_DEBUG_SVC) console.log('[Service]', ...a); }
 
 // Service này là "bộ não" của chức năng auto-enrollment.
 // Nhiệm vụ chính:
@@ -25,6 +31,13 @@ const OPEN_CLASS_STATUSES =
   process.env.AUTO_ENROLLMENT_INCLUDE_DRAFT === "true"
     ? ["published", "scheduled", "draft"]
     : ["published", "scheduled"];
+/** Trạng thái được phép làm «lớp mẫu» copy môn/GV (khác pool chỉ published/scheduled). */
+const TEMPLATE_SOURCE_CLASS_STATUSES = new Set([
+  "draft",
+  "scheduled",
+  "published",
+  "locked",
+]);
 const ACTIVE_ENROLLMENT_STATUSES = new Set(repo.ACTIVE_ENROLLMENT_STATUSES);
 const LEGACY_WAITLIST_INDEX_NAME = "student_1_subject_1_status_1";
 
@@ -230,6 +243,175 @@ function normalizeCodeList(values = []) {
 function parsePositiveInteger(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function generateUniqueSplitClassCode(baseCode) {
+  const base = String(baseCode || "CLASS")
+    .replace(/\s+/g, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 36);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const suffix = `${Date.now().toString(36)}${attempt.toString(36)}`;
+    const code = `${base}-NS${suffix}`.slice(0, 80);
+    const exists = await ClassSection.findOne({ classCode: code })
+      .select("_id")
+      .lean();
+    if (!exists) return code;
+  }
+  const e = new Error("Không tạo được mã lớp duy nhất");
+  e.statusCode = 500;
+  throw e;
+}
+
+/**
+ * Chọn một lớp học phần mẫu cùng nhóm để copy môn + GV (và fallback sĩ số).
+ */
+function pickTemplateClassSection({
+  classSections,
+  classGroup,
+  enrollmentMode,
+  curriculumIdFilter,
+  sectionSemester,
+  sectionAcademicYear,
+  curriculumSemesterOrderVal,
+}) {
+  const cg = String(classGroup || "").trim();
+  const pool = (classSections || []).filter(
+    (cs) => String(cs.classGroup || "").trim() === cg,
+  );
+  const open = pool.filter((cs) =>
+    TEMPLATE_SOURCE_CLASS_STATUSES.has(String(cs.status || "")),
+  );
+  let filtered = open;
+
+  if (
+    enrollmentMode === "normal" &&
+    curriculumIdFilter &&
+    curriculumSemesterOrderVal != null
+  ) {
+    filtered = open.filter((cs) => {
+      if (cs.curriculumSemesterOrder == null) return false;
+      if (
+        Number(cs.curriculumSemesterOrder) !==
+        Number(curriculumSemesterOrderVal)
+      ) {
+        return false;
+      }
+      if (!cs.curriculum) return true;
+      return String(cs.curriculum) === String(curriculumIdFilter);
+    });
+    if (filtered.length === 0) {
+      filtered = open.filter(
+        (cs) =>
+          cs.curriculumSemesterOrder != null &&
+          Number(cs.curriculumSemesterOrder) ===
+            Number(curriculumSemesterOrderVal),
+      );
+    }
+    // Dữ liệu cũ/seed: chỉ có ClassSection.semester = kỳ trong khung, chưa ghi curriculumSemesterOrder
+    if (filtered.length === 0) {
+      filtered = open.filter(
+        (cs) =>
+          Number(cs.semester) === Number(sectionSemester) &&
+          String(cs.academicYear || "").trim() ===
+            String(sectionAcademicYear || "").trim(),
+      );
+    }
+    // Cuối cùng: cùng niên khóa khung trên lớp (vẫn cùng nhóm)
+    if (filtered.length === 0 && sectionAcademicYear) {
+      filtered = open.filter(
+        (cs) =>
+          String(cs.academicYear || "").trim() ===
+          String(sectionAcademicYear || "").trim(),
+      );
+    }
+  } else {
+    filtered = open.filter(
+      (cs) =>
+        Number(cs.semester) === Number(sectionSemester) &&
+        String(cs.academicYear || "").trim() ===
+          String(sectionAcademicYear || "").trim(),
+    );
+  }
+
+  const withSubjectTeacher = filtered.filter(
+    (cs) =>
+      cs.subject &&
+      mongoose.Types.ObjectId.isValid(String(cs.subject)) &&
+      cs.teacher &&
+      mongoose.Types.ObjectId.isValid(String(cs.teacher)),
+  );
+  const candidates =
+    withSubjectTeacher.length > 0 ? withSubjectTeacher : filtered;
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) =>
+    String(a.classCode || "").localeCompare(String(b.classCode || ""), undefined, {
+      numeric: true,
+    }),
+  );
+  return candidates[0];
+}
+
+async function buildTemplateClassSectionPool(ctx, classGroup) {
+  const cg = String(classGroup || "").trim();
+  if (!cg) {
+    return Array.isArray(ctx.classSections) ? ctx.classSections : [];
+  }
+  const base = Array.isArray(ctx.classSections) ? ctx.classSections : [];
+  const extra = await repo.findClassSectionsByGroupForTemplate(cg);
+  const map = new Map();
+  for (const c of base) {
+    map.set(String(c._id), c);
+  }
+  for (const c of extra) {
+    map.set(String(c._id), c);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Cùng quy tắc semester / academicYear như tạo lớp từ nhóm (createClassSectionAndAssignStudents).
+ * `curriculumSemesterOrderRaw`: bắt buộc khi normal + có khung CT (số kỳ trong CT).
+ */
+function resolveSectionPeriodForGroupTemplate(ctx, curriculumSemesterOrderRaw) {
+  const enrollmentMode = ctx.enrollmentMode;
+  const sem = ctx.semester;
+  const curriculumIdFilter = ctx.curriculumIdFilter;
+
+  let sectionSemester;
+  let sectionAcademicYear;
+  let curriculumSemesterOrderVal;
+
+  if (enrollmentMode === "retake" || !curriculumIdFilter) {
+    sectionSemester = Number(sem.semesterNum);
+    sectionAcademicYear = String(sem.academicYear || "").trim();
+    if (!sectionAcademicYear || Number.isNaN(sectionSemester)) {
+      return null;
+    }
+    const o = Number(curriculumSemesterOrderRaw);
+    if (Number.isInteger(o) && o >= 1) {
+      curriculumSemesterOrderVal = o;
+    }
+    return { sectionSemester, sectionAcademicYear, curriculumSemesterOrderVal };
+  }
+
+  const cur = ctx.activeCurriculums.find(
+    (c) => String(c._id) === String(curriculumIdFilter),
+  );
+  if (!cur) {
+    return null;
+  }
+  const o = Number(curriculumSemesterOrderRaw);
+  if (!Number.isInteger(o) || o < 1) {
+    return null;
+  }
+  curriculumSemesterOrderVal = o;
+  sectionSemester = o;
+  sectionAcademicYear = String(cur.academicYear || "").trim();
+  if (!sectionAcademicYear) {
+    return null;
+  }
+  return { sectionSemester, sectionAcademicYear, curriculumSemesterOrderVal };
 }
 
 // Lấy classGroup từ student.
@@ -1221,9 +1403,11 @@ async function previewAutoEnrollment(studentId) {
  * Đây là hàm điều phối (orchestration function), nên bản thân nó dài.
  * Khi đọc nên chia theo từng chặng thay vì cố hiểu từng dòng một lần.
  */
-async function triggerAutoEnrollment(semesterId, options = {}) {
-  const startedAt = Date.now();
-  const dryRun = options.dryRun === true;
+async function prepareAutoEnrollmentBatchContext(
+  semesterId,
+  options = {},
+  { applyStudentLimit = true } = {},
+) {
   const requestedMajorCodes = normalizeCodeList(options.majorCodes);
   const requestedStudentCodes = normalizeCodeList(options.studentCodes);
   const onlyStudentsWithoutEnrollments =
@@ -1268,7 +1452,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // - termsPerYear: số học kỳ trong năm để tính curriculum semester
   // Chặng 2: nạp dữ liệu nền song song.
   // Đây là toàn bộ đầu vào chính trước khi bắt đầu duyệt từng sinh viên.
-  const [candidateStudents, activeCurriculums, termsPerYear] =
+  const [eligibleOutcome, activeCurriculums, termsPerYear] =
     await Promise.all([
       repo.findEligibleStudents({
         majorCodes: requestedMajorCodes,
@@ -1279,6 +1463,31 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       repo.findActiveCurriculums(),
       paymentValidationService.resolveTermsPerYear(semester),
     ]);
+  const candidateStudents = eligibleOutcome.students;
+  const eligibleMajorMeta = eligibleOutcome.meta || {
+    curriculumMajorCodes: [],
+    effectiveMajorCodes: [],
+    curriculumEnrollmentYearRange: null,
+  };
+
+  _svc(
+    `findEligibleStudents returned ${candidateStudents.length} candidates`,
+    '(check [Repo] logs above for classSection values)',
+  );
+  // In thử 5 SV đầu tiên — tìm Trần Minh Thật
+  const debugNames = candidateStudents
+    .filter((s) => /thật/i.test(s.fullName))
+    .map((s) => `FOUND: ${s.studentCode} ${s.fullName} classSection="${s.classSection}"`);
+  if (debugNames.length) {
+    debugNames.forEach((m) => _svc(m));
+  } else {
+    _svc('Trần Minh Thật NOT in candidate list — showing top 5:');
+    candidateStudents.slice(0, 5).forEach((s) =>
+      _svc(
+        `  ${s.studentCode} | ${s.fullName} | major=${s.majorCode} | classSection="${s.classSection}"`,
+      ),
+    );
+  }
 
   const candidateMajorCodes = Array.from(
     new Set(
@@ -1456,7 +1665,15 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   }
 
   let excludedAlreadyAssignedInSemester = 0;
-  if (excludeStudentsAlreadyAssignedInSemester && students.length > 0) {
+  // Khi đã lọc "chưa xếp đủ môn kỳ khung" (onlyStudentsWithoutEnrollments), SV vẫn có thể
+  // có 1–2 enrollment trong HK → không được loại hết batch bằng "đã có bất kỳ lớp nào trong HK".
+  // Trùng môn vẫn được xử lý trong vòng lặp (skip duplicate). Gộp hai filter trước đây làm
+  // mất toàn bộ ứng viên (40 skipped) dù Lớp SH trống / chưa xếp đủ môn.
+  if (
+    excludeStudentsAlreadyAssignedInSemester &&
+    students.length > 0 &&
+    !onlyStudentsWithoutEnrollments
+  ) {
     const primaryAy = String(semester.academicYear || "").trim();
     const excludeExtraYears = institutionalSemesterYearUnion.filter(
       (y) => y !== primaryAy,
@@ -1477,9 +1694,124 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     excludedAlreadyAssignedInSemester = before - students.length;
   }
 
-  if (studentLimit) {
+  if (applyStudentLimit && studentLimit) {
     students = students.slice(0, studentLimit);
   }
+
+  const groupSectionsOrdered =
+    classGroupFilter && Array.isArray(classSections) && classSections.length > 0
+      ? [...classSections].sort((a, b) =>
+          String(a.classCode || "").localeCompare(String(b.classCode || "")),
+        )
+      : [];
+
+  let groupSubjectDocsById = new Map();
+  if (groupSectionsOrdered.length > 0) {
+    const subjIds = [
+      ...new Set(
+        groupSectionsOrdered
+          .map((s) => s.subject)
+          .filter((id) => id && mongoose.Types.ObjectId.isValid(id)),
+      ),
+    ];
+    if (subjIds.length > 0) {
+      const subjDocs = await Subject.find({ _id: { $in: subjIds } })
+        .select("_id subjectCode subjectName")
+        .lean();
+      groupSubjectDocsById = new Map(subjDocs.map((s) => [String(s._id), s]));
+    }
+  }
+
+  const filtersWithSubjectSource = {
+    ...filters,
+    subjectListSource:
+      classGroupFilter && groupSectionsOrdered.length > 0
+        ? "group_open_sections"
+        : "curriculum_semester",
+  };
+
+  return {
+    requestedMajorCodes,
+    requestedStudentCodes,
+    onlyStudentsWithoutEnrollments,
+    excludeStudentsAlreadyAssignedInSemester,
+    studentLimit,
+    enrollmentMode,
+    curriculumIdFilter,
+    classGroupFilter,
+    filters: filtersWithSubjectSource,
+    groupSectionsOrdered,
+    groupSubjectDocsById,
+    semester,
+    candidateStudents,
+    eligibleMajorMeta,
+    activeCurriculums,
+    termsPerYear,
+    classSections,
+    classSectionsById,
+    classSectionsBySubject,
+    classSectionsByGroup,
+    majorAliasesByCode,
+    curriculumLookup,
+    institutionalSemesterYearUnion,
+    existingEnrollments,
+    existingWaitlists,
+    studentStateMap,
+    waitlistSet,
+    curriculumSemesterSubjectsCache,
+    curriculumMatchCache,
+    curriculumSemesterOrderCache,
+    students,
+    excludedAlreadyAssignedInSemester,
+  };
+}
+
+async function triggerAutoEnrollment(semesterId, options = {}) {
+  const startedAt = Date.now();
+  const dryRun = options.dryRun === true;
+  const ctx = await prepareAutoEnrollmentBatchContext(semesterId, options, {
+    applyStudentLimit: true,
+  });
+  const {
+    requestedMajorCodes,
+    requestedStudentCodes,
+    onlyStudentsWithoutEnrollments,
+    excludeStudentsAlreadyAssignedInSemester,
+    studentLimit,
+    enrollmentMode,
+    curriculumIdFilter,
+    classGroupFilter,
+    filters,
+    semester,
+    candidateStudents,
+    eligibleMajorMeta,
+    activeCurriculums,
+    termsPerYear,
+    classSections,
+    classSectionsById,
+    classSectionsBySubject,
+    classSectionsByGroup,
+    majorAliasesByCode,
+    curriculumLookup,
+    institutionalSemesterYearUnion,
+    existingEnrollments,
+    existingWaitlists,
+    studentStateMap,
+    waitlistSet,
+    curriculumSemesterSubjectsCache,
+    curriculumMatchCache,
+    curriculumSemesterOrderCache,
+    students,
+    excludedAlreadyAssignedInSemester,
+    groupSectionsOrdered,
+    groupSubjectDocsById,
+  } = ctx;
+
+  /** Đã chọn nhóm lớp: duyệt từng ClassSection trong pool (kể cả trùng subjectId), không gộp theo môn. */
+  const useGroupSectionWalk =
+    Boolean(classGroupFilter) &&
+    Array.isArray(groupSectionsOrdered) &&
+    groupSectionsOrdered.length > 0;
 
   const logs = [];
   let totalEnrollments = 0;
@@ -1572,9 +1904,146 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       studentLog.curriculumCode = curriculum.code;
       studentLog.curriculumSemesterOrder = curriculumSemesterOrder;
 
-      // Bước 3: lấy danh sách subject mà curriculum quy định cho semester order này.
-      // Bước 5.3: lấy các môn mà curriculum quy định cho kỳ hiện tại của sinh viên.
-      const semesterSubjects = await getCurriculumSemesterSubjectsCached(
+      // Nhóm lớp: duyệt từng ClassSection đã có trong pool (kể cả cùng môn — 2 lớp PRF192 = 2 enrollment).
+      if (useGroupSectionWalk) {
+        const studentState = getOrCreateStudentState(
+          studentStateMap,
+          student._id,
+        );
+
+        if (!groupSectionsOrdered.length) {
+          studentLog.skipped.push(
+            `Không có lớp học phần nào trong pool lớp mở của nhóm "${classGroupFilter}" (cần lớp Published/Scheduled trong nhóm).`,
+          );
+          logs.push(studentLog);
+          continue;
+        }
+
+        let needsEnrollmentProcessing = false;
+        let allSectionsAlreadyEnrolled = true;
+
+        for (const secRaw of groupSectionsOrdered) {
+          const sec = classSectionsById.get(String(secRaw._id));
+          if (!sec) continue;
+          if (studentState.occupiedClassSectionIds.has(String(sec._id))) {
+            continue;
+          }
+          allSectionsAlreadyEnrolled = false;
+          if (sec.currentEnrollment < sec.maxCapacity) {
+            needsEnrollmentProcessing = true;
+            break;
+          }
+          const wk = buildStudentSubjectKey(student._id, sec.subject);
+          if (!waitlistSet.has(wk)) {
+            needsEnrollmentProcessing = true;
+            break;
+          }
+        }
+
+        if (!needsEnrollmentProcessing) {
+          studentsNoActionNeeded += 1;
+          studentLog.skipped.push(
+            allSectionsAlreadyEnrolled
+              ? "Trong CSDL đã có enrollment cho đủ các lớp học phần trong nhóm — không cần xếp thêm."
+              : "Trong CSDL đã có waitlist cho (các) môn chưa gán lớp của kỳ này và hiện không có lớp trống phù hợp — bỏ qua.",
+          );
+          logs.push(studentLog);
+          continue;
+        }
+
+        for (const secRaw of groupSectionsOrdered) {
+          const sec = classSectionsById.get(String(secRaw._id));
+          if (!sec) continue;
+
+          const subjectId = String(sec.subject);
+          const subjectMeta =
+            groupSubjectDocsById.get(subjectId) || {
+              subjectCode: sec.classCode || "?",
+              subjectName: sec.className || "",
+            };
+
+          if (studentState.occupiedClassSectionIds.has(String(sec._id))) {
+            duplicates += 1;
+            studentLog.skipped.push(
+              `${subjectMeta.subjectCode} (${sec.classCode || sec.className}): đã có enrollment`,
+            );
+            continue;
+          }
+
+          if (sec.currentEnrollment >= sec.maxCapacity) {
+            const waitlistResult = queueWaitlistIfNeeded(
+              student._id,
+              sec.subject,
+              semester.semesterNum,
+              semester.academicYear,
+              "Auto enrollment: no available class section",
+              {
+                dryRun,
+                waitlistSet,
+                pendingWaitlistDocs,
+              },
+            );
+
+            if (waitlistResult.success) {
+              if (waitlistResult.created) {
+                waitlisted += 1;
+                studentLog.waitlisted.push({
+                  subjectCode: subjectMeta.subjectCode,
+                  subjectName: subjectMeta.subjectName,
+                  waitlistId: waitlistResult.waitlistId,
+                  message: waitlistResult.message,
+                });
+              } else if (waitlistResult.reason === "already_waiting") {
+                studentLog.skipped.push(
+                  `${subjectMeta.subjectCode}: đã có trong waitlist (cùng HK hệ thống / niên khóa đã gộp), bỏ qua.`,
+                );
+              } else {
+                studentLog.skipped.push(
+                  `${subjectMeta.subjectCode}: ${waitlistResult.message}`,
+                );
+              }
+            } else {
+              failed += 1;
+              studentLog.errors.push(
+                `${subjectMeta.subjectCode}: ${waitlistResult.message}`,
+              );
+            }
+            continue;
+          }
+
+          const semesterPaymentCode =
+            paymentValidationService.generateSemesterPaymentCode(
+              curriculumSemesterOrder,
+              curriculum.code,
+            );
+
+          pendingEnrollmentDocs.push({
+            student: student._id,
+            classSection: sec._id,
+            enrollmentDate: new Date(),
+            status: "enrolled",
+            isOverload: false,
+            note: `Auto enrolled by semester trigger ${semester.code} (${semesterPaymentCode})`,
+          });
+          incrementMapCounter(classSectionIncrementMap, sec._id, 1);
+          totalEnrollments += 1;
+          sec.currentEnrollment += 1;
+          studentState.activeSubjectIds.add(subjectId);
+          studentState.occupiedClassSectionIds.add(String(sec._id));
+          studentLog.enrolled.push({
+            subjectCode: subjectMeta.subjectCode,
+            subjectName: subjectMeta.subjectName,
+            classSectionId: sec._id,
+            classCode: sec.classCode,
+          });
+        }
+
+        logs.push(studentLog);
+        continue;
+      }
+
+      // Bước 3: danh môn cần xếp theo kỳ trong khung CT (không chọn nhóm lớp).
+      let semesterSubjects = await getCurriculumSemesterSubjectsCached(
         curriculumSemesterSubjectsCache,
         curriculum._id,
         curriculumSemesterOrder,
@@ -1811,6 +2280,25 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
     filters,
   });
 
+  if (curriculumIdFilter) {
+    const cm = eligibleMajorMeta.curriculumMajorCodes || [];
+    const em = eligibleMajorMeta.effectiveMajorCodes || [];
+    if (cm.length === 0 && em.length === 0) {
+      preflight.warnings.push(
+        "Không có SV ứng viên: không suy ra được mã ngành từ khung CT (thiếu majorId / Major không khớp) và ô Major codes để trống. " +
+          "Cập nhật Curriculum.majorId trong DB, hoặc nhập Major codes (vd: SE) trùng ngành khung.",
+      );
+    } else if (
+      cm.length > 0 &&
+      requestedMajorCodes.length > 0 &&
+      em.length === 0
+    ) {
+      preflight.warnings.push(
+        `Major codes trên form không giao với ngành của khung: khung → [${cm.join(", ")}], form → [${requestedMajorCodes.join(", ")}]. Để trống Major codes để lấy hết SV ngành khung.`,
+      );
+    }
+  }
+
   const durationMs = Date.now() - startedAt;
 
   // success ở đây là mức batch-level:
@@ -1842,7 +2330,13 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
       failed,
     },
     preflight,
-    filters,
+    filters: {
+      ...filters,
+      curriculumMajorCodesResolved: eligibleMajorMeta.curriculumMajorCodes,
+      effectiveMajorCodes: eligibleMajorMeta.effectiveMajorCodes,
+      curriculumEnrollmentYearRange:
+        eligibleMajorMeta.curriculumEnrollmentYearRange || null,
+    },
     logs,
   };
 
@@ -1865,13 +2359,40 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
 // Enrollment Management — service wrappers
 // ─────────────────────────────────────────────
 
-async function getEnrollmentStatus({ semesterNum, academicYear, classGroup }) {
+function parseMajorCodesQuery(value) {
+  if (value == null || value === '') return [];
+  return String(value)
+    .split(/[\s,;\n]+/)
+    .map((x) => x.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+async function getEnrollmentStatus({
+  semesterNum,
+  academicYear,
+  classGroup,
+  curriculumId,
+  curriculumSemesterOrder,
+  majorCodes,
+}) {
   if (semesterNum == null || !academicYear) {
     const err = new Error('semesterNum and academicYear are required');
     err.statusCode = 400;
     throw err;
   }
-  return repo.getEnrollmentStatus({ semesterNum, academicYear, classGroup });
+  const csOrder =
+    curriculumSemesterOrder != null && String(curriculumSemesterOrder).trim() !== ''
+      ? Number(curriculumSemesterOrder)
+      : undefined;
+  return repo.getEnrollmentStatus({
+    semesterNum,
+    academicYear,
+    classGroup,
+    curriculumId,
+    curriculumSemesterOrder:
+      csOrder != null && Number.isFinite(csOrder) && csOrder >= 1 ? csOrder : undefined,
+    majorCodes: Array.isArray(majorCodes) ? majorCodes : parseMajorCodesQuery(majorCodes),
+  });
 }
 
 async function deleteEnrollments({ semesterNum, academicYear, classGroup, studentId }) {
@@ -1891,12 +2412,618 @@ async function promoteWaitlist(waitlistId, targetClassSectionId) {
   return repo.promoteWaitlist(waitlistId, { targetClassSectionId });
 }
 
+function serializeStudentRow(s) {
+  return {
+    _id: s._id,
+    studentCode: s.studentCode,
+    fullName: s.fullName,
+    email: s.email || '',
+    majorCode: s.majorCode,
+    enrollmentYear: s.enrollmentYear,
+    classSection: s.classSection,
+    curriculumId: s.curriculumId,
+  };
+}
+
+/**
+ * Danh sách sinh viên sau cùng cùng filter với trigger (không áp limit — để admin chọn tay).
+ * Khi có classGroup: loại SV đã có enrollment (enrolled/completed) cùng môn + kỳ như lớp mẫu trong nhóm
+ * (không hiển thị SV đã học môn đó trong học kỳ đó — trùng logic gán tay).
+ */
+async function listEligibleStudents(semesterId, options = {}) {
+  const ctx = await prepareAutoEnrollmentBatchContext(semesterId, options, {
+    applyStudentLimit: false,
+  });
+  const { semester, eligibleMajorMeta, filters } = ctx;
+  let students = ctx.students;
+
+  const cg =
+    options.classGroup != null && String(options.classGroup).trim() !== ""
+      ? String(options.classGroup).trim()
+      : "";
+  let excludedAlreadyEnrolledInSubject = 0;
+  let templateClassCodeForList = null;
+
+  if (cg) {
+    const period = resolveSectionPeriodForGroupTemplate(
+      ctx,
+      options.curriculumSemesterOrder,
+    );
+    if (period) {
+      const templatePool = await buildTemplateClassSectionPool(ctx, cg);
+      const template = pickTemplateClassSection({
+        classSections: templatePool,
+        classGroup: cg,
+        enrollmentMode: ctx.enrollmentMode,
+        curriculumIdFilter: ctx.curriculumIdFilter,
+        sectionSemester: period.sectionSemester,
+        sectionAcademicYear: period.sectionAcademicYear,
+        curriculumSemesterOrderVal: period.curriculumSemesterOrderVal,
+      });
+      if (template && template.subject) {
+        templateClassCodeForList = template.classCode || null;
+        const ids = students.map((s) => s._id);
+        const busy = await repo.findStudentIdsWithEnrollmentForSubjectPeriod(
+          ids,
+          template.subject,
+          template.semester,
+          template.academicYear,
+        );
+        const busySet = new Set(busy.map((id) => String(id)));
+        const before = students.length;
+        students = students.filter((s) => !busySet.has(String(s._id)));
+        excludedAlreadyEnrolledInSubject = before - students.length;
+      }
+    }
+  }
+
+  return {
+    semester: {
+      _id: semester._id,
+      semesterNum: semester.semesterNum,
+      academicYear: semester.academicYear,
+      code: semester.code,
+      name: semester.name,
+    },
+    students: students.map(serializeStudentRow),
+    count: students.length,
+    filters: {
+      ...filters,
+      curriculumMajorCodesResolved: eligibleMajorMeta.curriculumMajorCodes,
+      effectiveMajorCodes: eligibleMajorMeta.effectiveMajorCodes,
+      curriculumEnrollmentYearRange:
+        eligibleMajorMeta.curriculumEnrollmentYearRange || null,
+      excludedAlreadyEnrolledInSubject,
+      templateClassCodeForList,
+    },
+  };
+}
+
+/**
+ * Chọn đúng một ClassSection: theo ObjectId, hoặc mã lớp / tên lớp (khớp duy nhất).
+ */
+async function resolveManualAssignClassSectionId(classSectionIdRaw, classLookup, ctx) {
+  const pool = Array.isArray(ctx.classSections) ? ctx.classSections : [];
+
+  if (classSectionIdRaw != null && String(classSectionIdRaw).trim() !== '') {
+    const id = String(classSectionIdRaw).trim();
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      return id;
+    }
+  }
+
+  const raw = String(classLookup || "").trim();
+  if (!raw) {
+    const e = new Error(
+      "Chọn lớp trong danh sách hoặc nhập mã lớp / tên lớp học phần",
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const upper = raw.toUpperCase();
+  const byCode = pool.filter(
+    (cs) => String(cs.classCode || "").trim().toUpperCase() === upper,
+  );
+  if (byCode.length === 1) {
+    return String(byCode[0]._id);
+  }
+  if (byCode.length > 1) {
+    const e = new Error(
+      `Có ${byCode.length} lớp trùng mã trong danh sách — chọn trực tiếp trong dropdown.`,
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const lower = raw.toLowerCase();
+  const byName = pool.filter(
+    (cs) => String(cs.className || "").trim().toLowerCase() === lower,
+  );
+  if (byName.length === 1) {
+    return String(byName[0]._id);
+  }
+  if (byName.length > 1) {
+    const e = new Error(
+      `Có ${byName.length} lớp trùng tên "${raw}" — nhập đúng mã lớp (classCode).`,
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let sec = await ClassSection.findOne({
+    classCode: new RegExp(`^${esc}$`, "i"),
+    status: { $in: OPEN_CLASS_STATUSES },
+  }).lean();
+  if (sec) {
+    return String(sec._id);
+  }
+
+  const nameMatches = await ClassSection.find({
+    className: new RegExp(`^${esc}$`, "i"),
+    status: { $in: OPEN_CLASS_STATUSES },
+  })
+    .select("_id classCode className")
+    .limit(3)
+    .lean();
+  if (nameMatches.length === 1) {
+    return String(nameMatches[0]._id);
+  }
+  if (nameMatches.length > 1) {
+    const e = new Error(
+      `Có nhiều lớp trùng tên "${raw}" — nhập mã lớp (VD: ${nameMatches[0].classCode}).`,
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const e = new Error(
+    `Không tìm thấy lớp đang mở (published/scheduled) với mã/tên: "${raw}"`,
+  );
+  e.statusCode = 404;
+  throw e;
+}
+
+/**
+ * Gán các sinh viên đã chọn vào một lớp học (cùng điều kiện lọc với tab Auto Enrollment).
+ * Có thể truyền `classSectionId` hoặc `options.classLookup` (mã lớp / tên lớp).
+ */
+async function assignStudentsToClassSection(
+  semesterId,
+  classSectionIdRaw,
+  studentIds,
+  options = {},
+) {
+  const dryRun = options.dryRun === true;
+  if (!semesterId || !mongoose.Types.ObjectId.isValid(String(semesterId))) {
+    const e = new Error('semesterId không hợp lệ');
+    e.statusCode = 400;
+    throw e;
+  }
+  const rawIds = Array.isArray(studentIds) ? studentIds : [];
+  const uniqueIds = [
+    ...new Set(
+      rawIds
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id)),
+    ),
+  ];
+  if (uniqueIds.length === 0) {
+    const e = new Error('studentIds phải có ít nhất một mã hợp lệ');
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const ctx = await prepareAutoEnrollmentBatchContext(semesterId, options, {
+    applyStudentLimit: false,
+  });
+  const allowed = new Set(ctx.students.map((s) => String(s._id)));
+  const eligibleIds = uniqueIds.filter((id) => allowed.has(id));
+  const notEligible = uniqueIds.filter((id) => !allowed.has(id));
+
+  const classLookup =
+    options.classLookup != null && String(options.classLookup).trim() !== ""
+      ? String(options.classLookup).trim()
+      : "";
+
+  const classSectionId = await resolveManualAssignClassSectionId(
+    classSectionIdRaw,
+    classLookup,
+    ctx,
+  );
+
+  const classSection = await ClassSection.findById(classSectionId).lean();
+  if (!classSection) {
+    const e = new Error('Class section not found');
+    e.statusCode = 404;
+    throw e;
+  }
+  if (!OPEN_CLASS_STATUSES.includes(classSection.status)) {
+    const e = new Error('Class section is not open for enrollment');
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const cg =
+    options.classGroup != null && String(options.classGroup).trim() !== ''
+      ? String(options.classGroup).trim()
+      : '';
+  if (cg && String(classSection.classGroup || '').trim() !== cg) {
+    const e = new Error('Lớp không thuộc nhóm lớp đã chọn');
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const enrollmentMode = options.mode === 'retake' ? 'retake' : 'normal';
+  const sem = ctx.semester;
+  if (enrollmentMode === 'retake') {
+    if (
+      Number(classSection.semester) !== Number(sem.semesterNum) ||
+      String(classSection.academicYear || '').trim() !==
+        String(sem.academicYear || '').trim()
+    ) {
+      const e = new Error('Lớp học không thuộc học kỳ hệ thống đang chọn');
+      e.statusCode = 400;
+      throw e;
+    }
+  }
+
+  const subjectIdStr = String(classSection.subject);
+  const semNum = Number(classSection.semester);
+  const ayStr = String(classSection.academicYear || '').trim();
+
+  const existingForStudents =
+    eligibleIds.length > 0
+      ? await ClassEnrollment.find({
+          student: { $in: eligibleIds.map((id) => new mongoose.Types.ObjectId(id)) },
+          status: { $in: Array.from(ACTIVE_ENROLLMENT_STATUSES) },
+        })
+          .populate({
+            path: 'classSection',
+            select: 'semester academicYear subject',
+          })
+          .lean()
+      : [];
+
+  const results = [];
+  let enrolled = 0;
+  let skipped = 0;
+  const semesterCode = String(sem.code || `${ayStr}_HK${semNum}`);
+
+  for (const studentId of eligibleIds) {
+    const dupTarget = existingForStudents.some(
+      (en) =>
+        String(en.student) === studentId &&
+        String(en.classSection?._id || en.classSection) === String(classSectionId),
+    );
+    if (dupTarget) {
+      results.push({
+        studentId,
+        ok: false,
+        reason: 'already_in_section',
+        message: 'Sinh viên đã có trong lớp này',
+      });
+      skipped += 1;
+      continue;
+    }
+
+    const subjectConflict = existingForStudents.some((en) => {
+      if (String(en.student) !== studentId) return false;
+      const cs = en.classSection;
+      if (!cs) return false;
+      return (
+        Number(cs.semester) === semNum &&
+        String(cs.academicYear || '').trim() === ayStr &&
+        String(cs.subject) === subjectIdStr
+      );
+    });
+    if (subjectConflict) {
+      results.push({
+        studentId,
+        ok: false,
+        reason: 'subject_already_enrolled',
+        message: 'Sinh viên đã có lớp khác cho cùng môn trong học kỳ này',
+      });
+      skipped += 1;
+      continue;
+    }
+
+    const r = await enrollStudentInSection(studentId, classSectionId, semesterCode, {
+      dryRun,
+      note: options.note || `Manual assign (${semesterCode})`,
+    });
+    if (r.success) {
+      enrolled += 1;
+      results.push({ studentId, ok: true, enrollmentId: r.enrollment?._id });
+    } else {
+      skipped += 1;
+      results.push({
+        studentId,
+        ok: false,
+        reason: r.reason || 'error',
+        message: r.message || 'Enrollment failed',
+      });
+    }
+  }
+
+  return {
+    classSectionId: String(classSection._id),
+    classCode: classSection.classCode,
+    className: classSection.className,
+    dryRun,
+    requested: uniqueIds.length,
+    notEligible,
+    enrolled,
+    skipped,
+    results,
+  };
+}
+
+/**
+ * Tạo một ClassSection mới (cùng nhóm với filter "Nhóm lớp học phần") rồi gán SV đã chọn.
+ * - Chế độ theo khung CT: semester + academicYear trên lớp = kỳ trong khung + academicYear của curriculum.
+ * - Chế độ học lại / không chọn khung: dùng semesterNum + academicYear của HK hệ thống.
+ */
+async function createClassSectionAndAssignStudents(
+  semesterId,
+  studentIds,
+  options = {},
+  newSection = {},
+) {
+  const dryRun = options.dryRun === true;
+  const cgOpt =
+    options.classGroup != null && String(options.classGroup).trim() !== ""
+      ? String(options.classGroup).trim()
+      : "";
+  if (!cgOpt) {
+    const e = new Error(
+      "Cần chọn Nhóm lớp học phần trước khi tạo lớp và gán sinh viên",
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  if (!semesterId || !mongoose.Types.ObjectId.isValid(String(semesterId))) {
+    const e = new Error("semesterId không hợp lệ");
+    e.statusCode = 400;
+    throw e;
+  }
+  const rawIds = Array.isArray(studentIds) ? studentIds : [];
+  const uniqueIds = [
+    ...new Set(
+      rawIds
+        .map((id) => String(id || "").trim())
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id)),
+    ),
+  ];
+  if (uniqueIds.length === 0) {
+    const e = new Error("studentIds phải có ít nhất một mã hợp lệ");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const ctx = await prepareAutoEnrollmentBatchContext(semesterId, options, {
+    applyStudentLimit: false,
+  });
+  const allowed = new Set(ctx.students.map((s) => String(s._id)));
+  const eligibleIds = uniqueIds.filter((id) => allowed.has(id));
+  if (eligibleIds.length === 0) {
+    const e = new Error(
+      "Không có sinh viên nào trong danh sách chọn khớp bộ lọc hiện tại",
+    );
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const enrollmentMode = ctx.enrollmentMode;
+  const sem = ctx.semester;
+  const curriculumIdFilter = ctx.curriculumIdFilter;
+
+  let sectionSemester;
+  let sectionAcademicYear;
+  let curriculumSemesterOrderVal;
+  let curriculumIdForSection;
+
+  if (enrollmentMode === "retake" || !curriculumIdFilter) {
+    sectionSemester = Number(sem.semesterNum);
+    sectionAcademicYear = String(sem.academicYear || "").trim();
+    if (!sectionAcademicYear || Number.isNaN(sectionSemester)) {
+      const e = new Error("Học kỳ hệ thống không hợp lệ");
+      e.statusCode = 400;
+      throw e;
+    }
+    const optionalCso = newSection.curriculumSemesterOrder;
+    if (
+      optionalCso != null &&
+      optionalCso !== "" &&
+      !Number.isNaN(Number(optionalCso))
+    ) {
+      const o = Number(optionalCso);
+      if (Number.isInteger(o) && o >= 1) curriculumSemesterOrderVal = o;
+    }
+    curriculumIdForSection =
+      curriculumIdFilter &&
+      mongoose.Types.ObjectId.isValid(String(curriculumIdFilter))
+        ? String(curriculumIdFilter)
+        : undefined;
+  } else {
+    const cur = ctx.activeCurriculums.find(
+      (c) => String(c._id) === String(curriculumIdFilter),
+    );
+    if (!cur) {
+      const e = new Error("Không tìm thấy khung chương trình");
+      e.statusCode = 400;
+      throw e;
+    }
+    const o = Number(newSection.curriculumSemesterOrder);
+    if (!Number.isInteger(o) || o < 1) {
+      const e = new Error(
+        "Thiếu curriculumSemesterOrder — chọn học kỳ trong khung CT (dropdown HK)",
+      );
+      e.statusCode = 400;
+      throw e;
+    }
+    curriculumSemesterOrderVal = o;
+    sectionSemester = o;
+    sectionAcademicYear = String(cur.academicYear || "").trim();
+    if (!sectionAcademicYear) {
+      const e = new Error("Khung CT thiếu academicYear");
+      e.statusCode = 400;
+      throw e;
+    }
+    curriculumIdForSection = String(curriculumIdFilter);
+  }
+
+  const subRaw = String(newSection.subjectId ?? newSection.subject ?? "").trim();
+  const teaRaw = String(newSection.teacherId ?? newSection.teacher ?? "").trim();
+  const explicitManual =
+    String(newSection.classCode ?? "").trim() !== "" &&
+    mongoose.Types.ObjectId.isValid(subRaw) &&
+    mongoose.Types.ObjectId.isValid(teaRaw);
+
+  let classCode;
+  let className;
+  let subjectId;
+  let teacherId;
+  let maxCap;
+  let templateSection = null;
+
+  if (explicitManual) {
+    classCode = String(newSection.classCode ?? "").trim();
+    className = String(newSection.className ?? "").trim();
+    subjectId = subRaw;
+    teacherId = teaRaw;
+    maxCap = Number(newSection.maxCapacity);
+    if (!classCode || !className) {
+      const e = new Error("Thiếu mã lớp hoặc tên lớp");
+      e.statusCode = 400;
+      throw e;
+    }
+    if (!Number.isInteger(maxCap) || maxCap < 1) {
+      const e = new Error("maxCapacity phải là số nguyên từ 1 trở lên");
+      e.statusCode = 400;
+      throw e;
+    }
+  } else {
+    className = String(newSection.className ?? "").trim();
+    if (!className) {
+      const e = new Error("Nhập tên lớp học phần");
+      e.statusCode = 400;
+      throw e;
+    }
+    const templatePool = await buildTemplateClassSectionPool(ctx, cgOpt);
+    templateSection = pickTemplateClassSection({
+      classSections: templatePool,
+      classGroup: cgOpt,
+      enrollmentMode,
+      curriculumIdFilter,
+      sectionSemester,
+      sectionAcademicYear,
+      curriculumSemesterOrderVal,
+    });
+    if (!templateSection) {
+      const e = new Error(
+        "Không tìm thấy lớp mẫu cùng nhóm đã chọn: cần ít nhất một ClassSection (nháp / đã xếp lịch / đã công bố / khóa) với đúng classGroup, có môn và giảng viên. " +
+          "Nếu mới tạo nhóm, hãy tạo một lớp học phần cho nhóm đó trong Quản lý lớp trước, hoặc kiểm tra HK trong khung và niên khóa trên lớp có khớp với dropdown đang chọn.",
+      );
+      e.statusCode = 404;
+      throw e;
+    }
+    subjectId = String(templateSection.subject);
+    teacherId = String(templateSection.teacher);
+    const capFromOpt =
+      parsePositiveInteger(options.newClassMaxCapacity) ??
+      parsePositiveInteger(options.limit);
+    const tmplCap = Number(templateSection.maxCapacity);
+    maxCap =
+      capFromOpt ??
+      (Number.isInteger(tmplCap) && tmplCap >= 1 ? tmplCap : 40);
+    if (!Number.isInteger(maxCap) || maxCap < 1) {
+      const e = new Error("Sĩ số lớp không hợp lệ");
+      e.statusCode = 400;
+      throw e;
+    }
+    if (dryRun) {
+      classCode = `${String(templateSection.classCode || "CLASS").slice(0, 48)}-NS(auto)`;
+    } else {
+      classCode = await generateUniqueSplitClassCode(templateSection.classCode);
+    }
+  }
+
+  let status = "published";
+  if (newSection.status === "scheduled") status = "scheduled";
+  else if (newSection.status === "draft") status = "draft";
+
+  const wouldCreate = {
+    classCode,
+    className,
+    subject: subjectId,
+    teacher: teacherId,
+    semester: sectionSemester,
+    academicYear: sectionAcademicYear,
+    maxCapacity: maxCap,
+    status,
+    classGroup: cgOpt,
+    curriculum: curriculumIdForSection,
+    curriculumSemesterOrder: curriculumSemesterOrderVal,
+    templateClassCode: templateSection ? templateSection.classCode : undefined,
+  };
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      wouldCreate,
+      requested: uniqueIds.length,
+      eligible: eligibleIds.length,
+      notEligible: uniqueIds.filter((id) => !allowed.has(id)),
+    };
+  }
+
+  let created;
+  try {
+    created = await classSectionService.createClassSection({
+      classCode,
+      className,
+      subject: subjectId,
+      teacher: teacherId,
+      semester: sectionSemester,
+      academicYear: sectionAcademicYear,
+      maxCapacity: maxCap,
+      status,
+      classGroup: cgOpt,
+      curriculum: curriculumIdForSection,
+      curriculumSemesterOrder: curriculumSemesterOrderVal,
+    });
+  } catch (err) {
+    const e = new Error(err.message || "Tạo lớp thất bại");
+    e.statusCode = 400;
+    throw e;
+  }
+
+  const assignResult = await assignStudentsToClassSection(
+    semesterId,
+    String(created._id),
+    uniqueIds,
+    options,
+  );
+
+  return {
+    ...assignResult,
+    createdClassSectionId: String(created._id),
+    createdClass: true,
+  };
+}
+
 module.exports = {
   autoEnrollAfterPayment,
   previewAutoEnrollment,
   findAvailableClassSection,
   enrollStudentInSection,
   triggerAutoEnrollment,
+  listEligibleStudents,
+  assignStudentsToClassSection,
+  createClassSectionAndAssignStudents,
   getBulkWriteUpsertedCount,
   // Enrollment Management
   getEnrollmentStatus,

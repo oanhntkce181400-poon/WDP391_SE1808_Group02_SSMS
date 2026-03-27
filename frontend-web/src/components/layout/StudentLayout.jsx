@@ -1,8 +1,22 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
 import authService from '../../services/authService';
 import gpaService from '../../services/gpaService';
-import useStudentRealtimeNotifications from '../../hooks/useStudentRealtimeNotifications';
+import { useSocket } from '../../contexts/SocketContext';
+
+const INBOX_KEY = 'ssms_student_inbox';
+const INBOX_UNREAD_KEY = 'ssms_student_inbox_unread';
+
+function loadInboxFromStorage() {
+  try {
+    const raw = sessionStorage.getItem(INBOX_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 
 function getNotificationBadgeClass(type) {
   const badgeClasses = {
@@ -18,8 +32,18 @@ function getNotificationBadgeClass(type) {
 
 export default function StudentLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const { socket } = useSocket();
+  const notifPanelRef = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+  const [socketInbox, setSocketInbox] = useState(loadInboxFromStorage);
+  const [socketUnread, setSocketUnread] = useState(() => {
+    try {
+      return Math.max(0, parseInt(sessionStorage.getItem(INBOX_UNREAD_KEY) || '0', 10) || 0);
+    } catch {
+      return 0;
+    }
+  });
 
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}'); }
@@ -32,14 +56,6 @@ export default function StudentLayout() {
   const [selectedSemester, setSelectedSemester] = useState(null);
   const [semesterGPA, setSemesterGPA] = useState(null);
   const [semesterGPALoading, setSemesterGPALoading] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const notificationRef = useRef(null);
-  const {
-    notifications,
-    unreadCount,
-    markAllAsRead,
-    removeNotification,
-  } = useStudentRealtimeNotifications();
 
   // Refresh user info from server on mount
   useEffect(() => {
@@ -118,18 +134,60 @@ export default function StudentLayout() {
   }, [selectedSemester]);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setIsNotificationOpen(false);
+    if (!socket) return;
+    const onNotification = (data) => {
+      const item = {
+        ...data,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      };
+      setSocketInbox((prev) => {
+        const next = [item, ...prev].slice(0, 40);
+        try {
+          sessionStorage.setItem(INBOX_KEY, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+      setSocketUnread((u) => {
+        const n = Math.min(99, u + 1);
+        try {
+          sessionStorage.setItem(INBOX_UNREAD_KEY, String(n));
+        } catch {
+          /* ignore */
+        }
+        return n;
+      });
+    };
+    socket.on('notification', onNotification);
+    return () => socket.off('notification', onNotification);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!notifPanelOpen) return;
+    const onPointerDown = (e) => {
+      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target)) {
+        setNotifPanelOpen(false);
       }
     };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [notifPanelOpen]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  const toggleNotifPanel = () => {
+    setNotifPanelOpen((open) => {
+      const next = !open;
+      if (next) {
+        setSocketUnread(0);
+        try {
+          sessionStorage.setItem(INBOX_UNREAD_KEY, '0');
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
+  };
 
   const navItems = [
     { name: 'Trang chủ', path: '/student', icon: '🏠' },
@@ -339,17 +397,14 @@ export default function StudentLayout() {
                 </div>
               )}
 
-              {/* Notifications */}
-              <div ref={notificationRef} className="relative">
+              {/* Real-time notifications (Socket.IO — ví dụ nhắc học phí) */}
+              <div className="relative" ref={notifPanelRef}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsNotificationOpen((prev) => !prev);
-                    if (!isNotificationOpen) {
-                      markAllAsRead();
-                    }
-                  }}
+                  onClick={toggleNotifPanel}
                   className="relative rounded-lg p-2 hover:bg-slate-100"
+                  aria-expanded={notifPanelOpen}
+                  aria-label="Thông báo"
                 >
                   <svg
                     className="h-5 w-5 text-slate-600"
@@ -364,66 +419,51 @@ export default function StudentLayout() {
                       d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
                     />
                   </svg>
-                  {unreadCount > 0 && (
-                    <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                  {socketUnread > 0 && (
+                    <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                      {socketUnread > 9 ? '9+' : socketUnread}
                     </span>
                   )}
                 </button>
-
-                {isNotificationOpen && (
-                  <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                      <p className="text-sm font-semibold text-slate-800">Thông báo</p>
-                      <button
-                        type="button"
-                        onClick={markAllAsRead}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                {notifPanelOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 max-h-[min(24rem,70vh)] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl">
+                    <div className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-2">
+                      <span className="text-sm font-semibold text-slate-800">Thông báo</span>
+                      <Link
+                        to="/student/announcements"
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => setNotifPanelOpen(false)}
                       >
-                        Đã đọc
-                      </button>
+                        Tin tức &amp; sự kiện
+                      </Link>
                     </div>
-
-                    <div className="max-h-[360px] overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="px-4 py-6 text-sm text-slate-500">
-                          Chưa có thông báo nào.
-                        </div>
-                      ) : (
-                        notifications.map((item) => (
-                          <div
-                            key={item.id}
-                            className={`border-b border-slate-100 px-4 py-3 last:border-b-0 ${
-                              item.isRead ? 'bg-white' : 'bg-blue-50/50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${getNotificationBadgeClass(item.type)}`}
-                                >
-                                  {item.typeLabel || 'Thông báo'}
-                                </span>
-                                <p className="mt-2 text-sm font-semibold text-slate-800">{item.title}</p>
-                                {item.message && (
-                                  <p className="mt-1 text-sm text-slate-600">{item.message}</p>
-                                )}
-                                <p className="mt-1 text-xs text-slate-400">
-                                  {new Date(item.timestamp).toLocaleString('vi-VN')}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removeNotification(item.id)}
-                                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-600"
+                    {socketInbox.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-slate-500">
+                        Chưa có thông báo đẩy. Nhắc học phí (email + in-app) sẽ hiện ở đây khi bạn đang mở portal.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-slate-100">
+                        {socketInbox.map((n) => (
+                          <li key={n.id} className="px-4 py-3 text-sm">
+                            <p className="font-medium text-slate-900">{n.title || 'Thông báo'}</p>
+                            {n.message && (
+                              <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-slate-600">
+                                {n.message}
+                              </p>
+                            )}
+                            {n.type === 'payment_reminder' && (
+                              <Link
+                                to="/student/finance"
+                                className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline"
+                                onClick={() => setNotifPanelOpen(false)}
                               >
-                                Xóa
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                                → Tài chính / học phí
+                              </Link>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>
