@@ -294,7 +294,7 @@ const StudentProfilePage = () => {
               <p className="text-lg font-bold text-gray-800 mt-2 leading-tight break-words">
                 {student?.student?.placementClassName || '—'}
               </p>
-              <p className="text-[11px] text-gray-500 mt-1">Theo bản &quot;Lưu lớp&quot; Auto Enrollment</p>
+              <p className="text-[11px] text-gray-500 mt-1">Theo bản &quot;Lưu bản log&quot; Auto Enrollment</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-4 text-center border-t-4 border-green-500">
               <p className="text-gray-600 text-sm font-medium">NGÀNH</p>

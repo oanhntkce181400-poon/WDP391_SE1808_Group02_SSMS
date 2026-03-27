@@ -605,7 +605,10 @@ export default function StudentManagementPage() {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                         Mật khẩu
                       </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                      <th
+                        className="px-4 py-3 text-left text-sm font-semibold text-slate-700"
+                        title="Nhóm (classGroup) trên lớp học phần đang đăng ký (enrolled)"
+                      >
                         Lớp SH
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
@@ -846,9 +849,15 @@ function StudentFormModal({
             {/* Email - Auto generated */}
             {!isEdit && (
               <div className="md:col-span-2">
-                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3">
-                  <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu sẽ được tự động tạo theo định dạng: 
-                  <span className="font-mono text-indigo-600"> tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                  <p>
+                    <span className="font-medium">ℹ️ Lưu ý:</span> Email và mật khẩu sẽ được tự động tạo theo định dạng:{" "}
+                    <span className="font-mono text-indigo-600">tên + họ viết tắt + MSSV@fpt.edu.vn</span>
+                  </p>
+                  <p className="text-slate-600">
+                    <span className="font-medium">Lớp sinh hoạt / nhóm học phần</span> không gán lúc tạo tài khoản — hãy xếp lớp qua
+                    trang <span className="font-medium">Tự động xếp lớp</span> (Auto Enrollment) sau khi đã mở lớp học phần và chọn đúng nhóm.
+                  </p>
                 </div>
               </div>
             )}
@@ -1037,7 +1046,10 @@ function StudentDetailModal({ student, onClose }) {
               <div className="space-y-3">
                 <InfoRow label="Ngành học" value={student.majorCode} />
                 <InfoRow label="Khóa" value={`K${student.cohort}`} />
-                <InfoRow label="Lớp sinh hoạt" value={student.classSection || '-'} />
+                <InfoRow
+                  label="Lớp SH (nhóm lớp học phần)"
+                  value={student.classSection || '-'}
+                />
                 <InfoRow label="Năm nhập học" value={student.enrollmentYear || '-'} />
                 <InfoRow
                   label="Trạng thái"

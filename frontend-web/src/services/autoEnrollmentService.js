@@ -9,7 +9,6 @@ const autoEnrollmentService = {
             dryRun: options.dryRun === true,
             limit: options.limit,
             majorCodes: options.majorCodes,
-            studentCodes: options.studentCodes,
             onlyStudentsWithoutEnrollments: options.onlyStudentsWithoutEnrollments === true,
             excludeStudentsAlreadyAssignedInSemester:
               options.excludeStudentsAlreadyAssignedInSemester === true,
@@ -18,11 +17,54 @@ const autoEnrollmentService = {
             classGroup: options.classGroup || undefined,
           };
 
-    return axiosClient.post('/auto-enrollment/trigger', {
+    const codes = Array.isArray(options.studentCodes)
+      ? options.studentCodes
+          .map((c) => String(c || '').trim().toUpperCase())
+          .filter(Boolean)
+      : [];
+    const body = {
       semesterId,
       ...normalizedOptions,
+      ...(codes.length > 0 ? { studentCodes: codes } : {}),
+    };
+
+    return axiosClient.post('/auto-enrollment/trigger', body);
+  },
+
+  /**
+   * Cùng filter với trigger nhưng trả về toàn bộ SV ứng viên (không cắt theo Student limit).
+   */
+  listEligibleStudents: (semesterId, options = {}) => {
+    const normalized = {
+      majorCodes: options.majorCodes,
+      studentCodes: options.studentCodes,
+      onlyStudentsWithoutEnrollments:
+        options.onlyStudentsWithoutEnrollments === true,
+      excludeStudentsAlreadyAssignedInSemester:
+        options.excludeStudentsAlreadyAssignedInSemester === true,
+      mode: options.mode === 'retake' ? 'retake' : 'normal',
+      curriculumId: options.curriculumId || undefined,
+      classGroup: options.classGroup || undefined,
+      curriculumSemesterOrder:
+        options.curriculumSemesterOrder != null &&
+        options.curriculumSemesterOrder !== ''
+          ? options.curriculumSemesterOrder
+          : undefined,
+    };
+    return axiosClient.post('/auto-enrollment/eligible-students', {
+      semesterId,
+      ...normalized,
     });
   },
+
+  /**
+   * Gán các SV đã chọn vào một lớp học phần (cùng bộ lọc với tab Auto Enrollment).
+   */
+  assignToClass: (semesterId, payload) =>
+    axiosClient.post('/auto-enrollment/assign-to-class', {
+      semesterId,
+      ...payload,
+    }),
 
   // ── Enrollment Management ──────────────────────────────────────────────────────
 

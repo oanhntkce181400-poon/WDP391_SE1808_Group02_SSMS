@@ -27,25 +27,86 @@ async function listClasses(query = {}) {
     semester,
     status,
     search,
+    curriculumId,
+    createdAfter,
     page = 1,
     limit = 10,
   } = query;
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
 
-  const filter = {};
-  if (academicYear) filter.academicYear = academicYear;
-  if (semester) filter.semester = parseInt(semester, 10);
-  if (status) filter.status = status;
+  const ay =
+    academicYear && String(academicYear).trim() !== ""
+      ? String(academicYear).trim()
+      : null;
+  const semParsed =
+    semester != null && semester !== "" ? parseInt(semester, 10) : null;
+  const semOk = semParsed != null && !Number.isNaN(semParsed);
+  const cid =
+    curriculumId &&
+    mongoose.Types.ObjectId.isValid(String(curriculumId))
+      ? new mongoose.Types.ObjectId(String(curriculumId))
+      : null;
 
+  const noCurriculum = {
+    $or: [{ curriculum: null }, { curriculum: { $exists: false } }],
+  };
+
+  const filterParts = [];
+
+  if (cid) {
+    const orBranches = [{ curriculum: cid }];
+    if (semOk && ay) {
+      orBranches.push({
+        $and: [{ semester: semParsed }, { academicYear: ay }, noCurriculum],
+      });
+    } else if (semOk) {
+      orBranches.push({ $and: [{ semester: semParsed }, noCurriculum] });
+    } else if (ay) {
+      orBranches.push({ $and: [{ academicYear: ay }, noCurriculum] });
+    }
+    filterParts.push({ $or: orBranches });
+  } else {
+    const leg = {};
+    if (ay) leg.academicYear = ay;
+    if (semOk) leg.semester = semParsed;
+    if (Object.keys(leg).length) filterParts.push(leg);
+  }
+
+  let filter = {};
   if (search) {
     const subjectIds = await repo.findSubjectIdsBySearch(search);
-    filter.$or = [
+    const searchOr = [
       { classCode: { $regex: search, $options: "i" } },
       { className: { $regex: search, $options: "i" } },
       { classGroup: { $regex: search, $options: "i" } },
       ...(subjectIds.length > 0 ? [{ subject: { $in: subjectIds } }] : []),
     ];
+    filterParts.push({ $or: searchOr });
+  }
+
+  if (filterParts.length === 0) {
+    filter = {};
+  } else if (filterParts.length === 1) {
+    filter = filterParts[0];
+  } else {
+    filter = { $and: filterParts };
+  }
+
+  if (status) {
+    filter =
+      Object.keys(filter).length === 0
+        ? { status }
+        : { $and: [filter, { status }] };
+  }
+
+  if (createdAfter) {
+    const afterDate = new Date(createdAfter);
+    if (!isNaN(afterDate)) {
+      filter = Object.keys(filter).length === 0
+        ? { createdAt: { $gte: afterDate } }
+        : { $and: [filter, { createdAt: { $gte: afterDate } }] };
+    }
   }
 
   const [total, data] = await Promise.all([
@@ -590,16 +651,17 @@ async function bulkUpdateStatus(classIds, newStatus) {
       continue;
     }
 
-    // Special validation for publishing: check if class has schedule
-    if (newStatus === "published") {
-      // Check in Schedule collection
-      const Schedule = require("../../models/schedule.model");
-      const scheduleCount = await Schedule.countDocuments({
+    // Khi công bố lớp: mặc định KHÔNG bắt buộc đã có lịch (admin có thể mở lớp trước khi xếp phòng).
+    // Bật chế độ nghiêm: CLASS_PUBLISH_REQUIRES_SCHEDULE=true
+    if (
+      newStatus === "published" &&
+      process.env.CLASS_PUBLISH_REQUIRES_SCHEDULE === "true"
+    ) {
+      const ScheduleModel = require("../../models/schedule.model");
+      const scheduleCount = await ScheduleModel.countDocuments({
         classSection: cls._id,
         status: "active",
       });
-
-      // Also check if ClassSection has room/timeslot (old format)
       const hasOldSchedule = cls.room && cls.timeslot && cls.dayOfWeek;
 
       if (scheduleCount === 0 && !hasOldSchedule) {
@@ -607,7 +669,7 @@ async function bulkUpdateStatus(classIds, newStatus) {
           classId: cls._id,
           classCode: cls.classCode,
           currentStatus,
-          message: `Lớp ${cls.classCode} chưa được gán lịch học, không thể mở lớp`,
+          message: `Lớp ${cls.classCode} chưa được gán lịch học, không thể mở lớp (CLASS_PUBLISH_REQUIRES_SCHEDULE=true)`,
         });
         continue;
       }
@@ -1157,12 +1219,10 @@ async function bulkAssignGroup(classIds, classGroupPrefix, academicYear, semeste
 }
 
 /**
- * Lấy danh sách distinct classGroups có trong DB
+ * Filter Mongo dùng chung cho distinct classGroup và danh sách nhóm có nhiều học phần.
  * @param {object} filters - { semester, academicYear, curriculumId }
- * - academicYear trên ClassSection thường trùng khung CT (vd 2026-2030), không trùng niên học HK hệ thống (vd 2025-2026).
- * - curriculumId: lọc thêm lớp gắn khung (lớp không có curriculum vẫn khớp nếu academicYear khớp).
  */
-async function getDistinctClassGroups(filters = {}) {
+function buildClassGroupFilter(filters = {}) {
   const semester =
     filters.semester != null && filters.semester !== ""
       ? Number(filters.semester)
@@ -1182,36 +1242,157 @@ async function getDistinctClassGroups(filters = {}) {
   };
 
   let query = {};
-  if (semester != null && !Number.isNaN(semester)) {
-    if (cid && academicYear) {
-      query = {
-        semester,
-        $or: [
-          { curriculum: cid },
-          { $and: [{ academicYear }, noCurriculum] },
-        ],
-      };
-    } else if (cid) {
-      query = { semester, curriculum: cid };
+  if (cid) {
+    const orBranches = [{ curriculum: cid }];
+    if (semester != null && !Number.isNaN(semester)) {
+      if (academicYear) {
+        orBranches.push({
+          $and: [{ semester }, { academicYear }, noCurriculum],
+        });
+      } else {
+        orBranches.push({ $and: [{ semester }, noCurriculum] });
+      }
     } else if (academicYear) {
+      orBranches.push({ $and: [{ academicYear }, noCurriculum] });
+    }
+    query = orBranches.length === 1 ? orBranches[0] : { $or: orBranches };
+  } else if (semester != null && !Number.isNaN(semester)) {
+    if (academicYear) {
       query = { semester, academicYear };
     } else {
       query = { semester };
     }
-  } else if (cid && academicYear) {
-    query = {
-      $or: [{ curriculum: cid }, { $and: [{ academicYear }, noCurriculum] }],
-    };
-  } else if (cid) {
-    query = { curriculum: cid };
   } else if (academicYear) {
     query = { academicYear };
   }
 
+  return query;
+}
+
+/**
+ * Lấy danh sách distinct classGroups có trong DB
+ * @param {object} filters - { semester, academicYear, curriculumId }
+ * - academicYear trên ClassSection thường trùng khung CT (vd 2026-2030), không trùng niên học HK hệ thống (vd 2025-2026).
+ * - curriculumId: lọc thêm lớp gắn khung (lớp không có curriculum vẫn khớp nếu academicYear khớp).
+ */
+async function getDistinctClassGroups(filters = {}) {
+  const query = buildClassGroupFilter(filters);
   const groups = await ClassSection.distinct("classGroup", query);
   return groups
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+/**
+ * Danh sách nhóm lớp (classGroup, VD SEKhuong / SE1808-01): mỗi nhóm gồm các lớp học phần + môn + GV.
+ * Dùng cho trang “lớp mới tạo” / tổng quan nhóm phục vụ enroll thủ công & auto-enrollment.
+ */
+async function listClassGroupsOverview(query = {}) {
+  const {
+    semester,
+    academicYear,
+    curriculumId,
+    createdAfter,
+    page = 1,
+    limit = 10,
+  } = query;
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+
+  const baseFilter = buildClassGroupFilter({
+    semester: semester != null ? Number(semester) : undefined,
+    academicYear: academicYear || undefined,
+    curriculumId: curriculumId || undefined,
+  });
+
+  const classGroupCond = {
+    classGroup: { $exists: true, $nin: [null, ""] },
+  };
+
+  const matchStage =
+    Object.keys(baseFilter).length === 0
+      ? classGroupCond
+      : { $and: [baseFilter, classGroupCond] };
+
+  const groupStages = [
+    { $match: matchStage },
+    {
+      $group: {
+        _id: "$classGroup",
+        sectionCount: { $sum: 1 },
+        semester: { $first: "$semester" },
+        academicYear: { $first: "$academicYear" },
+        firstCreatedAt: { $min: "$createdAt" },
+        lastCreatedAt: { $max: "$createdAt" },
+        sectionIds: { $push: "$_id" },
+      },
+    },
+  ];
+
+  const afterStages = [];
+  if (createdAfter) {
+    const d = new Date(createdAfter);
+    if (!Number.isNaN(d.getTime())) {
+      afterStages.push({ $match: { firstCreatedAt: { $gte: d } } });
+    }
+  }
+
+  afterStages.push({ $sort: { firstCreatedAt: -1 } });
+
+  const countPipeline = [...groupStages, ...afterStages, { $count: "total" }];
+  const dataPipeline = [
+    ...groupStages,
+    ...afterStages,
+    { $skip: (pageNum - 1) * limitNum },
+    { $limit: limitNum },
+  ];
+
+  const [countResult, groupsAgg] = await Promise.all([
+    ClassSection.aggregate(countPipeline),
+    ClassSection.aggregate(dataPipeline),
+  ]);
+
+  const total = countResult[0]?.total || 0;
+  const allIds = groupsAgg.flatMap((g) => g.sectionIds || []);
+  const sections =
+    allIds.length > 0
+      ? await repo.findClasses(
+          { _id: { $in: allIds } },
+          {
+            limit: Math.min(2000, Math.max(allIds.length, 50)),
+            sort: { classCode: 1 },
+          },
+        )
+      : [];
+
+  const byGroup = new Map();
+  for (const s of sections) {
+    const cg = s.classGroup;
+    if (!cg) continue;
+    if (!byGroup.has(cg)) byGroup.set(cg, []);
+    byGroup.get(cg).push(s);
+  }
+
+  const data = groupsAgg.map((g) => ({
+    classGroup: g._id,
+    sectionCount: g.sectionCount,
+    semester: g.semester,
+    academicYear: g.academicYear,
+    firstCreatedAt: g.firstCreatedAt,
+    lastCreatedAt: g.lastCreatedAt,
+    sections: byGroup.get(g._id) || [],
+  }));
+
+  return {
+    data,
+    pagination: {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 0,
+    },
+  };
 }
 
 // Export all functions
@@ -1238,4 +1419,5 @@ module.exports = {
   bulkCreateClassSectionsFromCurriculum,
   bulkAssignGroup,
   getDistinctClassGroups,
+  listClassGroupsOverview,
 };

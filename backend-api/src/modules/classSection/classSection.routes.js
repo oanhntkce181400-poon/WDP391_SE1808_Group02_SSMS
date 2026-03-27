@@ -26,6 +26,14 @@ router.get(
 
 // ─── Admin Routes ────────────────────
 
+// Nhóm lớp (classGroup) + danh sách học phần trong nhóm — đặt trước /groups để path cụ thể
+router.get(
+  "/groups/overview",
+  authMiddleware,
+  ADMIN_STAFF,
+  ctrl.listClassGroupsOverview,
+);
+
 // Get distinct classGroups for filtering
 router.get("/groups", authMiddleware, ADMIN_STAFF, ctrl.getDistinctClassGroups);
 

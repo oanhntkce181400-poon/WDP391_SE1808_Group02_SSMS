@@ -206,8 +206,11 @@ export default function EnrollmentSnapshotsPage() {
             Lịch sử xếp lớp (đã lưu)
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Các bản chụp kết quả sau khi bấm &quot;Lưu lớp&quot; trên trang Auto
-            Enrollment — chỉnh sửa tên / ghi chú hoặc xóa.
+            Bản lưu gắn{" "}
+            <span className="font-medium text-slate-800">nhóm lớp</span> (classGroup
+            từ ClassSection) và{" "}
+            <span className="font-medium text-slate-800">sĩ số</span> (Student limit)
+            — dùng cho điểm danh / tra cứu; chỉnh tên, ghi chú hoặc xóa.
           </p>
         </div>
         <Link
@@ -269,6 +272,12 @@ export default function EnrollmentSnapshotsPage() {
                     Khung CT
                   </th>
                   <th className="px-3 py-2 font-semibold text-slate-700">
+                    Nhóm lớp
+                  </th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">
+                    Sĩ số (limit)
+                  </th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">
                     Chế độ
                   </th>
                   <th className="px-3 py-2 font-semibold text-slate-700">
@@ -292,6 +301,20 @@ export default function EnrollmentSnapshotsPage() {
                     </td>
                     <td className="px-3 py-2 text-slate-600">
                       {row.curriculumCode || "-"}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {row.classGroup || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">
+                      {row.studentLimit != null ? row.studentLimit : "—"}
+                      {row.maxCapacityAppliedToClassSections ? (
+                        <span
+                          className="ml-1 text-xs text-emerald-600"
+                          title="Đã cập nhật maxCapacity lên ClassSection"
+                        >
+                          ✓
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2">
                       {row.dryRun ? (
@@ -341,8 +364,8 @@ export default function EnrollmentSnapshotsPage() {
 
         {!loading && items.length === 0 && (
           <p className="py-8 text-center text-sm text-slate-500">
-            Chưa có bản lưu nào. Chạy Auto Enrollment rồi bấm &quot;Lưu
-            lớp&quot; để tạo bản ghi tại đây.
+            Chưa có bản lưu nào. Chạy Auto Enrollment rồi bấm &quot;Lưu bản
+            log&quot; để tạo bản ghi tại đây.
           </p>
         )}
       </div>
@@ -365,8 +388,13 @@ export default function EnrollmentSnapshotsPage() {
                 ) : null}
                 <p className="mt-2 text-xs text-slate-500">
                   {detail.semesterSnapshot?.name} ·{" "}
-                  {detail.curriculumCode || "—"} ·{" "}
-                  {detail.dryRun ? "Dry run" : "Live"} ·{" "}
+                  {detail.curriculumCode || "—"} · Nhóm:{" "}
+                  {detail.classGroup || "—"} · Limit:{" "}
+                  {detail.studentLimit != null ? detail.studentLimit : "—"}
+                  {detail.maxCapacityAppliedToClassSections
+                    ? " (đã sync maxCapacity)"
+                    : ""}{" "}
+                  · {detail.dryRun ? "Dry run" : "Live"} ·{" "}
                   {formatDate(detail.createdAt)}
                 </p>
               </div>

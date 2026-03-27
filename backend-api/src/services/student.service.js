@@ -8,6 +8,10 @@ const Wallet = require('../models/wallet.model');
 const Major = require('../models/major.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const bcrypt = require('bcryptjs');
+const {
+  getNonEmptyClassGroupsListsByStudentIds,
+  canonicalHomeroomLabel,
+} = require('../utils/studentHomeroomFromEnrollments');
 const ExcelJS = require('exceljs');
 
 // Export files use human-readable labels instead of raw enum values from MongoDB.
@@ -66,6 +70,26 @@ function buildStudentSort(filters = {}) {
   const sortOrder = filters.sortOrder === 'desc' ? -1 : 1;
 
   return { [sortBy]: sortOrder };
+}
+
+/**
+ * Ghi đè `classSection` trên object trả về API: một nhãn Lớp SH (nhóm lớp HP),
+ * đồng bộ logic với filter auto-enrollment (utils/studentHomeroomFromEnrollments).
+ */
+async function attachHomeroomGroupFromEnrollments(students = []) {
+  if (!Array.isArray(students) || students.length === 0) return students;
+  const listsMap = await getNonEmptyClassGroupsListsByStudentIds(
+    students.map((s) => s._id),
+  );
+  return students.map((s) => {
+    const sid = String(s._id);
+    const list = listsMap.get(sid) || [];
+    const label = canonicalHomeroomLabel(list, s.classSection);
+    return {
+      ...s,
+      classSection: label || null,
+    };
+  });
 }
 
 /*
@@ -253,7 +277,7 @@ async function generateStudentExcelBuffer(rows = []) {
     { header: 'Phone', key: 'phoneNumber', width: 16 },
     { header: 'Major', key: 'majorCode', width: 12 },
     { header: 'Cohort', key: 'cohortLabel', width: 10 },
-    { header: 'Class Section', key: 'classSection', width: 16 },
+    { header: 'Lớp SH (nhóm lớp HP)', key: 'classSection', width: 22 },
     { header: 'Status', key: 'academicStatus', width: 14 },
     { header: 'Identity Number', key: 'identityNumber', width: 20 },
     { header: 'Enrollment Year', key: 'enrollmentYear', width: 16 },
@@ -305,7 +329,7 @@ function generateStudentPdfBuffer(rows = [], filters = {}) {
 
   rows.forEach((row, index) => {
     const mainLine = `${index + 1}. ${row.studentCode} | ${row.fullName} | ${row.majorCode} | ${row.cohortLabel} | ${row.academicStatus}`;
-    const detailLine = `   Email: ${row.email || '-'} | Phone: ${row.phoneNumber || '-'} | Class: ${row.classSection || '-'} | ID: ${row.identityNumber || '-'}`;
+    const detailLine = `   Email: ${row.email || '-'} | Phone: ${row.phoneNumber || '-'} | Lớp SH: ${row.classSection || '-'} | ID: ${row.identityNumber || '-'}`;
     const metaLine = `   Enrollment year: ${row.enrollmentYear || '-'} | Created: ${row.createdAt || '-'}`;
 
     wrapPdfText(mainLine).forEach((line) => lines.push(line));
@@ -333,7 +357,8 @@ async function exportStudents(filters = {}) {
     throw error;
   }
 
-  const students = await findStudentsByFilters(filters);
+  const studentsRaw = await findStudentsByFilters(filters);
+  const students = await attachHomeroomGroupFromEnrollments(studentsRaw);
   const rows = students.map(formatStudentExportRow);
   const timestamp = buildExportTimestamp();
 
@@ -352,37 +377,44 @@ async function exportStudents(filters = {}) {
   };
 }
 
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ─────────────────────────────────────────────────────────────
 // HELPER: Tạo mã sinh viên tự động
-// Format: {MajorCode}{Year}{Sequential} - VD: SE181234
+// Format: {MajorCode}{Year}{Sequential} - VD: SE260001 (SE + 26 + 0001)
 // ─────────────────────────────────────────────────────────────
 async function generateStudentCode(majorCode, enrollmentYear) {
+  const mc = String(majorCode || '')
+    .trim()
+    .toUpperCase();
+  if (!mc) {
+    const err = new Error('Thiếu mã ngành (majorCode)');
+    err.statusCode = 400;
+    throw err;
+  }
+
   // Lấy 2 số cuối của năm: 2024 -> 24
   const yearSuffix = String(enrollmentYear).slice(-2);
-  
-  // Prefix: SE24, AI24...
-  const prefix = `${majorCode}${yearSuffix}`;
-  
-  // Tìm sinh viên có mã lớn nhất với prefix này
-  const lastStudent = await Student.findOne({ 
-    studentCode: new RegExp(`^${prefix}`) 
-  })
-    .sort({ studentCode: -1 })
-    .select('studentCode')
-    .lean();
-  
-  let sequential = 1;
-  if (lastStudent) {
-    // Extract số thứ tự từ mã cuối: SE241234 -> 1234
-    const lastSeq = parseInt(lastStudent.studentCode.substring(prefix.length));
-    if (!isNaN(lastSeq)) {
-      sequential = lastSeq + 1;
-    }
+
+  // Prefix: SE26, AI26... (luôn uppercase để khớp DB / regex)
+  const prefix = `${mc}${yearSuffix}`;
+
+  // Lấy mọi mã khớp prefix + phần số (tránh findOne+sort chuỗi lệch khi có mã lạ / đua race)
+  const re = new RegExp(`^${escapeRegExp(prefix)}\\d+$`);
+  const docs = await Student.find({ studentCode: re }).select('studentCode').lean();
+
+  let maxSeq = 0;
+  for (const doc of docs) {
+    const tail = doc.studentCode.slice(prefix.length);
+    const n = parseInt(tail, 10);
+    if (!Number.isNaN(n) && n > maxSeq) maxSeq = n;
   }
-  
-  // Pad 4 chữ số: 1 -> 0001
+
+  const sequential = maxSeq + 1;
   const seqStr = String(sequential).padStart(4, '0');
-  
+
   return `${prefix}${seqStr}`;
 }
 
@@ -527,8 +559,12 @@ async function createStudent(payload, createdById) {
   // Tự động tính Khóa từ Năm nhập học
   const cohort = payload.cohort || calculateCohort(enrollmentYear);
 
+  const majorCodeNorm = String(majorCode || '')
+    .trim()
+    .toUpperCase();
+
   // Validate major exists
-  const major = await Major.findOne({ majorCode, isActive: true });
+  const major = await Major.findOne({ majorCode: majorCodeNorm, isActive: true });
   if (!major) {
     const error = new Error('Ngành học không tồn tại hoặc đã bị vô hiệu hóa');
     error.statusCode = 400;
@@ -551,7 +587,10 @@ async function createStudent(payload, createdById) {
   }
 
   // Tạo mã sinh viên tự động
-  const studentCode = await generateStudentCode(majorCode, enrollmentYear || cohort);
+  const studentCode = await generateStudentCode(
+    majorCodeNorm,
+    enrollmentYear || cohort,
+  );
   
   // Tạo email tự động theo format FPT
   const email = generateEmail(fullName, studentCode);
@@ -574,8 +613,9 @@ async function createStudent(payload, createdById) {
     throw error;
   }
   
-  // Gợi ý lớp sinh hoạt
-  const classSection = await suggestClassSection(majorCode, cohort);
+  // Không gán Lớp SH / nhóm lớp học phần lúc tạo tài khoản — admin xếp qua Auto Enrollment
+  // (/admin/auto-enrollment) hoặc cập nhật thủ công sau. Hiển thị "Lớp SH" trên danh sách
+  // lấy từ ClassEnrollment + ClassSection.classGroup khi đã có ghi danh.
 
   // 1. Tạo User Account
   const defaultPassword = sanitizedIdentityNumber || '123456'; // Mật khẩu hệ thống = CCCD hoặc 123456
@@ -597,13 +637,14 @@ async function createStudent(payload, createdById) {
     studentCode,
     fullName,
     email,
-    majorCode,
+    majorCode: String(majorCode || '')
+      .trim()
+      .toUpperCase(),
     cohort,
     dateOfBirth,
     phoneNumber,
     address,
     gender,
-    classSection,
     academicStatus: 'enrolled',
     enrollmentYear: enrollmentYear || cohort,
     userId: newUser._id,
@@ -616,7 +657,25 @@ async function createStudent(payload, createdById) {
     studentData.identityNumber = sanitizedIdentityNumber;
   }
 
-  const newStudent = await Student.create(studentData);
+  let newStudent;
+  try {
+    newStudent = await Student.create(studentData);
+  } catch (err) {
+    const dup =
+      err &&
+      (err.code === 11000 ||
+        String(err.message || '').includes('E11000 duplicate key'));
+    if (dup && String(err.message || '').includes('studentCode')) {
+      await User.findByIdAndDelete(newUser._id);
+      const conflict = new Error(
+        `Mã sinh viên ${studentCode} đã tồn tại (có thể do tạo trùng lúc hoặc dữ liệu cũ). Vui lòng thử lại — hệ thống sẽ cấp mã tiếp theo.`,
+      );
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+    await User.findByIdAndDelete(newUser._id);
+    throw err;
+  }
 
   // 3. Tạo Wallet với số dư 0 VND
   await Wallet.create({
@@ -719,10 +778,12 @@ async function getStudentsList(filters = {}) {
   const skip = (page - 1) * limit;
 
   // Reuse the same query helper as export so list totals and export totals always describe the same dataset.
-  const [students, total] = await Promise.all([
+  const [studentsRaw, total] = await Promise.all([
     findStudentsByFilters(filters, { skip, limit }),
     Student.countDocuments(query),
   ]);
+
+  const students = await attachHomeroomGroupFromEnrollments(studentsRaw);
 
   return {
     students,
@@ -764,7 +825,8 @@ async function getStudentById(studentId) {
   });
   student.enrollmentCount = enrollmentCount;
 
-  return student;
+  const [withHomeroom] = await attachHomeroomGroupFromEnrollments([student]);
+  return withHomeroom;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -977,12 +1039,13 @@ async function getSuggestedClassSection(majorCode, cohort) {
 // GET /api/students/me - Lấy thông tin sinh viên hiện tại qua userId
 async function getStudentByUserId(userId) {
   const student = await Student.findOne({ userId }).lean();
-  
+
   if (!student) {
     return null;
   }
 
-  return student;
+  const [withHomeroom] = await attachHomeroomGroupFromEnrollments([student]);
+  return withHomeroom;
 }
 
 module.exports = {

@@ -53,6 +53,8 @@ import AdminPaymentSummaryPage from "./pages/admin/AdminPaymentSummaryPage";
 import StudentManagementPage from "./pages/admin/StudentManagementPage";
 import RegistrationPeriodManagement from "./pages/admin/RegistrationPeriodManagement";
 import AutoEnrollmentPage from "./pages/admin/AutoEnrollmentPage";
+import AdminClassDetailPage from "./pages/admin/AdminClassDetailPage";
+import RecentClassesPage from "./pages/admin/RecentClassesPage";
 import EnrollmentSnapshotsPage from "./pages/admin/EnrollmentSnapshotsPage";
 import TeachingSchedulePage from "./pages/admin/TeachingSchedulePage";
 import AdminWishlistPage from "./pages/admin/AdminWishlistPage";
@@ -118,7 +120,9 @@ export default function App() {
           />
           <Route path="requests" element={<AdminRequestsPage />} />
           <Route path="attendance" element={<AttendancePage />} />
+          <Route path="classes/:classSectionId" element={<AdminClassDetailPage />} />
           <Route path="classes" element={<ClassManagement />} />
+          <Route path="recent-classes" element={<RecentClassesPage />} />
           <Route path="lecturers" element={<LecturerManagement />} />
           <Route path="students" element={<StudentManagementPage />} />
           <Route path="announcements" element={<AnnouncementManagement />} />

@@ -14,6 +14,30 @@ router.post(
   controller.trigger,
 );
 
+// Cùng filter với trigger — trả về toàn bộ SV ứng viên (không cắt theo limit) để chọn tay.
+router.post(
+  '/eligible-students',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.listEligibleStudents,
+);
+
+// Gán SV đã chọn vào một lớp học (một môn / một section).
+router.post(
+  '/assign-to-class',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.assignToClass,
+);
+
+// Tạo lớp học phần mới (đúng nhóm lọc) rồi gán SV đã chọn — không dùng lớp có sẵn.
+router.post(
+  '/create-class-and-assign',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  controller.createClassAndAssign,
+);
+
 // ── Enrollment Management ────────────────────────────────────────────────────────
 
 // GET /api/auto-enrollment/status?semesterNum=1&academicYear=2025-2026&classGroup=SE1808-01

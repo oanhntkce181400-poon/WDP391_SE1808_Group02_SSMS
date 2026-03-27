@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-Enrollment Flow với Prerequisite Validation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+            --accent-purple: #a855f7;
+            --border-color: #475569;
+            --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .background-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(168, 85, 247, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 60% 80%, rgba(34, 197, 94, 0.05) 0%, transparent 40%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 30px;
+        }
+
+        .flowchart-container {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .flowchart-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple), var(--accent-green));
+        }
+
+        #flowchart {
+            width: 100%;
+            height: 900px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .legend-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+
+        .legend-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-title svg {
+            width: 18px;
+            height: 18px;
+            color: var(--accent-blue);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .legend-shape {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .legend-circle {
+            border-radius: 50%;
+        }
+
+        .legend-diamond {
+            transform: rotate(45deg);
+            width: 18px;
+            height: 18px;
+        }
+
+        .legend-colors {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .color-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .color-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+
+        .stats-card {
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+
+        .stats-title {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .export-btn {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .export-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        .export-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .tooltip {
+            position: fixed;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            max-width: 280px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .tooltip-desc {
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .legend-card, .stats-card, .export-btn {
+                flex: 1;
+                min-width: 250px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            #flowchart {
+                height: 700px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-pattern"></div>
+    
+    <div class="container">
+        <header>
+            <h1>Auto-Enrollment Flow với Prerequisite Validation</h1>
+            <p class="subtitle">Quy trình tự động đăng ký học phần với kiểm tra điều kiện tiên quyết</p>
+        </header>
+
+        <div class="main-content">
+            <div class="flowchart-container">
+                <canvas id="flowchart"></canvas>
+            </div>
+
+            <div class="sidebar">
+                <div class="legend-card">
+                    <div class="legend-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4M12 8h.01"/>
+                        </svg>
+                        Chú thích ký hiệu
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-shape legend-circle" style="background: #22c55e;"></div>
+                        <span>Điểm bắt đầu/kết thúc</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-shape" style="background: var(--accent-blue);"></div>
+                        <span>Quá trình xử lý</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-shape legend-diamond" style="background: var(--accent-yellow);"></div>
+                        <span>Điểm quyết định</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-shape" style="background: linear-gradient(135deg, #a855f7, #6366f1);"></div>
+                        <span>Kiểm tra Prerequisites (MỚI)</span>
+                    </div>
+                </div>
+
+                <div class="legend-card">
+                    <div class="legend-title">Màu sắc trạng thái</div>
+                    <div class="legend-colors">
+                        <div class="color-item">
+                            <div class="color-dot" style="background: #22c55e;"></div>
+                            <span>Thành công / Đăng ký thành công</span>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-dot" style="background: #eab308;"></div>
+                            <span>Chờ / Waitlist</span>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-dot" style="background: #ef4444;"></div>
+                            <span>Bỏ qua / Từ chối</span>
+                        </div>
+                        <div class="color-item">
+                            <div class="color-dot" style="background: linear-gradient(135deg, #a855f7, #6366f1);"></div>
+                            <span>Kiểm tra điều kiện tiên quyết</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-card">
+                    <div class="stats-title">Các bước chính</div>
+                    <div class="stat-item">
+                        <span class="stat-label">Load dữ liệu</span>
+                        <span class="stat-value" style="color: var(--accent-blue);">2 bước</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Xử lý Sinh viên</span>
+                        <span class="stat-value" style="color: var(--accent-purple);">3 bước</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Xử lý Môn học</span>
+                        <span class="stat-value" style="color: var(--accent-orange);">5 bước</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Ghi DB & Trả kết quả</span>
+                        <span class="stat-value" style="color: var(--accent-green);">2 bước</span>
+                    </div>
+                </div>
+
+                <button class="export-btn" onclick="exportToPNG()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Xuất hình ảnh PNG
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip">
+        <div class="tooltip-title"></div>
+        <div class="tooltip-desc"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('flowchart');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        // High DPI support
+        function setupCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = 900 * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = '900px';
+            ctx.scale(dpr, dpr);
+            return { width: rect.width, height: 900 };
+        }
+
+        // Colors
+        const colors = {
+            start: '#22c55e',
+            end: '#22c55e',
+            process: '#3b82f6',
+            decision: '#eab308',
+            prereq: '#a855f7',
+            success: '#22c55e',
+            waitlist: '#f97316',
+            skip: '#ef4444',
+            arrow: '#64748b',
+            text: '#f1f5f9',
+            textDark: '#1e293b',
+            border: '#475569',
+            bgCard: '#334155'
+        };
+
+        // Node definitions
+        const nodes = [
+            // Start
+            { id: 'start', type: 'start', x: 400, y: 50, w: 120, h: 50, label: 'BẮT ĐẦU', tooltip: 'Khởi đầu quá trình auto-enrollment' },
+            
+            // Load Data
+            { id: 'loadStudents', type: 'process', x: 400, y: 130, w: 200, h: 50, label: 'Load Students Batch', tooltip: 'Tải danh sách sinh viên cần xử lý theo batch' },
+            { id: 'loadPrereq', type: 'process', x: 400, y: 210, w: 220, h: 50, label: 'Load Prerequisites Data', tooltip: 'Tải dữ liệu điều kiện tiên quyết (passedSubjectsMap)' },
+            
+            // For Each Student Loop
+            { id: 'loopStudent', type: 'process', x: 400, y: 300, w: 200, h: 50, label: 'For Each Student', tooltip: 'Lặp qua từng sinh viên trong batch' },
+            
+            // Match Curriculum
+            { id: 'matchCurriculum', type: 'process', x: 400, y: 380, w: 180, h: 50, label: 'Match Curriculum', tooltip: 'Ghép sinh viên với curriculum phù hợp' },
+            { id: 'getSemesterOrder', type: 'process', x: 400, y: 460, w: 220, h: 50, label: 'Get Semester Order', tooltip: 'Lấy thứ tự học kỳ hiện tại trong curriculum' },
+            { id: 'getSubjects', type: 'process', x: 400, y: 540, w: 200, h: 50, label: 'Get Subjects of Semester', tooltip: 'Lấy danh sách môn học của học kỳ đó' },
+            
+            // For Each Subject Loop
+            { id: 'loopSubject', type: 'process', x: 400, y: 620, w: 200, h: 50, label: 'For Each Subject', tooltip: 'Lặp qua từng môn học trong học kỳ' },
+            
+            // Check Already Enrolled
+            { id: 'checkEnrolled', type: 'decision', x: 400, y: 700, w: 100, h: 70, label: 'Already\nEnrolled?', tooltip: 'Kiểm tra sinh viên đã đăng ký môn này chưa?' },
+            { id: 'skipEnrolled', type: 'skip', x: 620, y: 710, w: 120, h: 45, label: '→ Skip', tooltip: 'Đã đăng ký rồi → Bỏ qua môn này' },
+            
+            // NEW: Check Prerequisites
+            { id: 'checkPrereq', type: 'prereq', x: 400, y: 800, w: 220, h: 55, label: 'Check Prerequisites', tooltip: 'Kiểm tra điều kiện tiên quyết của môn học (MỚI)' },
+            
+            // Get passed subjects for prereq check
+            { id: 'getPassed', type: 'subprocess', x: 250, y: 870, w: 160, h: 40, label: 'Get passedSubjectCodes', tooltip: 'Lấy danh sách môn đã passed của sinh viên' },
+            { id: 'checkPrereqCodes', type: 'subprocess', x: 450, y: 870, w: 160, h: 40, label: 'Check prereq[] against codes', tooltip: 'So sánh môn tiên quyết với danh sách đã qua' },
+            { id: 'checkSemOrder', type: 'subprocess', x: 650, y: 870, w: 150, h: 40, label: 'Check semester order', tooltip: 'Kiểm tra thứ tự học kỳ trong curriculum' },
+            
+            // Prereq decision
+            { id: 'prereqPassed?', type: 'decision', x: 400, y: 940, w: 100, h: 70, label: 'Prereq\nPassed?', tooltip: 'Sinh viên có đủ điều kiện tiên quyết không?' },
+            { id: 'waitlistPrereq', type: 'waitlist', x: 620, y: 950, w: 160, h: 45, label: 'Waitlist (reason)', tooltip: 'Chưa đủ điều kiện → Đưa vào waitlist với lý do' },
+            
+            // Find Class Section
+            { id: 'findClass', type: 'process', x: 400, y: 1050, w: 200, h: 50, label: 'Find Available Class', tooltip: 'Tìm lớp học có sẵn cho môn này' },
+            { id: 'hasClass?', type: 'decision', x: 400, y: 1130, w: 100, h: 70, label: 'Has\nClass?', tooltip: 'Có lớp học khả dụng không?' },
+            
+            // Outcomes
+            { id: 'enroll', type: 'success', x: 250, y: 1140, w: 120, h: 45, label: '✓ ENROLL', tooltip: 'Đăng ký thành công vào lớp' },
+            { id: 'waitlistNoClass', type: 'waitlist', x: 620, y: 1140, w: 160, h: 45, label: 'Waitlist (no class)', tooltip: 'Không có lớp → Đưa vào waitlist' },
+            
+            // Bulk Write
+            { id: 'bulkWrite', type: 'process', x: 400, y: 1240, w: 180, h: 50, label: 'Bulk Write to DB', tooltip: 'Ghi hàng loạt kết quả vào database' },
+            
+            // End
+            { id: 'end', type: 'end', x: 400, y: 1330, w: 120, h: 50, label: 'KẾT THÚC', tooltip: 'Hoàn thành quá trình auto-enrollment' },
+        ];
+
+        // Arrow definitions
+        const arrows = [
+            { from: 'start', to: 'loadStudents' },
+            { from: 'loadStudents', to: 'loadPrereq' },
+            { from: 'loadPrereq', to: 'loopStudent' },
+            { from: 'loopStudent', to: 'matchCurriculum' },
+            { from: 'matchCurriculum', to: 'getSemesterOrder' },
+            { from: 'getSemesterOrder', to: 'getSubjects' },
+            { from: 'getSubjects', to: 'loopSubject' },
+            { from: 'loopSubject', to: 'checkEnrolled' },
+            { from: 'checkEnrolled', to: 'skipEnrolled', label: 'YES', condition: true },
+            { from: 'checkEnrolled', to: 'checkPrereq', label: 'NO', condition: false },
+            { from: 'checkPrereq', to: 'getPassed' },
+            { from: 'checkPrereq', to: 'checkPrereqCodes' },
+            { from: 'checkPrereq', to: 'checkSemOrder' },
+            { from: 'getPassed', to: 'prereqPassed?' },
+            { from: 'checkPrereqCodes', to: 'prereqPassed?' },
+            { from: 'checkSemOrder', to: 'prereqPassed?' },
+            { from: 'prereqPassed?', to: 'waitlistPrereq', label: 'NO', condition: true },
+            { from: 'prereqPassed?', to: 'findClass', label: 'YES', condition: false },
+            { from: 'findClass', to: 'hasClass?' },
+            { from: 'hasClass?', to: 'enroll', label: 'YES', condition: false },
+            { from: 'hasClass?', to: 'waitlistNoClass', label: 'NO', condition: true },
+            { from: 'enroll', to: 'bulkWrite' },
+            { from: 'waitlistNoClass', to: 'bulkWrite' },
+            { from: 'waitlistPrereq', to: 'bulkWrite' },
+            { from: 'skipEnrolled', to: 'bulkWrite' },
+            { from: 'bulkWrite', to: 'end' },
+        ];
+
+        let hoveredNode = null;
+        let animationPhase = 0;
+        let animationOffset = 0;
+
+        function getNode(id) {
+            return nodes.find(n => n.id === id);
+        }
+
+        function drawRoundedRect(x, y, w, h, r, fill, stroke, strokeWidth = 2) {
+            ctx.beginPath();
+            ctx.roundRect(x - w/2, y - h/2, w, h, r);
+            if (fill) {
+                ctx.fillStyle = fill;
+                ctx.fill();
+            }
+            if (stroke) {
+                ctx.strokeStyle = stroke;
+                ctx.lineWidth = strokeWidth;
+                ctx.stroke();
+            }
+        }
+
+        function drawDiamond(x, y, w, h, fill, stroke, strokeWidth = 2) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - h/2);
+            ctx.lineTo(x + w/2, y);
+            ctx.lineTo(x, y + h/2);
+            ctx.lineTo(x - w/2, y);
+            ctx.closePath();
+            if (fill) {
+                ctx.fillStyle = fill;
+                ctx.fill();
+            }
+            if (stroke) {
+                ctx.strokeStyle = stroke;
+                ctx.lineWidth = strokeWidth;
+                ctx.stroke();
+            }
+        }
+
+        function drawCircle(x, y, r, fill, stroke, strokeWidth = 2) {
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            if (fill) {
+                ctx.fillStyle = fill;
+                ctx.fill();
+            }
+            if (stroke) {
+                ctx.strokeStyle = stroke;
+                ctx.lineWidth = strokeWidth;
+                ctx.stroke();
+            }
+        }
+
+        function drawArrow(from, to, label = '', dashed = false, animated = false) {
+            const f = getNode(from);
+            const t = getNode(to);
+            if (!f || !t) return;
+
+            const startX = f.x;
+            const startY = f.y + f.h/2;
+            const endX = t.x;
+            const endY = t.y - t.h/2;
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            
+            // Curved path
+            const midY = (startY + endY) / 2;
+            ctx.bezierCurveTo(startX, midY, endX, midY, endX, endY);
+            
+            if (dashed) {
+                ctx.setLineDash([5, 5]);
+            } else {
+                ctx.setLineDash([]);
+            }
+
+            // Animated flow effect
+            if (animated) {
+                const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+                gradient.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+                gradient.addColorStop(animationOffset % 1, 'rgba(59, 130, 246, 0.8)');
+                gradient.addColorStop(1, 'rgba(59, 130, 246, 0.2)');
+                ctx.strokeStyle = gradient;
+            } else {
+                ctx.strokeStyle = colors.arrow;
+            }
+            
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Arrow head
+            const angle = Math.atan2(endY - midY, endX - endX);
+            const arrowSize = 10;
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - arrowSize * Math.cos(angle - Math.PI/6), endY - arrowSize * Math.sin(angle - Math.PI/6) - arrowSize/2);
+            ctx.lineTo(endX - arrowSize * Math.cos(angle + Math.PI/6), endY - arrowSize * Math.sin(angle + Math.PI/6) - arrowSize/2);
+            ctx.closePath();
+            ctx.fillStyle = colors.arrow;
+            ctx.fill();
+
+            // Label
+            if (label) {
+                ctx.font = '600 11px Inter';
+                ctx.fillStyle = '#f1f5f9';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                const labelY = (startY + endY) / 2;
+                const bgWidth = ctx.measureText(label).width + 12;
+                ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
+                ctx.fillRect(startX + 10, labelY - 10, bgWidth, 20);
+                ctx.fillStyle = label === 'YES' ? colors.success : label === 'NO' ? colors.skip : colors.text;
+                ctx.fillText(label, startX + 10 + bgWidth/2, labelY);
+            }
+
+            ctx.setLineDash([]);
+        }
+
+        function drawNode(node) {
+            const isHovered = hoveredNode === node.id;
+            const scale = isHovered ? 1.05 : 1;
+            const glow = isHovered ? 15 : 0;
+
+            ctx.save();
+            ctx.translate(node.x, node.y);
+            ctx.scale(scale, scale);
+
+            switch (node.type) {
+                case 'start':
+                case 'end':
+                    drawCircle(0, 0, node.w/2, colors.start, colors.start, 3);
+                    ctx.shadowColor = colors.start;
+                    ctx.shadowBlur = glow;
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = '600 12px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+
+                case 'process':
+                    drawRoundedRect(0, 0, node.w, node.h, 8, colors.process, colors.border);
+                    if (isHovered) {
+                        ctx.shadowColor = colors.process;
+                        ctx.shadowBlur = glow;
+                    }
+                    ctx.fillStyle = colors.text;
+                    ctx.font = '500 12px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+
+                case 'subprocess':
+                    drawRoundedRect(0, 0, node.w, node.h, 6, '#475569', colors.border);
+                    ctx.fillStyle = colors.text;
+                    ctx.font = '400 10px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+
+                case 'decision':
+                    drawDiamond(0, 0, node.w, node.h, colors.decision, colors.border);
+                    if (isHovered) {
+                        ctx.shadowColor = colors.decision;
+                        ctx.shadowBlur = glow;
+                    }
+                    ctx.fillStyle = colors.textDark;
+                    ctx.font = '600 10px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const lines = node.label.split('\n');
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, 0, (i - (lines.length-1)/2) * 14);
+                    });
+                    break;
+
+                case 'prereq':
+                    const prereqGrad = ctx.createLinearGradient(-node.w/2, 0, node.w/2, 0);
+                    prereqGrad.addColorStop(0, '#a855f7');
+                    prereqGrad.addColorStop(1, '#6366f1');
+                    drawRoundedRect(0, 0, node.w, node.h, 8, prereqGrad, '#c084fc');
+                    if (isHovered) {
+                        ctx.shadowColor = '#a855f7';
+                        ctx.shadowBlur = 20;
+                    }
+                    // NEW badge
+                    ctx.fillStyle = '#fef08a';
+                    ctx.font = '700 8px Inter';
+                    ctx.fillText('NEW', -node.w/2 + 18, -node.h/2 + 12);
+                    ctx.fillStyle = colors.text;
+                    ctx.font = '600 12px Inter';
+                    ctx.fillText(node.label, 0, 5);
+                    break;
+
+                case 'success':
+                    drawRoundedRect(0, 0, node.w, node.h, 6, colors.success, colors.success);
+                    if (isHovered) {
+                        ctx.shadowColor = colors.success;
+                        ctx.shadowBlur = glow;
+                    }
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = '700 12px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+
+                case 'waitlist':
+                    drawRoundedRect(0, 0, node.w, node.h, 6, colors.waitlist, colors.waitlist);
+                    if (isHovered) {
+                        ctx.shadowColor = colors.waitlist;
+                        ctx.shadowBlur = glow;
+                    }
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = '600 11px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+
+                case 'skip':
+                    drawRoundedRect(0, 0, node.w, node.h, 6, colors.skip, colors.skip);
+                    if (isHovered) {
+                        ctx.shadowColor = colors.skip;
+                        ctx.shadowBlur = glow;
+                    }
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = '600 11px Inter';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(node.label, 0, 0);
+                    break;
+            }
+
+            ctx.restore();
+        }
+
+        function draw() {
+            const { width } = setupCanvas();
+            ctx.clearRect(0, 0, width, 900);
+
+            // Draw arrows first
+            arrows.forEach(arrow => {
+                drawArrow(arrow.from, arrow.to, arrow.label, arrow.dashed, arrow.animated);
+            });
+
+            // Draw nodes
+            nodes.forEach(node => drawNode(node));
+
+            // Animation
+            animationOffset += 0.005;
+            if (animationOffset > 1) animationOffset = 0;
+            requestAnimationFrame(draw);
+        }
+
+        // Event handlers
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            let found = null;
+            for (const node of nodes) {
+                if (Math.abs(x - node.x) < node.w/2 && Math.abs(y - node.y) < node.h/2) {
+                    found = node;
+                    break;
+                }
+            }
+
+            if (found) {
+                hoveredNode = found.id;
+                tooltip.querySelector('.tooltip-title').textContent = found.label;
+                tooltip.querySelector('.tooltip-desc').textContent = found.tooltip;
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.classList.add('visible');
+                canvas.style.cursor = 'pointer';
+            } else {
+                hoveredNode = null;
+                tooltip.classList.remove('visible');
+                canvas.style.cursor = 'default';
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoveredNode = null;
+            tooltip.classList.remove('visible');
+        });
+
+        // Export to PNG
+        function exportToPNG() {
+            const link = document.createElement('a');
+            link.download = 'auto-enrollment-flowchart.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Initialize
+        draw();
+        window.addEventListener('resize', () => draw());
+    </script>
+</body>
+</html>

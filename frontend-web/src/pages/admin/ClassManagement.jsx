@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -75,13 +76,17 @@ function Toast({ toast, onClose }) {
   const colors =
     toast.type === "success"
       ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-      : "bg-red-50 border-red-300 text-red-800";
+      : toast.type === "warning"
+        ? "bg-amber-50 border-amber-300 text-amber-900"
+        : "bg-red-50 border-red-300 text-red-800";
   return (
     <div
       className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg max-w-sm ${colors}`}
     >
       {toast.type === "success" ? (
         <CheckCircle size={18} />
+      ) : toast.type === "warning" ? (
+        <AlertTriangle size={18} />
       ) : (
         <XCircle size={18} />
       )}
@@ -476,9 +481,23 @@ export default function ClassManagement() {
         selectedClasses,
         "published",
       );
-      showToast(
-        `Đã mở ${res.data.data.success.length}/${selectedClasses.length} lớp`,
-      );
+      const { success = [], failed = [] } = res.data?.data || {};
+      if (failed.length > 0) {
+        const detail = failed
+          .slice(0, 3)
+          .map((f) => f.message || f.classCode)
+          .join(" · ");
+        const more =
+          failed.length > 3 ? ` (+${failed.length - 3} lớp khác)` : "";
+        showToast(
+          `Mở lớp: ${success.length}/${selectedClasses.length} thành công. Lỗi: ${detail}${more}`,
+          failed.length === selectedClasses.length ? "error" : "warning",
+        );
+      } else {
+        showToast(
+          `Đã mở ${success.length}/${selectedClasses.length} lớp`,
+        );
+      }
       setSelectedClasses([]);
       fetchClasses(pagination.page, search, statusFilter);
     } catch (err) {
@@ -983,7 +1002,12 @@ export default function ClassManagement() {
                         />
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-700">
-                        {cls.classCode}
+                        <Link
+                          to={`/admin/classes/${cls._id}`}
+                          className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                        >
+                          {cls.classCode}
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         {cls.classGroup ? (

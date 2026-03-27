@@ -483,6 +483,30 @@ async function getDistinctClassGroups(req, res) {
   }
 }
 
+async function listClassGroupsOverview(req, res) {
+  try {
+    const {
+      semester,
+      academicYear,
+      curriculumId,
+      createdAfter,
+      page,
+      limit,
+    } = req.query;
+    const result = await service.listClassGroupsOverview({
+      semester: semester != null && semester !== "" ? Number(semester) : undefined,
+      academicYear: academicYear || undefined,
+      curriculumId: curriculumId || undefined,
+      createdAfter: createdAfter || undefined,
+      page,
+      limit,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
 module.exports = {
   getAll,
   getMyClasses,
@@ -497,6 +521,7 @@ module.exports = {
   bulkCreateFromCurriculum,
   bulkAssignGroup,
   getDistinctClassGroups,
+  listClassGroupsOverview,
   getStudentEnrollments,
   getClassEnrollments,
   dropCourse,
