@@ -16,6 +16,7 @@ import WishlistScreen from '../screens/student/WishlistScreen';
 import ScheduleScreen from '../screens/student/ScheduleScreen';
 import NotificationListScreen from '../screens/student/NotificationListScreen';
 import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
+import TuitionFeeScreen from '../screens/student/TuitionFeeScreen';
 import authService from '../services/authService';
 import useAuthStore from '../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, getItem, removeItem } from '../utils/storage';
@@ -103,6 +104,7 @@ export default function AppNavigator() {
       { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
       { key: 'grades', icon: 'bar-chart', label: 'Điểm' },
+      { key: 'tuition-fee', icon: 'wallet', label: 'Học phí' },
       { key: 'wishlist', icon: 'bookmark', label: 'Yêu cầu' },
       { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
@@ -117,7 +119,7 @@ export default function AppNavigator() {
 
     const extraScreens = isAdminViewer
       ? new Set()
-      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades', 'gradeDetail', 'wishlist']);
+      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades', 'gradeDetail', 'tuition-fee', 'wishlist']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
@@ -208,6 +210,9 @@ export default function AppNavigator() {
   }
   if (activeTab === 'academicCalendar') {
     screen = <AcademicCalendarScreen />;
+  }
+  if (activeTab === 'tuition-fee') {
+    screen = <TuitionFeeScreen onNavigate={handleNavigate} />;
   }
   if (activeTab === 'profile') {
     screen = <ProfileScreen />;

@@ -66,11 +66,19 @@ function getPriorityLabel(priority) {
 }
 
 export default function useWishlist(options = {}) {
-  const { enabled = true } = options;
+  const { 
+    enabled = true,
+    semesterId = null,
+    autoRefresh = false,
+    refreshInterval = 30000,
+  } = options;
+
   const [wishlist, setWishlist] = useState(null);
+  const [semesterBreakdown, setSemesterBreakdown] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const fetchWishlist = useCallback(async (isRefresh = false) => {
     if (!enabled) {
@@ -90,21 +98,51 @@ export default function useWishlist(options = {}) {
     setError('');
 
     try {
-      const response = await wishlistService.getMyWishlist();
-      const normalized = normalizeWishlist(response?.data);
+      // Fetch wishlist and semester breakdown in parallel
+      const wishlistPromise = wishlistService.getMyWishlist();
+      const breakdownPromise = semesterId 
+        ? wishlistService.getSemesterBreakdown(semesterId)
+        : Promise.resolve({ data: null });
+
+      const [wishlistRes, breakdownRes] = await Promise.all([
+        wishlistPromise.catch(err => {
+          console.warn('Error fetching wishlist:', err.message);
+          return { data: {} };
+        }),
+        breakdownPromise.catch(err => {
+          console.warn('Error fetching semester breakdown:', err.message);
+          return { data: null };
+        }),
+      ]);
+
+      const normalized = normalizeWishlist(wishlistRes?.data);
       setWishlist(normalized);
+      setSemesterBreakdown(breakdownRes?.data || null);
+      setLastUpdated(new Date());
     } catch (err) {
+      console.error('Error in useWishlist:', err);
       const message = err?.response?.data?.message || 'Lỗi khi tải danh sách yêu cầu khoá học';
       setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [enabled]);
+  }, [enabled, semesterId]);
 
   useEffect(() => {
     fetchWishlist();
   }, [fetchWishlist]);
+
+  // Auto-refresh interval
+  useEffect(() => {
+    if (!autoRefresh || !enabled) return;
+
+    const interval = setInterval(() => {
+      fetchWishlist(true);
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, enabled, refreshInterval, fetchWishlist]);
 
   const refresh = useCallback(
     () => fetchWishlist(true),
@@ -116,11 +154,32 @@ export default function useWishlist(options = {}) {
     [fetchWishlist]
   );
 
+  // Computed values
+  const summary = wishlist?.summary || { total: 0, pending: 0, approved: 0, rejected: 0 };
+  const wishlists = wishlist?.wishlists || [];
+  const pendingCount = wishlists.filter(w => w.status === 'pending').length;
+  const approvedCount = wishlists.filter(w => w.status === 'approved').length;
+  const rejectedCount = wishlists.filter(w => w.status === 'rejected').length;
+
   return {
+    // Data
     wishlist,
+    wishlists,
+    semesterBreakdown,
+    
+    // Computed values
+    summary,
+    pendingCount,
+    approvedCount,
+    rejectedCount,
+    
+    // Status
     loading,
     refreshing,
     error,
+    lastUpdated,
+    
+    // Methods
     refresh,
     reload,
   };

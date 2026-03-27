@@ -1,0 +1,17 @@
+{
+  "ignore_dirs": [
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    "vendor",
+    ".cache",
+    ".expo",
+    "dist",
+    "build",
+    ".gradle",
+    ".idea"
+  ],
+  "watch_limit": 10000,
+  "file_watch_timeout": 10
+}
