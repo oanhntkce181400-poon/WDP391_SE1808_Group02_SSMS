@@ -80,7 +80,6 @@ export default function Header({ mode = "admin" }) {
         { label: "Người dùng", href: "/admin/users" },
         { label: "Sinh viên", href: "/admin/students" },
         { label: "Đơn từ", href: "/admin/requests" },
-        { label: "Điểm danh", href: "/admin/attendance" },
       ];
 
   const moreNav = isTeacherMode
@@ -102,10 +101,10 @@ export default function Header({ mode = "admin" }) {
         { label: "Lịch sử xếp lớp", href: "/admin/enrollment-snapshots" },
         { label: "Lịch giảng dạy", href: "/admin/teaching-schedule" },
         { label: "Thống kê lớp", href: "/admin/class-performance" },
+        { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
         { label: "Phân bố điểm", href: "/admin/grade-distribution-report" },
         { label: "Danh sách xuất sắc", href: "/admin/honor-roll-students" },
         { label: "Đánh giá", href: "/admin/feedback-management" },
-        { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
         { label: "Mẫu email", href: "/admin/email-templates" },
         { label: null, href: null },
         { label: "Cài đặt", href: "/admin/settings" },

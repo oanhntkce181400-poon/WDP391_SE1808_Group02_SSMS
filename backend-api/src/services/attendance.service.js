@@ -7,8 +7,8 @@ const Student = require('../models/student.model');
 const Teacher = require('../models/teacher.model');
 const Schedule = require('../models/schedule.model');
 
-const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Late', 'Absent']);
-const ATTENDED_STATUSES = new Set(['Present', 'Late']);
+const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Absent']);
+const ATTENDED_STATUSES = new Set(['Present']);
 const WEEKDAY_LABELS = {
   1: 'Thu Hai',
   2: 'Thu Ba',
@@ -18,6 +18,12 @@ const WEEKDAY_LABELS = {
   6: 'Thu Bay',
   7: 'Chu Nhat',
 };
+
+function normalizeAttendanceStatus(status, fallback = 'Absent') {
+  if (status === 'Late') return 'Present';
+  if (VALID_ATTENDANCE_STATUSES.has(status)) return status;
+  return fallback;
+}
 
 function toStartOfDay(date) {
   const d = new Date(date);
@@ -581,7 +587,7 @@ function buildAttendanceLookupByDateKey(rows) {
       slotId: record.slotId,
       slotDate,
       slotKey,
-      status: record.status || 'Absent',
+      status: normalizeAttendanceStatus(record.status),
       note: record.note || '',
     };
     for (const k of calendarKeysForAttendanceRecord(record)) {
@@ -788,7 +794,7 @@ async function getMyAttendanceReport(userId, filters = {}) {
           slotId: record.slotId,
           slotDate,
           slotKey,
-          status: record.status || 'Absent',
+          status: normalizeAttendanceStatus(record.status),
           note: record.note || '',
         };
       });
@@ -807,10 +813,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
           const row = {
             slotId: existing.slotId || dateKey,
             slotDate: existing.slotDate || sessionDate,
-            status: existing.status,
+            status: normalizeAttendanceStatus(existing.status),
             note: existing.note,
-            isAbsent: existing.status === 'Absent',
-            isParticipated: ATTENDED_STATUSES.has(existing.status),
+            isAbsent: normalizeAttendanceStatus(existing.status) === 'Absent',
+            isParticipated: ATTENDED_STATUSES.has(normalizeAttendanceStatus(existing.status)),
             isMarked: true,
             isToDate: true,
           };
@@ -824,9 +830,9 @@ async function getMyAttendanceReport(userId, filters = {}) {
         const unmarkedRow = {
           slotId: dateKey,
           slotDate: sessionDate,
-          status: 'Unmarked',
+          status: 'Absent',
           note: '',
-          isAbsent: false,
+          isAbsent: true,
           isParticipated: false,
           isMarked: false,
           isToDate: true,
@@ -854,10 +860,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
         const row = {
           slotId: record.slotId || primaryKey,
           slotDate: slotDateNorm || parseDateKeyToDate(primaryKey),
-          status: record.status || 'Absent',
+          status: normalizeAttendanceStatus(record.status),
           note: record.note || '',
-          isAbsent: (record.status || '') === 'Absent',
-          isParticipated: ATTENDED_STATUSES.has(record.status || ''),
+          isAbsent: normalizeAttendanceStatus(record.status) === 'Absent',
+          isParticipated: ATTENDED_STATUSES.has(normalizeAttendanceStatus(record.status)),
           isMarked: true,
           isToDate: true,
         };
@@ -878,10 +884,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
       });
 
       const absentSessions = detailsToDate.filter((item) => item.status === 'Absent').length;
-      const lateSessions = detailsToDate.filter((item) => item.status === 'Late').length;
+      const lateSessions = 0;
       const presentSessions = detailsToDate.filter((item) => item.status === 'Present').length;
-      const attendedSessions = presentSessions + lateSessions;
-      const unmarkedSessions = detailsToDate.filter((item) => item.status === 'Unmarked').length;
+      const attendedSessions = presentSessions;
+      const unmarkedSessions = 0;
 
       const sessionsElapsedFromSchedule = scheduledDatesToDate.length;
       const totalSessionsFromSchedule = countSessionsFromRules(rules, null);
@@ -1267,7 +1273,7 @@ async function getClassPerformance(classId, userId) {
     if (!slotKey) return;
 
     const sessionDate = slotDate || parseDateKeyToDate(slotKey);
-    const status = VALID_ATTENDANCE_STATUSES.has(row.status) ? row.status : 'Absent';
+    const status = normalizeAttendanceStatus(row.status);
 
     if (!sessionMap.has(slotKey)) {
       sessionMap.set(slotKey, {
@@ -1286,9 +1292,6 @@ async function getClassPerformance(classId, userId) {
     if (status === 'Present') {
       session.presentCount += 1;
       attendanceTotals.presentCount += 1;
-    } else if (status === 'Late') {
-      session.lateCount += 1;
-      attendanceTotals.lateCount += 1;
     } else {
       session.absentCount += 1;
       attendanceTotals.absentCount += 1;
@@ -1316,8 +1319,6 @@ async function getClassPerformance(classId, userId) {
     studentStats.markedSessions += 1;
     if (status === 'Present') {
       studentStats.presentCount += 1;
-    } else if (status === 'Late') {
-      studentStats.lateCount += 1;
     } else {
       studentStats.absentCount += 1;
     }
@@ -1325,7 +1326,7 @@ async function getClassPerformance(classId, userId) {
 
   const timeline = Array.from(sessionMap.values())
     .map((item) => {
-      const attendedCount = item.presentCount + item.lateCount;
+      const attendedCount = item.presentCount;
       return {
         slotKey: item.slotKey,
         slotDate: item.slotDate,
@@ -1344,14 +1345,14 @@ async function getClassPerformance(classId, userId) {
     });
 
   const markedSessions = timeline.length;
-  const attendedRecords = attendanceTotals.presentCount + attendanceTotals.lateCount;
+  const attendedRecords = attendanceTotals.presentCount;
   const totalStudents = enrolledStudents.length;
   const gradeSummary = buildGradeSummary(enrollments, classSection);
 
   const studentBreakdown = Array.from(studentStatsMap.values())
     .map((item) => {
       item.attendanceRate = safePercentage(
-        item.presentCount + item.lateCount,
+        item.presentCount,
         item.markedSessions,
       );
       item.absenceRate = safePercentage(item.absentCount, item.markedSessions);
@@ -1360,9 +1361,6 @@ async function getClassPerformance(classId, userId) {
     .sort((a, b) => {
       if (b.absentCount !== a.absentCount) {
         return b.absentCount - a.absentCount;
-      }
-      if (b.lateCount !== a.lateCount) {
-        return b.lateCount - a.lateCount;
       }
       return String(a.fullName || '').localeCompare(String(b.fullName || ''));
     });
@@ -1454,7 +1452,7 @@ async function getSlotAttendance(classId, slotId, userId) {
       studentCode: enrollment.student.studentCode,
       fullName: enrollment.student.fullName,
       email: enrollment.student.email,
-      status: existing?.status || '',
+      status: normalizeAttendanceStatus(existing?.status),
       note: existing?.note || '',
       absenceWarning: existing?.absenceWarning || false,
     };
@@ -1472,7 +1470,6 @@ async function getClassSlots(classId, userId) {
         slotDate: { $first: '$slotDate' },
         totalStudents: { $sum: 1 },
         absentCount: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
-        lateCount: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
       },
     },
     { $sort: { slotDate: -1 } },
@@ -1483,8 +1480,8 @@ async function getClassSlots(classId, userId) {
     slotDate: s.slotDate,
     totalStudents: s.totalStudents,
     absentCount: s.absentCount,
-    lateCount: s.lateCount,
-    presentCount: s.totalStudents - s.absentCount - s.lateCount,
+    lateCount: 0,
+    presentCount: s.totalStudents - s.absentCount,
   }));
 }
 
@@ -1598,8 +1595,8 @@ async function bulkSave(payload, userId) {
 
   const totalSaved = records.length;
   const absentCount = records.filter((r) => r.status === 'Absent').length;
-  const lateCount = records.filter((r) => r.status === 'Late').length;
-  const presentCount = totalSaved - absentCount - lateCount;
+  const lateCount = 0;
+  const presentCount = totalSaved - absentCount;
 
   return {
     saved: totalSaved,

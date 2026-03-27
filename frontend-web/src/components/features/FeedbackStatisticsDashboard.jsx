@@ -101,12 +101,12 @@ const FeedbackStatisticsDashboard = () => {
 
   const getTeacherComparisonData = () => {
     return teacherComparison.map((t, idx) => ({
-      name: `GV ${idx + 1}`,
+      name: `${t.rankLabel || `Top ${idx + 1}`} - ${t.teacherName || 'Giang vien'}`,
+      teacherName: t.teacherName || 'Giang vien',
       gpa: parseFloat(t.gpa),
       feedback: t.totalFeedback
     }));
   };
-
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -182,7 +182,7 @@ const FeedbackStatisticsDashboard = () => {
                     <p className="text-gray-600 text-sm">Top GPA</p>
                     <p className="text-3xl font-bold text-blue-600 mt-2">
                       {teacherComparison.length > 0 ? teacherComparison[0].gpa : '0.00'}
-                    </p>
+                    </p><p className="mt-2 text-sm text-gray-500">{teacherComparison[0]?.teacherName || 'Chua co ten giang vien'}</p>
                   </div>
                   <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <p className="text-gray-600 text-sm">Tổng số đánh giá</p>
@@ -340,7 +340,7 @@ const FeedbackStatisticsDashboard = () => {
                         {teacherComparison.map((teacher, idx) => (
                           <tr key={teacher.teacherId} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
-                              <span className="text-lg font-bold text-blue-600">#{idx + 1}</span>
+                              <div><span className="text-sm font-bold text-blue-600">{teacher.rankLabel || `Top ${idx + 1}`}</span><div className="mt-1 font-medium text-gray-900">{teacher.teacherName || 'Chua co ten giang vien'}</div><div className="text-xs text-gray-500">{teacher.teacherCode || teacher.teacherId}</div></div>
                             </td>
                             <td className="px-6 py-4">
                               <span className="text-lg font-bold text-green-600">{teacher.gpa}</span>

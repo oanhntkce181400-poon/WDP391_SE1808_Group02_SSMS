@@ -42,6 +42,12 @@ function formatDateYmd(date) {
   return `${y}-${m}-${d}`;
 }
 
+function toStartOfDay(dateInput) {
+  const date = new Date(dateInput);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 /**
  * Lịch học của sinh viên cần hiển thị cả lớp đã được xếp lịch (`scheduled`)
  * vì luồng auto-enrollment đang gắn sinh viên vào các lớp này trước khi admin publish.
@@ -646,6 +652,7 @@ async function attachAttendanceStatus(items, studentId, weekStartDate, weekEndDa
     .filter(Boolean);
 
   if (classIds.length === 0) return items;
+  const today = toStartOfDay(new Date());
 
   const records = await Attendance.find({
     student: studentId,
@@ -660,10 +667,15 @@ async function attachAttendanceStatus(items, studentId, weekStartDate, weekEndDa
 
   for (const rec of records) {
     const classId = String(rec.classSection);
-    if (rec.slotId) bySlotId.set(`${classId}|${rec.slotId}`, rec.status);
+    const normalizedStatus = String(rec.status || '').toLowerCase() === 'late'
+      ? 'present'
+      : String(rec.status || '').toLowerCase();
+    if (rec.slotId) {
+      bySlotId.set(`${classId}|${String(rec.slotId).trim()}`, normalizedStatus);
+    }
     if (rec.slotDate) {
       const key = `${classId}|${ymdFromDate(new Date(rec.slotDate))}`;
-      byDate.set(key, rec.status);
+      byDate.set(key, normalizedStatus);
     }
   }
 
@@ -677,7 +689,7 @@ async function attachAttendanceStatus(items, studentId, weekStartDate, weekEndDa
     const status =
       bySlotId.get(`${classId}|${classDateKey}`) ||
       byDate.get(`${classId}|${classDateKey}`) ||
-      null;
+      (classDate <= today ? 'absent' : null);
 
     return {
       ...item,

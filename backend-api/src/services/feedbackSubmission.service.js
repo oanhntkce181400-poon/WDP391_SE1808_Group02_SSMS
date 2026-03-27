@@ -10,8 +10,56 @@ const CLASS_SECTION_POPULATE = [
   { path: 'room', select: 'roomCode roomName roomNumber' },
   { path: 'timeslot', select: 'groupName startTime endTime dayOfWeek' },
 ];
+const EXPECTED_UNIQUE_INDEX_KEYS = ['feedbackTemplate', 'submittedBy', 'evaluatedEntity', 'classSection'];
+let ensureFeedbackSubmissionIndexesPromise = null;
 
 class FeedbackSubmissionService {
+  async ensureSubmissionIndexes() {
+    if (!ensureFeedbackSubmissionIndexesPromise) {
+      ensureFeedbackSubmissionIndexesPromise = (async () => {
+        try {
+          const indexes = await FeedbackSubmission.collection.indexes();
+          for (const index of indexes) {
+            const keyNames = Object.keys(index.key || {});
+            const hasCoreKeys =
+              keyNames.includes('feedbackTemplate') &&
+              keyNames.includes('submittedBy');
+            const isExpectedIndex =
+              EXPECTED_UNIQUE_INDEX_KEYS.length === keyNames.length &&
+              EXPECTED_UNIQUE_INDEX_KEYS.every((key) => keyNames.includes(key));
+
+            if (index.unique && hasCoreKeys && !isExpectedIndex) {
+              await FeedbackSubmission.collection.dropIndex(index.name);
+              console.warn('[feedbackSubmission] Dropped legacy unique index:', index.name);
+            }
+          }
+
+          await FeedbackSubmission.collection.createIndex(
+            {
+              feedbackTemplate: 1,
+              submittedBy: 1,
+              evaluatedEntity: 1,
+              classSection: 1,
+            },
+            {
+              unique: true,
+              name: 'feedbackTemplate_1_submittedBy_1_evaluatedEntity_1_classSection_1',
+            },
+          );
+        } catch (error) {
+          if (
+            error?.codeName !== 'IndexOptionsConflict' &&
+            error?.codeName !== 'IndexKeySpecsConflict'
+          ) {
+            console.warn('[feedbackSubmission] Unable to reconcile indexes:', error?.message || error);
+          }
+        }
+      })();
+    }
+
+    return ensureFeedbackSubmissionIndexesPromise;
+  }
+
   async getStudentRecordByUserId(userId) {
     const student = await Student.findOne({ userId })
       .select('_id userId studentCode fullName email')
@@ -81,7 +129,7 @@ class FeedbackSubmissionService {
 
   validateTemplateScope(template, classSection) {
     if (!classSection) {
-      return;
+      return { matched: true, reason: null };
     }
 
     if (template.subject) {
@@ -89,16 +137,18 @@ class FeedbackSubmissionService {
       const classSubjectId = String(classSection.subject?._id || classSection.subject || '');
 
       if (templateSubjectId !== classSubjectId) {
-        throw new Error('This class is outside the scope of the selected feedback template');
+        return { matched: false, reason: 'subject-mismatch' };
       }
     }
 
     if (template.classSection) {
       const templateClassId = String(template.classSection?._id || template.classSection);
       if (templateClassId !== String(classSection._id)) {
-        throw new Error('This class is outside the scope of the selected feedback template');
+        return { matched: false, reason: 'class-mismatch' };
       }
     }
+
+    return { matched: true, reason: null };
   }
 
   normalizeResponseAnswer(question, answer) {
@@ -219,6 +269,8 @@ class FeedbackSubmissionService {
       this.getTemplateById(feedbackTemplateId),
     ]);
 
+    await this.ensureSubmissionIndexes();
+
     this.assertTemplateOpen(template);
 
     if (String(template.evaluationTarget) !== String(evaluationType)) {
@@ -235,7 +287,17 @@ class FeedbackSubmissionService {
 
       classSection = await this.getClassSectionById(classSectionId);
       await this.validateStudentEnrollment(student._id, classSectionId);
-      this.validateTemplateScope(template, classSection);
+      const templateScope = this.validateTemplateScope(template, classSection);
+      if (!templateScope.matched) {
+        console.warn(
+          '[feedbackSubmission] Allowing submit despite template scope mismatch:',
+          templateScope.reason,
+          'template=',
+          String(template._id),
+          'classSection=',
+          String(classSection._id),
+        );
+      }
 
       const teacherId = classSection.teacher?._id || classSection.teacher;
       if (!teacherId) {
@@ -243,7 +305,12 @@ class FeedbackSubmissionService {
       }
 
       if (evaluatedEntity && String(evaluatedEntity) !== String(teacherId)) {
-        throw new Error('Selected lecturer does not match the class section');
+        console.warn(
+          '[feedbackSubmission] Overriding evaluatedEntity to match class lecturer:',
+          String(evaluatedEntity),
+          '->',
+          String(teacherId),
+        );
       }
 
       evaluatedEntity = teacherId;
@@ -270,18 +337,40 @@ class FeedbackSubmissionService {
       throw new Error('You already submitted feedback for this class in the current feedback campaign');
     }
 
-    const submission = await FeedbackSubmission.create({
-      feedbackTemplate: template._id,
-      submittedBy: userId,
-      evaluatedEntity,
-      evaluationType,
-      classSection: classSection?._id || null,
-      responses: normalizedResponses,
-      status: 'submitted',
-      submissionScore: this.calculateSubmissionScore(normalizedResponses),
-      submissionIp: meta.ip || '',
-      submissionUserAgent: meta.userAgent || '',
-    });
+    let submission;
+    try {
+      submission = await FeedbackSubmission.create({
+        feedbackTemplate: template._id,
+        submittedBy: userId,
+        evaluatedEntity,
+        evaluationType,
+        classSection: classSection?._id || null,
+        responses: normalizedResponses,
+        status: 'submitted',
+        submissionScore: this.calculateSubmissionScore(normalizedResponses),
+        submissionIp: meta.ip || '',
+        submissionUserAgent: meta.userAgent || '',
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        const existingByClass = await FeedbackSubmission.findOne({
+          feedbackTemplate: template._id,
+          submittedBy: userId,
+          classSection: classSection?._id || null,
+        })
+          .populate('feedbackTemplate')
+          .populate({
+            path: 'classSection',
+            populate: CLASS_SECTION_POPULATE,
+          });
+
+        if (existingByClass) {
+          return existingByClass;
+        }
+      }
+
+      throw error;
+    }
 
     await submission.populate('feedbackTemplate');
     await submission.populate({

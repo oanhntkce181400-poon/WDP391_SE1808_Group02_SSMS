@@ -119,7 +119,7 @@ export default function App() {
             element={<FeedbackStatisticsPage />}
           />
           <Route path="requests" element={<AdminRequestsPage />} />
-          <Route path="attendance" element={<AttendancePage />} />
+          <Route path="attendance" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="class-performance" element={<ClassPerformancePage />} />
           <Route path="grade-distribution-report" element={<GradeDistributionReportPage />} />
           <Route path="honor-roll-students" element={<HonorRollStudentsPage />} />

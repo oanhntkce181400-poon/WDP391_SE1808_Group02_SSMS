@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import lecturerService from '../../services/lecturerService';
 import scheduleService from '../../services/scheduleService';
 import subjectService from '../../services/subjectService';
 import roomService from '../../services/roomService';
@@ -54,12 +53,9 @@ export default function TeachingSchedulePage() {
   const isAdminOrStaff = userRole === 'admin' || userRole === 'staff';
 
   const [loading, setLoading] = useState(false);
-  const [loadingLecturers, setLoadingLecturers] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [data, setData] = useState(null);
-  const [lecturers, setLecturers] = useState([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const [subjects, setSubjects] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -186,36 +182,36 @@ export default function TeachingSchedulePage() {
   }, [teachingClasses, scheduleEntries]);
 
   const fetchSchedule = async (teacherId = '') => {
-    if (isAdminOrStaff && !teacherId) {
-      setError('');
-      setData(null);
-      setHint('Chọn giảng viên để xem lịch giảng dạy.');
-      return;
-    }
-
     setLoading(true);
     setError('');
     setHint('');
 
     try {
-      // API này chính là BE của feature "View Lecturer Timetable".
-      // Nếu teacherId rỗng thì ưu tiên lấy lịch theo account hiện tại.
       const params = teacherId ? { teacherId } : {};
       const response = await scheduleService.getTeachingSchedule(params);
       setData(response?.data?.data || null);
     } catch (err) {
-      const message = err?.response?.data?.message || 'Không tải được lịch giảng dạy';
+      const message = err?.response?.data?.message || 'Khong tai duoc lich giang day';
       setData(null);
-
-      if (!teacherId && message.includes('Please select a lecturer')) {
-        setHint('Tài khoản hiện tại không gắn với hồ sơ giảng viên. Hãy chọn một giảng viên để xem lịch.');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const loadGeneratorMasterData = async () => {
     try {
@@ -245,19 +241,19 @@ export default function TeachingSchedulePage() {
       setRoleResolved(true);
     }
 
-    const loadLecturers = async () => {
-      setLoadingLecturers(true);
-      try {
-        const response = await lecturerService.getAll({ limit: 100 });
-        setLecturers(normalizeLecturerOptions(response));
-      } catch (err) {
-        console.error('Failed to load lecturers for filter', err);
-      } finally {
-        setLoadingLecturers(false);
-      }
-    };
 
-    loadLecturers();
+
+
+
+
+
+
+
+
+
+
+
+
   }, []);
 
   useEffect(() => {
@@ -265,30 +261,30 @@ export default function TeachingSchedulePage() {
 
     if (isAdminOrStaff) {
       loadGeneratorMasterData();
-      fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear, '');
-      setData(null);
-      setError('');
-      setHint('Chọn giảng viên để xem lịch giảng dạy.');
+      fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
+      setHint('');
+      fetchSchedule('');
       return;
     }
+
 
     fetchSchedule('');
   }, [roleResolved, isAdminOrStaff]);
 
-  useEffect(() => {
-    if (!roleResolved) return;
 
-    if (!selectedTeacherId) {
-      if (isAdminOrStaff) {
-        setData(null);
-        setError('');
-        setHint('Chọn giảng viên để xem lịch giảng dạy.');
-      }
-      return;
-    }
 
-    fetchSchedule(selectedTeacherId);
-  }, [selectedTeacherId, roleResolved, isAdminOrStaff]);
+
+
+
+
+
+
+
+
+
+
+
+
 
   const toggleSubject = (subjectId) => {
     setSelectedSubjectIds((prev) =>
@@ -332,7 +328,7 @@ export default function TeachingSchedulePage() {
         timeoutPromise,
       ]);
       setGenerateResult(response?.data?.data || null);
-      await fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear, selectedTeacherId);
+      await fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
     } catch (err) {
       setGenerateError(err?.response?.data?.message || err?.message || 'Tạo lịch giảng dạy thất bại.');
     } finally {
@@ -340,14 +336,14 @@ export default function TeachingSchedulePage() {
     }
   };
 
-  const fetchGeneratedFromDb = async (semester, academicYear, teacherId = '') => {
+  const fetchGeneratedFromDb = async (semester, academicYear) => {
     try {
       const response = await scheduleService.getGeneratedTimetables({
         semester: Number(semester),
         academicYear,
-        ...(teacherId ? { teacherId } : {}),
       });
       const data = response?.data?.data || null;
+
       if (data?.generated?.length > 0) {
         setGenerateResult(data);
       }
@@ -651,39 +647,39 @@ export default function TeachingSchedulePage() {
           </div>
 
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="teacherId">
-              Giảng viên
-            </label>
-            <div className="flex gap-3">
-              <select
-                id="teacherId"
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                value={selectedTeacherId}
-                onChange={(event) => setSelectedTeacherId(event.target.value)}
-                disabled={loadingLecturers}
-              >
-                <option value="">{isAdminOrStaff ? 'Chon giang vien' : 'Tai khoan hien tai'}</option>
-                {lecturers.map((lecturer) => (
-                  <option key={lecturer.id} value={lecturer.id}>
-                    {lecturer.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                onClick={() => fetchSchedule(selectedTeacherId)}
-                disabled={loading || (isAdminOrStaff && !selectedTeacherId)}
-              >
-                {loading ? 'Dang tai...' : 'Xem lich'}
-              </button>
+            <div className="text-sm font-medium text-slate-700">
+              {isAdminOrStaff ? 'Pham vi hien thi' : 'Tai khoan hien tai'}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-sm text-slate-600">
               {isAdminOrStaff
-                ? 'Chon mot giang vien cu the de xem dung lich day theo hoc ky hien tai.'
-                : 'Neu dang dang nhap bang tai khoan giang vien, ban co the de trong bo loc nay.'}
+                ? 'Dang hien lich giang day cua toan bo giang vien trong hoc ky hien tai.'
+                : 'Dang hien lich giang day cua giang vien dang dang nhap.'}
             </p>
+            <button
+              type="button"
+              className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              onClick={() => fetchSchedule('')}
+              disabled={loading}
+            >
+              {loading ? 'Dang tai...' : 'Tai lai lich'}
+            </button>
           </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         </div>
 
         {loading && (

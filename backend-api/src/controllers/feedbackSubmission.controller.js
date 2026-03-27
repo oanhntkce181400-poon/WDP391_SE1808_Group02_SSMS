@@ -45,7 +45,7 @@ class FeedbackSubmissionController {
 
       return res.status(201).json({
         success: true,
-        message: 'Feedback submitted successfully',
+        message: 'Feedback saved successfully',
         data: submission,
       });
     } catch (error) {
