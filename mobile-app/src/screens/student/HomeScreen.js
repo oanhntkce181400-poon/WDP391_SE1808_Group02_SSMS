@@ -12,12 +12,6 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useProfile from '../../hooks/useProfile';
 
-/*
- * Trang chủ cần đóng vai trò một landing page thật cho sinh viên, không chỉ là
- * vài nút điều hướng rời rạc. Màn này chỉ đọc profile gọn để vẫn mở nhanh nhưng
- * đủ dữ liệu học tập giúp người dùng quyết định đi đâu tiếp theo.
- */
-
 function formatSemester(value) {
   if (!value) return 'N/A';
   return `Học kỳ ${value}`;
@@ -60,11 +54,14 @@ function ServiceRow({ title, subtitle, icon, onPress }) {
 export default function HomeScreen({ onNavigate }) {
   const { profile, loading, refreshing, error, refresh, reload } = useProfile();
 
-  /*
-   * Giữ điều hướng ở dạng dữ liệu giúp bổ sung hoặc bớt shortcut nhanh hơn mà
-   * không phải sửa nhiều khối JSX rời rạc.
-   */
   const quickActions = [
+    {
+      key: 'notification',
+      title: 'Thông báo',
+      subtitle: 'Xem các thông báo mới nhất từ nhà trường',
+      tone: '#2563eb',
+      icon: <Ionicons name="notifications-outline" size={24} color="#2563eb" />,
+    },
     {
       key: 'feedback',
       title: 'Đánh giá giảng viên',
@@ -80,11 +77,11 @@ export default function HomeScreen({ onNavigate }) {
       icon: <MaterialCommunityIcons name="calendar-clock" size={24} color="#1d4ed8" />,
     },
     {
-      key: 'calendar',
-      title: 'Lịch học vụ',
-      subtitle: 'Xem các mốc thời gian quan trọng',
+      key: 'schedule',
+      title: 'Thời khóa biểu',
+      subtitle: 'Xem lịch học tuần theo lớp, giờ và phòng',
       tone: '#0f766e',
-      icon: <MaterialCommunityIcons name="calendar-month" size={24} color="#0f766e" />,
+      icon: <Ionicons name="calendar-outline" size={24} color="#0f766e" />,
     },
     {
       key: 'attendance',
@@ -92,6 +89,13 @@ export default function HomeScreen({ onNavigate }) {
       subtitle: 'Xem báo cáo chuyên cần',
       tone: '#7c3aed',
       icon: <MaterialCommunityIcons name="clipboard-check-outline" size={24} color="#7c3aed" />,
+    },
+    {
+      key: 'grades',
+      title: 'Báo cáo điểm',
+      subtitle: 'Xem điểm từng môn học',
+      tone: '#10b981',
+      icon: <MaterialCommunityIcons name="chart-line" size={24} color="#10b981" />,
     },
     {
       key: 'application',
@@ -143,7 +147,8 @@ export default function HomeScreen({ onNavigate }) {
           <Text style={styles.heroEyebrow}>Ứng dụng sinh viên</Text>
           <Text style={styles.heroName}>{profile?.fullName || 'Sinh viên'}</Text>
           <Text style={styles.heroSubline}>
-            {profile?.studentCode || 'N/A'} • {profile?.majorCode || 'N/A'} • {profile?.cohortLabel || 'N/A'}
+            {profile?.studentCode || 'N/A'} • {profile?.majorCode || 'N/A'} •{' '}
+            {profile?.cohortLabel || 'N/A'}
           </Text>
 
           <View style={styles.heroMetaRow}>
@@ -167,7 +172,9 @@ export default function HomeScreen({ onNavigate }) {
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Truy cập nhanh</Text>
-            <Text style={styles.sectionSubtitle}>Mở nhanh những chức năng sinh viên dùng thường xuyên nhất.</Text>
+            <Text style={styles.sectionSubtitle}>
+              Mở nhanh những chức năng sinh viên dùng thường xuyên nhất.
+            </Text>
           </View>
 
           <View style={styles.quickActionGrid}>
@@ -221,10 +228,22 @@ export default function HomeScreen({ onNavigate }) {
           </View>
 
           <ServiceRow
+            title="Mở thông báo mới nhất"
+            subtitle="Xem danh sách thông báo gần đây và đọc nội dung chi tiết từng thông báo."
+            icon={<Ionicons name="notifications-outline" size={22} color="#2563eb" />}
+            onPress={() => onNavigate?.('notification')}
+          />
+          <ServiceRow
             title="Gửi đánh giá giảng viên"
             subtitle="Đánh giá chất lượng lớp học và cập nhật phản hồi gần nhất của bạn."
             icon={<MaterialCommunityIcons name="message-star-outline" size={22} color="#f59e0b" />}
             onPress={() => onNavigate?.('feedback')}
+          />
+          <ServiceRow
+            title="Mở thời khóa biểu tuần"
+            subtitle="Xem lịch học thật đang áp dụng cho tuần hiện tại, có lớp, giảng viên, phòng và slot học."
+            icon={<Ionicons name="calendar-outline" size={22} color="#0f766e" />}
+            onPress={() => onNavigate?.('schedule')}
           />
           <ServiceRow
             title="Xem lịch thi"
@@ -237,6 +256,12 @@ export default function HomeScreen({ onNavigate }) {
             subtitle="Theo dõi điểm danh sớm để phát hiện vấn đề trước khi kết thúc học kỳ."
             icon={<MaterialCommunityIcons name="clipboard-pulse-outline" size={22} color="#7c3aed" />}
             onPress={() => onNavigate?.('attendance')}
+          />
+          <ServiceRow
+            title="Xem lịch học vụ"
+            subtitle="Mở lịch học vụ để kiểm tra các mốc quan trọng của học kỳ và nhà trường."
+            icon={<MaterialCommunityIcons name="calendar-month" size={22} color="#0f766e" />}
+            onPress={() => onNavigate?.('academicCalendar')}
           />
         </View>
       </ScrollView>

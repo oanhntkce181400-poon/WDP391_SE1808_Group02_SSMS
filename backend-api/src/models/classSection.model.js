@@ -21,7 +21,8 @@ const classSectionSchema = new mongoose.Schema(
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Teacher",
-      required: true,
+      // Có thể để trống khi mở lớp theo nhóm từ khung CT rồi phân công GV sau.
+      required: false,
     },
     room: {
       type: mongoose.Schema.Types.ObjectId,

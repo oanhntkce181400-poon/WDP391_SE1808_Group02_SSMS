@@ -21,6 +21,18 @@ const feedbackTemplateSchema = new mongoose.Schema(
       default: ''
     },
 
+    templateCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null
+    },
+
+    isSystemTemplate: {
+      type: Boolean,
+      default: false
+    },
+
     // Các câu hỏi trong template
     questions: [
       {
@@ -139,5 +151,6 @@ const feedbackTemplateSchema = new mongoose.Schema(
 // Index để tìm kiếm nhanh
 feedbackTemplateSchema.index({ status: 1, 'feedbackPeriod.startDate': 1 });
 feedbackTemplateSchema.index({ evaluationTarget: 1, status: 1 });
+feedbackTemplateSchema.index({ templateCode: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('FeedbackTemplate', feedbackTemplateSchema);

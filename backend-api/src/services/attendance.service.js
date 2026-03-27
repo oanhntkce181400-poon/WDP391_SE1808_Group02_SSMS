@@ -7,8 +7,8 @@ const Student = require('../models/student.model');
 const Teacher = require('../models/teacher.model');
 const Schedule = require('../models/schedule.model');
 
-const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Late', 'Absent']);
-const ATTENDED_STATUSES = new Set(['Present', 'Late']);
+const VALID_ATTENDANCE_STATUSES = new Set(['Present', 'Absent']);
+const ATTENDED_STATUSES = new Set(['Present']);
 const WEEKDAY_LABELS = {
   1: 'Thu Hai',
   2: 'Thu Ba',
@@ -18,6 +18,12 @@ const WEEKDAY_LABELS = {
   6: 'Thu Bay',
   7: 'Chu Nhat',
 };
+
+function normalizeAttendanceStatus(status, fallback = 'Absent') {
+  if (status === 'Late') return 'Present';
+  if (VALID_ATTENDANCE_STATUSES.has(status)) return status;
+  return fallback;
+}
 
 function toStartOfDay(date) {
   const d = new Date(date);
@@ -176,6 +182,259 @@ function safePercentage(numerator, denominator) {
   return Math.round((numerator / denominator) * 1000) / 10;
 }
 
+function roundTo(value, digits = 2) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function toNumericScore(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function averageScores(values = [], digits = 2) {
+  const numericValues = values
+    .map((value) => toNumericScore(value))
+    .filter((value) => value !== null);
+
+  if (numericValues.length === 0) return null;
+
+  const total = numericValues.reduce((sum, value) => sum + value, 0);
+  return roundTo(total / numericValues.length, digits);
+}
+
+function getDefaultGradingWeights() {
+  return {
+    GK: 30,
+    CK: 50,
+    BT: 20,
+    PT: 0,
+    QT: 0,
+  };
+}
+
+function normalizeGradingWeights(rawWeights) {
+  const defaults = getDefaultGradingWeights();
+  if (!rawWeights || typeof rawWeights !== 'object') {
+    return defaults;
+  }
+
+  return {
+    GK: Number.isFinite(Number(rawWeights.GK)) ? Number(rawWeights.GK) : defaults.GK,
+    CK: Number.isFinite(Number(rawWeights.CK)) ? Number(rawWeights.CK) : defaults.CK,
+    BT: Number.isFinite(Number(rawWeights.BT)) ? Number(rawWeights.BT) : defaults.BT,
+    PT: Number.isFinite(Number(rawWeights.PT)) ? Number(rawWeights.PT) : defaults.PT,
+    QT: Number.isFinite(Number(rawWeights.QT)) ? Number(rawWeights.QT) : defaults.QT,
+  };
+}
+
+function getPtAverage(ptScores) {
+  if (!Array.isArray(ptScores) || ptScores.length === 0) {
+    return null;
+  }
+
+  return averageScores(ptScores.map((item) => item?.score), 2);
+}
+
+function hasAnyGradeData(enrollment) {
+  return [
+    enrollment?.grade,
+    enrollment?.midtermScore,
+    enrollment?.finalScore,
+    enrollment?.assignmentScore,
+    enrollment?.continuousScore,
+    getPtAverage(enrollment?.ptScores),
+  ].some((value) => toNumericScore(value) !== null);
+}
+
+function calculateEnrollmentFinalScore(enrollment, gradingWeights) {
+  const storedGrade = toNumericScore(enrollment?.grade);
+  const ptAverage = getPtAverage(enrollment?.ptScores);
+
+  if (storedGrade !== null) {
+    return {
+      finalScore: storedGrade,
+      source: enrollment?.isFinalized ? 'stored_finalized' : 'stored',
+      ptAverage,
+    };
+  }
+
+  const weights = normalizeGradingWeights(gradingWeights);
+  const parts = [
+    { code: 'GK', weight: weights.GK, score: toNumericScore(enrollment?.midtermScore) },
+    { code: 'CK', weight: weights.CK, score: toNumericScore(enrollment?.finalScore) },
+    { code: 'BT', weight: weights.BT, score: toNumericScore(enrollment?.assignmentScore) },
+    { code: 'PT', weight: weights.PT, score: ptAverage },
+    { code: 'QT', weight: weights.QT, score: toNumericScore(enrollment?.continuousScore) },
+  ];
+
+  const activeParts = parts.filter((part) => part.weight > 0);
+  if (activeParts.length === 0) {
+    return {
+      finalScore: null,
+      source: 'missing',
+      ptAverage,
+    };
+  }
+
+  if (activeParts.some((part) => part.score === null)) {
+    return {
+      finalScore: null,
+      source: 'missing',
+      ptAverage,
+    };
+  }
+
+  const totalWeight = activeParts.reduce((sum, part) => sum + part.weight, 0);
+  if (!totalWeight) {
+    return {
+      finalScore: null,
+      source: 'missing',
+      ptAverage,
+    };
+  }
+
+  const weightedSum = activeParts.reduce((sum, part) => sum + (part.score * part.weight), 0);
+
+  return {
+    finalScore: roundTo(weightedSum / totalWeight, 2),
+    source: 'derived',
+    ptAverage,
+  };
+}
+
+function buildScoreDistribution(scoreValues = []) {
+  const buckets = [
+    { name: 'Duoi 5', min: 0, max: 4.99 },
+    { name: '5 - 6.4', min: 5, max: 6.49 },
+    { name: '6.5 - 7.9', min: 6.5, max: 7.99 },
+    { name: '8 - 8.9', min: 8, max: 8.99 },
+    { name: '9 - 10', min: 9, max: 10.01 },
+  ].map((item) => ({ ...item, value: 0 }));
+
+  scoreValues.forEach((score) => {
+    const numericScore = toNumericScore(score);
+    if (numericScore === null) return;
+    const bucket = buckets.find((item) => numericScore >= item.min && numericScore <= item.max);
+    if (bucket) {
+      bucket.value += 1;
+    }
+  });
+
+  return buckets.map(({ name, value }) => ({ name, value }));
+}
+
+function buildGradingFormulaText(gradingWeights) {
+  const weights = normalizeGradingWeights(gradingWeights);
+  return Object.entries(weights)
+    .filter(([, value]) => value > 0)
+    .map(([code, value]) => `${code} ${value}%`)
+    .join(' • ');
+}
+
+function buildGradeSummary(enrollments, classSection) {
+  const gradingWeights = normalizeGradingWeights(classSection?.subject?.gradingWeights);
+
+  const gradeRows = enrollments.map((enrollment) => {
+    const student = enrollment?.student || {};
+    const calculated = calculateEnrollmentFinalScore(enrollment, gradingWeights);
+
+    return {
+      studentId: student._id || enrollment?.student,
+      studentCode: student.studentCode || '',
+      fullName: student.fullName || 'Sinh vien',
+      email: student.email || '',
+      midtermScore: toNumericScore(enrollment?.midtermScore),
+      finalScoreComponent: toNumericScore(enrollment?.finalScore),
+      assignmentScore: toNumericScore(enrollment?.assignmentScore),
+      continuousScore: toNumericScore(enrollment?.continuousScore),
+      ptAverage: calculated.ptAverage,
+      finalScore: calculated.finalScore,
+      finalScoreSource: calculated.source,
+      isFinalized: enrollment?.isFinalized === true,
+      hasAnyGradeData: hasAnyGradeData(enrollment),
+    };
+  });
+
+  const studentsWithAnyGradeData = gradeRows.filter((row) => row.hasAnyGradeData).length;
+  const studentsWithComputedFinal = gradeRows.filter((row) => toNumericScore(row.finalScore) !== null);
+  const finalScores = studentsWithComputedFinal.map((row) => row.finalScore);
+  const finalizedCount = gradeRows.filter((row) => row.isFinalized).length;
+  const passCount = finalScores.filter((score) => score >= 5).length;
+  const failCount = finalScores.filter((score) => score < 5).length;
+
+  const componentAverages = [
+    { code: 'GK', label: 'Giua ky', value: averageScores(gradeRows.map((row) => row.midtermScore)) },
+    { code: 'CK', label: 'Cuoi ky', value: averageScores(gradeRows.map((row) => row.finalScoreComponent)) },
+    { code: 'BT', label: 'Bai tap', value: averageScores(gradeRows.map((row) => row.assignmentScore)) },
+    { code: 'QT', label: 'Qua trinh', value: averageScores(gradeRows.map((row) => row.continuousScore)) },
+    { code: 'PT', label: 'PT trung binh', value: averageScores(gradeRows.map((row) => row.ptAverage)) },
+  ].filter((item) => item.value !== null);
+
+  const rankedStudents = [...studentsWithComputedFinal]
+    .sort((a, b) => {
+      if (b.finalScore !== a.finalScore) {
+        return b.finalScore - a.finalScore;
+      }
+      return String(a.fullName || '').localeCompare(String(b.fullName || ''));
+    });
+
+  const averageScore = averageScores(finalScores);
+  const highestScore = finalScores.length ? Math.max(...finalScores) : null;
+  const lowestScore = finalScores.length ? Math.min(...finalScores) : null;
+
+  if (studentsWithAnyGradeData === 0) {
+    return {
+      status: 'empty',
+      averageScore: null,
+      highestScore: null,
+      lowestScore: null,
+      passRate: null,
+      passCount: 0,
+      failCount: 0,
+      gradedStudentCount: 0,
+      studentsWithAnyGradeData: 0,
+      finalizedCount: 0,
+      componentAverages: [],
+      scoreDistribution: [],
+      topStudents: [],
+      gradingWeights,
+      gradingFormulaText: buildGradingFormulaText(gradingWeights),
+      message: 'Chua co du lieu diem thuc te cho lop nay. Khi giang vien nhap diem, dashboard se tu dong cap nhat.',
+    };
+  }
+
+  return {
+    status: studentsWithComputedFinal.length > 0 ? 'ready' : 'partial',
+    averageScore,
+    highestScore: highestScore !== null ? roundTo(highestScore, 2) : null,
+    lowestScore: lowestScore !== null ? roundTo(lowestScore, 2) : null,
+    passRate: studentsWithComputedFinal.length
+      ? safePercentage(passCount, studentsWithComputedFinal.length)
+      : null,
+    passCount,
+    failCount,
+    gradedStudentCount: studentsWithComputedFinal.length,
+    studentsWithAnyGradeData,
+    finalizedCount,
+    componentAverages,
+    scoreDistribution: buildScoreDistribution(finalScores),
+    topStudents: rankedStudents.slice(0, 8).map((row) => ({
+      studentId: row.studentId,
+      studentCode: row.studentCode,
+      fullName: row.fullName,
+      finalScore: row.finalScore,
+      isFinalized: row.isFinalized,
+      source: row.finalScoreSource,
+    })),
+    gradingWeights,
+    gradingFormulaText: buildGradingFormulaText(gradingWeights),
+    message: studentsWithComputedFinal.length > 0
+      ? `Da tong hop diem tong ket cho ${studentsWithComputedFinal.length}/${gradeRows.length} sinh vien tu du lieu diem hien co.`
+      : 'Da co du lieu diem thanh phan, nhung chua du de tinh diem tong ket theo cong thuc hien tai.',
+  };
+}
+
 function toObjectIdOrNull(value) {
   if (!value) return null;
   if (!mongoose.Types.ObjectId.isValid(value)) return null;
@@ -328,7 +587,7 @@ function buildAttendanceLookupByDateKey(rows) {
       slotId: record.slotId,
       slotDate,
       slotKey,
-      status: record.status || 'Absent',
+      status: normalizeAttendanceStatus(record.status),
       note: record.note || '',
     };
     for (const k of calendarKeysForAttendanceRecord(record)) {
@@ -535,7 +794,7 @@ async function getMyAttendanceReport(userId, filters = {}) {
           slotId: record.slotId,
           slotDate,
           slotKey,
-          status: record.status || 'Absent',
+          status: normalizeAttendanceStatus(record.status),
           note: record.note || '',
         };
       });
@@ -554,10 +813,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
           const row = {
             slotId: existing.slotId || dateKey,
             slotDate: existing.slotDate || sessionDate,
-            status: existing.status,
+            status: normalizeAttendanceStatus(existing.status),
             note: existing.note,
-            isAbsent: existing.status === 'Absent',
-            isParticipated: ATTENDED_STATUSES.has(existing.status),
+            isAbsent: normalizeAttendanceStatus(existing.status) === 'Absent',
+            isParticipated: ATTENDED_STATUSES.has(normalizeAttendanceStatus(existing.status)),
             isMarked: true,
             isToDate: true,
           };
@@ -571,9 +830,9 @@ async function getMyAttendanceReport(userId, filters = {}) {
         const unmarkedRow = {
           slotId: dateKey,
           slotDate: sessionDate,
-          status: 'Unmarked',
+          status: 'Absent',
           note: '',
-          isAbsent: false,
+          isAbsent: true,
           isParticipated: false,
           isMarked: false,
           isToDate: true,
@@ -601,10 +860,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
         const row = {
           slotId: record.slotId || primaryKey,
           slotDate: slotDateNorm || parseDateKeyToDate(primaryKey),
-          status: record.status || 'Absent',
+          status: normalizeAttendanceStatus(record.status),
           note: record.note || '',
-          isAbsent: (record.status || '') === 'Absent',
-          isParticipated: ATTENDED_STATUSES.has(record.status || ''),
+          isAbsent: normalizeAttendanceStatus(record.status) === 'Absent',
+          isParticipated: ATTENDED_STATUSES.has(normalizeAttendanceStatus(record.status)),
           isMarked: true,
           isToDate: true,
         };
@@ -625,10 +884,10 @@ async function getMyAttendanceReport(userId, filters = {}) {
       });
 
       const absentSessions = detailsToDate.filter((item) => item.status === 'Absent').length;
-      const lateSessions = detailsToDate.filter((item) => item.status === 'Late').length;
+      const lateSessions = 0;
       const presentSessions = detailsToDate.filter((item) => item.status === 'Present').length;
-      const attendedSessions = presentSessions + lateSessions;
-      const unmarkedSessions = detailsToDate.filter((item) => item.status === 'Unmarked').length;
+      const attendedSessions = presentSessions;
+      const unmarkedSessions = 0;
 
       const sessionsElapsedFromSchedule = scheduledDatesToDate.length;
       const totalSessionsFromSchedule = countSessionsFromRules(rules, null);
@@ -858,7 +1117,7 @@ async function getTeachingClasses(userId) {
 
   const [enrollmentCounts, scheduleCounts] = await Promise.all([
     ClassEnrollment.aggregate([
-      { $match: { classSection: { $in: classIds }, status: 'enrolled' } },
+      { $match: { classSection: { $in: classIds }, status: { $in: ['enrolled', 'completed'] } } },
       { $group: { _id: '$classSection', count: { $sum: 1 } } },
     ]),
     Schedule.aggregate([
@@ -936,6 +1195,234 @@ async function getTeachingClasses(userId) {
   return classCards.filter((item) => Number(item.enrollmentCount || 0) > 0);
 }
 
+async function getClassPerformance(classId, userId) {
+  await ensureLecturerCanAccessClass(classId, userId);
+
+  const classSection = await ClassSection.findById(classId)
+    .populate('subject', 'subjectCode subjectName credits gradingWeights')
+    .populate('teacher', 'fullName email department teacherCode')
+    .populate('room', 'roomCode roomName')
+    .populate('timeslot', 'groupName startTime endTime')
+    .lean();
+
+  if (!classSection) {
+    const err = new Error('Khong tim thay lop hoc');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const [enrollments, scheduleRows, attendanceRows] = await Promise.all([
+    ClassEnrollment.find({
+      classSection: classId,
+      status: { $in: ['enrolled', 'completed'] },
+    })
+      .populate('student', 'studentCode fullName email')
+      .lean(),
+    Schedule.find({
+      classSection: classId,
+      status: 'active',
+    })
+      .select('dayOfWeek startDate endDate')
+      .lean(),
+    Attendance.find({
+      classSection: classId,
+    })
+      .select('student slotId slotDate status note createdAt updatedAt')
+      .sort({ slotDate: 1, createdAt: 1 })
+      .lean(),
+  ]);
+
+  const today = toStartOfDay(new Date());
+  const rules = buildScheduleRules(classSection, scheduleRows);
+  const scheduledSessionsToDate = listSessionDatesFromRules(rules, today);
+  const totalSessionsPlanned = countSessionsFromRules(rules, null);
+
+  const enrolledStudents = enrollments
+    .map((item) => item.student)
+    .filter(Boolean);
+
+  const studentStatsMap = new Map(
+    enrolledStudents.map((student) => [
+      String(student._id),
+      {
+        studentId: student._id,
+        studentCode: student.studentCode || '',
+        fullName: student.fullName || 'Sinh vien',
+        email: student.email || '',
+        presentCount: 0,
+        lateCount: 0,
+        absentCount: 0,
+        markedSessions: 0,
+        attendanceRate: 0,
+        absenceRate: 0,
+      },
+    ]),
+  );
+
+  const sessionMap = new Map();
+  const attendanceTotals = {
+    markedRecords: 0,
+    presentCount: 0,
+    lateCount: 0,
+    absentCount: 0,
+  };
+
+  attendanceRows.forEach((row) => {
+    const slotDate = row.slotDate ? toStartOfDay(row.slotDate) : null;
+    const slotKey = normalizeSlotKey(row.slotId, slotDate);
+    if (!slotKey) return;
+
+    const sessionDate = slotDate || parseDateKeyToDate(slotKey);
+    const status = normalizeAttendanceStatus(row.status);
+
+    if (!sessionMap.has(slotKey)) {
+      sessionMap.set(slotKey, {
+        slotKey,
+        slotDate: sessionDate,
+        totalRecords: 0,
+        presentCount: 0,
+        lateCount: 0,
+        absentCount: 0,
+      });
+    }
+
+    const session = sessionMap.get(slotKey);
+    session.totalRecords += 1;
+
+    if (status === 'Present') {
+      session.presentCount += 1;
+      attendanceTotals.presentCount += 1;
+    } else {
+      session.absentCount += 1;
+      attendanceTotals.absentCount += 1;
+    }
+
+    attendanceTotals.markedRecords += 1;
+
+    const studentId = String(row.student || '');
+    if (!studentStatsMap.has(studentId)) {
+      studentStatsMap.set(studentId, {
+        studentId: row.student,
+        studentCode: '',
+        fullName: 'Sinh vien khac',
+        email: '',
+        presentCount: 0,
+        lateCount: 0,
+        absentCount: 0,
+        markedSessions: 0,
+        attendanceRate: 0,
+        absenceRate: 0,
+      });
+    }
+
+    const studentStats = studentStatsMap.get(studentId);
+    studentStats.markedSessions += 1;
+    if (status === 'Present') {
+      studentStats.presentCount += 1;
+    } else {
+      studentStats.absentCount += 1;
+    }
+  });
+
+  const timeline = Array.from(sessionMap.values())
+    .map((item) => {
+      const attendedCount = item.presentCount;
+      return {
+        slotKey: item.slotKey,
+        slotDate: item.slotDate,
+        totalRecords: item.totalRecords,
+        presentCount: item.presentCount,
+        lateCount: item.lateCount,
+        absentCount: item.absentCount,
+        attendanceRate: safePercentage(attendedCount, item.totalRecords),
+        absenceRate: safePercentage(item.absentCount, item.totalRecords),
+      };
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.slotDate || 0).getTime();
+      const bTime = new Date(b.slotDate || 0).getTime();
+      return aTime - bTime;
+    });
+
+  const markedSessions = timeline.length;
+  const attendedRecords = attendanceTotals.presentCount;
+  const totalStudents = enrolledStudents.length;
+  const gradeSummary = buildGradeSummary(enrollments, classSection);
+
+  const studentBreakdown = Array.from(studentStatsMap.values())
+    .map((item) => {
+      item.attendanceRate = safePercentage(
+        item.presentCount,
+        item.markedSessions,
+      );
+      item.absenceRate = safePercentage(item.absentCount, item.markedSessions);
+      return item;
+    })
+    .sort((a, b) => {
+      if (b.absentCount !== a.absentCount) {
+        return b.absentCount - a.absentCount;
+      }
+      return String(a.fullName || '').localeCompare(String(b.fullName || ''));
+    });
+
+  const sessionCoverageBase = scheduledSessionsToDate.length || markedSessions;
+  const expectedMarkedRecords = totalStudents * markedSessions;
+
+  return {
+    classSection: {
+      _id: classSection._id,
+      classCode: classSection.classCode,
+      className: classSection.className,
+      semester: classSection.semester,
+      academicYear: classSection.academicYear,
+      status: classSection.status,
+      startDate: classSection.startDate || null,
+      endDate: classSection.endDate || null,
+      subject: classSection.subject || null,
+      teacher: classSection.teacher || null,
+      room: classSection.room || null,
+      timeslot: classSection.timeslot || null,
+    },
+    summary: {
+      totalStudents,
+      totalSessionsPlanned,
+      sessionsToDate: scheduledSessionsToDate.length,
+      sessionsMarked: markedSessions,
+      sessionsPendingMarking: Math.max(scheduledSessionsToDate.length - markedSessions, 0),
+      sessionCoverageRate: safePercentage(markedSessions, sessionCoverageBase),
+      markedRecords: attendanceTotals.markedRecords,
+      expectedMarkedRecords,
+      recordCoverageRate: safePercentage(attendanceTotals.markedRecords, expectedMarkedRecords),
+      attendanceRate: safePercentage(attendedRecords, attendanceTotals.markedRecords),
+      presentCount: attendanceTotals.presentCount,
+      lateCount: attendanceTotals.lateCount,
+      absentCount: attendanceTotals.absentCount,
+      noAttendanceData: attendanceTotals.markedRecords === 0,
+    },
+    charts: {
+      attendanceDistribution: [
+        { name: 'Co mat', value: attendanceTotals.presentCount },
+        { name: 'Muon', value: attendanceTotals.lateCount },
+        { name: 'Vang', value: attendanceTotals.absentCount },
+      ],
+      sessionTimeline: timeline,
+    },
+    studentBreakdown,
+    gradeSummary,
+    meta: {
+      generatedAt: new Date(),
+      scheduleDays: Array.from(
+        new Set(
+          scheduleRows
+            .map((item) => Number(item.dayOfWeek))
+            .filter((day) => Number.isInteger(day) && day >= 1 && day <= 7),
+        ),
+      ).sort((a, b) => a - b),
+      validAttendanceDates: scheduledSessionsToDate.map((date) => toDateKey(date)),
+    },
+  };
+}
+
 async function getSlotAttendance(classId, slotId, userId) {
   const { classSection } = await ensureLecturerCanAccessClass(classId, userId);
 
@@ -965,7 +1452,7 @@ async function getSlotAttendance(classId, slotId, userId) {
       studentCode: enrollment.student.studentCode,
       fullName: enrollment.student.fullName,
       email: enrollment.student.email,
-      status: existing?.status || '',
+      status: normalizeAttendanceStatus(existing?.status),
       note: existing?.note || '',
       absenceWarning: existing?.absenceWarning || false,
     };
@@ -983,7 +1470,6 @@ async function getClassSlots(classId, userId) {
         slotDate: { $first: '$slotDate' },
         totalStudents: { $sum: 1 },
         absentCount: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
-        lateCount: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
       },
     },
     { $sort: { slotDate: -1 } },
@@ -994,8 +1480,8 @@ async function getClassSlots(classId, userId) {
     slotDate: s.slotDate,
     totalStudents: s.totalStudents,
     absentCount: s.absentCount,
-    lateCount: s.lateCount,
-    presentCount: s.totalStudents - s.absentCount - s.lateCount,
+    lateCount: 0,
+    presentCount: s.totalStudents - s.absentCount,
   }));
 }
 
@@ -1109,8 +1595,8 @@ async function bulkSave(payload, userId) {
 
   const totalSaved = records.length;
   const absentCount = records.filter((r) => r.status === 'Absent').length;
-  const lateCount = records.filter((r) => r.status === 'Late').length;
-  const presentCount = totalSaved - absentCount - lateCount;
+  const lateCount = 0;
+  const presentCount = totalSaved - absentCount;
 
   return {
     saved: totalSaved,
@@ -1123,6 +1609,7 @@ async function bulkSave(payload, userId) {
 
 module.exports = {
   getTeachingClasses,
+  getClassPerformance,
   getSlotAttendance,
   getClassSlots,
   bulkSave,

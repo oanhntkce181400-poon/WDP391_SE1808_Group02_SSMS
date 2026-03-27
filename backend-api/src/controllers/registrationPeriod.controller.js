@@ -2,6 +2,10 @@
 // Controller xử lý HTTP requests cho Registration Period
 
 const registrationPeriodService = require('../services/registrationPeriod.service');
+const {
+  buildRegistrationPeriodNotification,
+  emitToStudents,
+} = require('../services/realtimeNotification.service');
 
 function resolveHttpStatusCode(error) {
   if (error?.statusCode) return error.statusCode;
@@ -22,12 +26,18 @@ const createPeriod = async (req, res) => {
 
     // Gửi realtime event cho tất cả client đang online
     const io = req.app.get('io');
-    if (io && io.broadcastToAll) {
-      io.broadcastToAll('registration-period-updated', {
-        action: 'created',
-        ...realtimePayload,
-        timestamp: new Date().toISOString(),
-      });
+    const socketPayload = {
+      action: 'created',
+      ...realtimePayload,
+      timestamp: new Date().toISOString(),
+    };
+    if (io) {
+      emitToStudents(io, 'registration-period-updated', socketPayload);
+      emitToStudents(
+        io,
+        'notification',
+        buildRegistrationPeriodNotification(socketPayload),
+      );
     }
 
     return res.status(201).json({
@@ -133,12 +143,18 @@ const updatePeriod = async (req, res) => {
 
     // Gửi realtime event cho tất cả client đang online
     const io = req.app.get('io');
-    if (io && io.broadcastToAll) {
-      io.broadcastToAll('registration-period-updated', {
-        action: 'updated',
-        ...realtimePayload,
-        timestamp: new Date().toISOString(),
-      });
+    const socketPayload = {
+      action: 'updated',
+      ...realtimePayload,
+      timestamp: new Date().toISOString(),
+    };
+    if (io) {
+      emitToStudents(io, 'registration-period-updated', socketPayload);
+      emitToStudents(
+        io,
+        'notification',
+        buildRegistrationPeriodNotification(socketPayload),
+      );
     }
 
     return res.status(200).json({
@@ -177,12 +193,18 @@ const toggleStatus = async (req, res) => {
 
     // Gửi realtime event cho tất cả client đang online
     const io = req.app.get('io');
-    if (io && io.broadcastToAll) {
-      io.broadcastToAll('registration-period-updated', {
-        action: 'status-updated',
-        ...realtimePayload,
-        timestamp: new Date().toISOString(),
-      });
+    const socketPayload = {
+      action: 'status-updated',
+      ...realtimePayload,
+      timestamp: new Date().toISOString(),
+    };
+    if (io) {
+      emitToStudents(io, 'registration-period-updated', socketPayload);
+      emitToStudents(
+        io,
+        'notification',
+        buildRegistrationPeriodNotification(socketPayload),
+      );
     }
 
     return res.status(200).json({
@@ -230,7 +252,7 @@ const deletePeriod = async (req, res) => {
  */
 const checkRequestRegistrationOpen = async (req, res) => {
   try {
-    const { requestType, studentCohort } = req.query;
+    const { requestType, studentCohort, semesterId, semesterNum, academicYear } = req.query;
 
     if (!requestType) {
       return res.status(400).json({
@@ -239,7 +261,11 @@ const checkRequestRegistrationOpen = async (req, res) => {
       });
     }
 
-    const result = await registrationPeriodService.isRegistrationOpen(requestType, studentCohort);
+    const result = await registrationPeriodService.isRegistrationOpen(requestType, studentCohort, {
+      semesterId: semesterId || null,
+      semesterNum: semesterNum || null,
+      academicYear: academicYear || null,
+    });
 
     return res.status(200).json({
       success: true,

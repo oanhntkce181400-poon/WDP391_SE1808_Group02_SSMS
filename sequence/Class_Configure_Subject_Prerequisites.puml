@@ -1,0 +1,93 @@
+@startuml
+title Configure Subject Prerequisites - Add Prerequisite Relationships
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen (Prerequisites)"
+participant APIClient as "API Client (Frontend)"
+participant PrereqRouter as "PrerequisiteRouter"
+participant Validation as "ValidationMiddleware"
+participant PrereqController as "PrerequisiteController"
+participant PrereqService as "PrerequisiteService"
+participant SubjectModel as "SubjectModel"
+participant SubjectPrereqModel as "SubjectPrerequisiteModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open prerequisites UI
+activate Screen
+
+Screen -> APIClient: (2) POST /api/subjects/prerequisites
+activate APIClient
+APIClient -> PrereqRouter: (3) forward POST
+activate PrereqRouter
+
+PrereqRouter -> Validation: (4) validate payload
+activate Validation
+alt invalid
+  Validation --> PrereqRouter: (4.1.1) invalid payload
+  deactivate Validation
+
+  PrereqRouter --> APIClient: (4.1.2) 400 Bad Request
+  APIClient --> Screen: (4.1.3) show validation error
+  Screen --> PrimaryActor: (4.1.4) display error
+else valid
+  deactivate Validation
+
+  PrereqRouter -> PrereqController: (4.2.1) postPrerequisites(data)
+  activate PrereqController
+  PrereqController -> PrereqService: (4.2.2) addPrerequisites()
+  activate PrereqService
+
+  PrereqService -> SubjectModel: (4.2.3) load graph
+  activate SubjectModel
+  SubjectModel -> DB: (4.2.4) db query
+  activate DB
+  DB --> SubjectModel: (4.2.5) return data
+  deactivate DB
+  SubjectModel --> PrereqService: (4.2.6) return graph
+  deactivate SubjectModel
+
+  ' model-based detection
+  PrereqService -> SubjectModel: (4.3.1) detectCycle(graph, additions)
+  activate SubjectModel
+  SubjectModel -> DB: (4.3.2) optional helper query
+  activate DB
+  DB --> SubjectModel: (4.3.3) helper data
+  deactivate DB
+  SubjectModel --> PrereqService: (4.3.4) detection result {cycle: true|false, details?}
+  deactivate SubjectModel
+
+  alt cycle detected
+    PrereqService --> PrereqController: (4.3.4.1.1)  validation error: cycle detected
+    deactivate PrereqService
+    PrereqController --> PrereqRouter:  (4.3.4.1.2)  400 Bad Request
+    PrereqRouter --> APIClient:  (4.3.4.1.3)  400 Bad Request
+    APIClient --> Screen:  (4.3.4.1.4)  show error
+    Screen --> PrimaryActor:  (4.3.4.1.5)  display error
+  else no cycle
+    PrereqService -> SubjectPrereqModel: (4.3.4.2.1) insertMany(prereq_ids)
+    activate SubjectPrereqModel
+    loop for each prereq_id in prereq_ids
+      SubjectPrereqModel -> DB: (4.3.4.2.2)db insert
+      activate DB
+      DB --> SubjectPrereqModel: (4.3.4.2.3)return insert result
+      deactivate DB
+    end
+    SubjectPrereqModel --> PrereqService: (4.3.4.2.3.1.1) return success
+    deactivate SubjectPrereqModel
+    PrereqService --> PrereqController: (4.3.4.2.3.1.2) return success
+    deactivate PrereqService
+    PrereqController --> PrereqRouter: (4.3.4.2.3.1.3) 201 Created
+    PrereqRouter --> APIClient: (4.3.4.2.3.1.4) 201 Created
+    APIClient --> Screen: (4.3.4.2.3.1.5) show success
+    Screen --> PrimaryActor: (4.3.4.2.3.1.6) display success
+  end
+end
+
+deactivate PrereqRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml

@@ -1,0 +1,111 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="UC205ViewAttendanceHistory" name="UC205 View Attendance History">
+    <mxGraphModel dx="1450" dy="950" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="950">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: UC205 View Attendance History&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="520" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AttendanceRouter" value="&lt;b&gt;AttendanceRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="250" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="AttendanceRouter-route" value="+attendanceController: AttendanceController&#xa;+getMyAttendanceQueryDto: GetMyAttendanceQueryDto&#xa;--&#xa;GET /api/attendance/my-attendance" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="AttendanceRouter">
+          <mxGeometry y="30" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GetMyAttendanceQueryDto" value="&lt;b&gt;GetMyAttendanceQueryDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="250" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="GetMyAttendanceQueryDto-fields" value="+semesterId: string (optional)&#xa;+fromDate: Date (optional)&#xa;+toDate: Date (optional)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="GetMyAttendanceQueryDto">
+          <mxGeometry y="30" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AttendanceController" value="&lt;b&gt;AttendanceController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="80" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="AttendanceController-methods" value="+getMyAttendance(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="AttendanceController">
+          <mxGeometry y="30" width="260" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AttendanceService" value="&lt;b&gt;AttendanceService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="650" y="80" width="300" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="AttendanceService-methods" value="+getMyAttendanceReport(userId,filters): Report&#xa;+listSessionDatesFromRules(rules,untilDate): Date[]&#xa;+normalizeSlotKey(slotId,slotDate): string&#xa;+countSessionsFromRules(rules,untilDate): number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="AttendanceService">
+          <mxGeometry y="30" width="300" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentEntity" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="280" y="280" width="180" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentEntity-fields" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-studentCode: string&#xa;-fullName: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentEntity">
+          <mxGeometry y="30" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="EnrollmentEntity" value="&lt;b&gt;ClassEnrollment&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="500" y="280" width="220" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="EnrollmentEntity-fields" value="-student: ObjectId&#xa;-classSection: ObjectId&#xa;-status: enrolled|completed" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="EnrollmentEntity">
+          <mxGeometry y="30" width="220" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ScheduleEntity" value="&lt;b&gt;Schedule&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="280" width="220" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="ScheduleEntity-fields" value="-classSection: ObjectId&#xa;-dayOfWeek: number&#xa;-startDate: Date&#xa;-endDate: Date&#xa;-status: active|inactive&#xa;-timeslot: ObjectId" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ScheduleEntity">
+          <mxGeometry y="30" width="220" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AttendanceEntity" value="&lt;b&gt;Attendance&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="280" width="230" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="AttendanceEntity-fields" value="-classSection: ObjectId&#xa;-student: ObjectId&#xa;-slotId: string&#xa;-slotDate: Date&#xa;-status: Present|Late|Absent&#xa;-note: string&#xa;-createdAt: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="AttendanceEntity">
+          <mxGeometry y="30" width="230" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceRouter-route" target="AttendanceController-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-controller" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="AttendanceRouter" target="AttendanceController">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-dto" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="AttendanceRouter" target="GetMyAttendanceQueryDto">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceController-methods" target="AttendanceService-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceService-methods" target="StudentEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceService-methods" target="EnrollmentEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceService-methods" target="ScheduleEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="AttendanceService-methods" target="AttendanceEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware + RBAC(student)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="165" width="210" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="AttendanceRouter" target="note1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

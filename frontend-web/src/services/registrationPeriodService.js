@@ -41,9 +41,9 @@ const registrationPeriodService = {
 
   // Check registration period theo loại đơn + cohort sinh viên
   // Dùng cho trang sinh viên trước khi hiển thị form đăng ký
-  checkRequestOpen: ({ requestType, studentCohort }) => {
+  checkRequestOpen: ({ requestType, studentCohort, semesterId, semesterNum, academicYear } = {}) => {
     return axiosClient.get('/registration-periods/check-request', {
-      params: { requestType, studentCohort },
+      params: { requestType, studentCohort, semesterId, semesterNum, academicYear },
     });
   },
 
@@ -53,8 +53,8 @@ const registrationPeriodService = {
   },
 
   // Lấy danh sách semesters
-  getSemesters: () => {
-    return axiosClient.get('/semesters');
+  getSemesters: (params = {}) => {
+    return axiosClient.get('/semesters', { params });
   },
 };
 

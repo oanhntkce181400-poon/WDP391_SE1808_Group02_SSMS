@@ -1,0 +1,100 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="UC202ViewStudentProfileMobile" name="UC202 View Student Profile Mobile">
+    <mxGraphModel dx="1300" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="850">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: UC202 View Student Profile (Mobile)&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="540" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentRouter" value="&lt;b&gt;StudentRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="70" y="80" width="250" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentRouter-route" value="+studentController: StudentController&#xa;+getMyProfileDto: GetMyProfileDto&#xa;--&#xa;GET /api/students/me" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentRouter">
+          <mxGeometry y="30" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GetMyProfileDto" value="&lt;b&gt;GetMyProfileDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="70" y="240" width="250" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="GetMyProfileDto-fields" value="+userId: string (from auth token)&#xa;+role: string (student)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="GetMyProfileDto">
+          <mxGeometry y="30" width="250" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentController" value="&lt;b&gt;StudentController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="80" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentController-methods" value="+getMyProfile(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentController">
+          <mxGeometry y="30" width="250" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentService" value="&lt;b&gt;StudentService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="80" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentService-methods" value="+getStudentByUserId(userId): Student?" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentService">
+          <mxGeometry y="30" width="250" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GPAService" value="&lt;b&gt;GPAService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="960" y="80" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="GPAService-methods" value="+calculateStudentGPA(studentId): GPAResult" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="GPAService">
+          <mxGeometry y="30" width="250" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentEntity" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="500" y="250" width="220" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentEntity-fields" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-studentCode: string&#xa;-fullName: string&#xa;-email: string&#xa;-majorCode: string&#xa;-cohort: number&#xa;-academicStatus: string&#xa;-enrollmentYear: number&#xa;-currentCurriculumSemester: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentEntity">
+          <mxGeometry y="30" width="220" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ClassEnrollment" value="&lt;b&gt;ClassEnrollment&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="260" width="210" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassEnrollment-fields" value="-student: ObjectId&#xa;-classSection: ObjectId&#xa;-midtermScore: number&#xa;-finalScore: number&#xa;-grade: number&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ClassEnrollment">
+          <mxGeometry y="30" width="210" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="StudentRouter-route" target="StudentController-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-controller" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="StudentRouter" target="StudentController">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-dto" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="StudentRouter" target="GetMyProfileDto">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="StudentController-methods" target="StudentService-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="StudentController-methods" target="GPAService-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="StudentService-methods" target="StudentEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="GPAService-methods" target="ClassEnrollment-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware + RBAC(student)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="70" y="170" width="210" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="StudentRouter" target="note1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

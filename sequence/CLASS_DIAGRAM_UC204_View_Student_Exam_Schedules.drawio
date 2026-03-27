@@ -1,0 +1,111 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="UC204ViewStudentExamSchedules" name="UC204 View Student Exam Schedules">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: UC204 View Student Exam Schedules&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="560" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentExamRouter" value="&lt;b&gt;StudentExamRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="250" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentExamRouter-route" value="+examController: ExamController&#xa;+getMyExamsQueryDto: GetMyExamsQueryDto&#xa;--&#xa;GET /api/student-exams/my-exams" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentExamRouter">
+          <mxGeometry y="30" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="GetMyExamsQueryDto" value="&lt;b&gt;GetMyExamsQueryDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="240" width="250" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="GetMyExamsQueryDto-fields" value="+semesterId: string (optional)&#xa;+status: string (optional)&#xa;+fromDate: Date (optional)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="GetMyExamsQueryDto">
+          <mxGeometry y="30" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ExamController" value="&lt;b&gt;ExamController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="340" y="80" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ExamController-methods" value="+getMyExams(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ExamController">
+          <mxGeometry y="30" width="260" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WishlistService" value="&lt;b&gt;WishlistService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="80" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="WishlistService-methods" value="+reconcileApprovedWishlistEnrollmentsForStudent(studentId): Result" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="WishlistService">
+          <mxGeometry y="30" width="280" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ExamEntity" value="&lt;b&gt;Exam&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="280" y="250" width="220" height="185" as="geometry" />
+        </mxCell>
+        <mxCell id="ExamEntity-fields" value="-id: ObjectId&#xa;-examCode: string&#xa;-subject: ObjectId&#xa;-classSection: ObjectId?&#xa;-room: ObjectId&#xa;-slot: ObjectId&#xa;-examDate: Date&#xa;-startTime: string&#xa;-endTime: string&#xa;-status: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ExamEntity">
+          <mxGeometry y="30" width="220" height="155" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentExamEntity" value="&lt;b&gt;StudentExam&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="260" width="220" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentExamEntity-fields" value="-student: ObjectId&#xa;-exam: ObjectId&#xa;-sbd: string&#xa;-seatNumber: string&#xa;-status: string&#xa;-registrationDate: Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentExamEntity">
+          <mxGeometry y="30" width="220" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ClassEnrollmentEntity" value="&lt;b&gt;ClassEnrollment&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="260" width="220" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassEnrollmentEntity-fields" value="-student: ObjectId&#xa;-classSection: ObjectId&#xa;-status: enrolled|completed" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ClassEnrollmentEntity">
+          <mxGeometry y="30" width="220" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="StudentEntity" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="260" width="180" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="StudentEntity-fields" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-studentCode: string&#xa;-email: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="StudentEntity">
+          <mxGeometry y="30" width="180" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="StudentExamRouter-route" target="ExamController-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-controller" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="StudentExamRouter" target="ExamController">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-dto" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="StudentExamRouter" target="GetMyExamsQueryDto">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="ExamController-methods" target="WishlistService-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="ExamController-methods" target="StudentEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="ExamController-methods" target="ClassEnrollmentEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="ExamController-methods" target="ExamEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="ExamController-methods" target="StudentExamEntity-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware + RBAC(student)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="165" width="210" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="StudentExamRouter" target="note1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

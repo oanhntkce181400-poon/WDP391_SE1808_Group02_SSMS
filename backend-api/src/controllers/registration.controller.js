@@ -112,7 +112,7 @@ const validateWallet = async (req, res) => {
 
 const validateScheduleConflict = async (req, res) => {
   try {
-    const { classId } = req.body;
+    const { classId, semesterId } = req.body;
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -128,7 +128,7 @@ const validateScheduleConflict = async (req, res) => {
       });
     }
 
-    const result = await registrationService.checkScheduleConflict(student._id, classId);
+    const result = await registrationService.checkScheduleConflict(student._id, classId, semesterId || null);
 
     if (!result.valid) {
       return res.status(400).json({
@@ -154,7 +154,7 @@ const validateScheduleConflict = async (req, res) => {
 
 const validateAll = async (req, res) => {
   try {
-    const { classId } = req.body;
+    const { classId, semesterId } = req.body;
     if (!classId) {
       return res.status(400).json({
         success: false,
@@ -174,8 +174,8 @@ const validateAll = async (req, res) => {
       registrationService.validatePrerequisites(student._id, classId),
       registrationService.validateClassCapacity(classId),
       registrationService.validateWallet(student._id, classId),
-      registrationService.checkScheduleConflict(student._id, classId),
-      registrationService.getStudentEligibilitySummary(student._id, classId),
+      registrationService.checkScheduleConflict(student._id, classId, semesterId || null),
+      registrationService.getStudentEligibilitySummary(student._id, classId, semesterId || null),
     ]);
 
     const isEligible =
@@ -192,7 +192,12 @@ const validateAll = async (req, res) => {
     if (scheduleConflictResult.hasConflict) validationErrors.push(scheduleConflictResult.message);
     if (!eligibility.limits.overload.allowed) validationErrors.push(eligibility.limits.overload.message);
     if (!eligibility.limits.credit.allowed) validationErrors.push(eligibility.limits.credit.message);
-    if (!eligibility.limits.cohortAccess.allowed) validationErrors.push(eligibility.limits.cohortAccess.message);
+    if (!eligibility.limits.registrationWindow.allowed) {
+      validationErrors.push(eligibility.limits.registrationWindow.message);
+    }
+    if (!eligibility.limits.duplicateSubject.allowed) {
+      validationErrors.push(eligibility.limits.duplicateSubject.message);
+    }
 
     return res.status(200).json({
       success: true,
@@ -206,6 +211,8 @@ const validateAll = async (req, res) => {
         overload: eligibility.limits.overload,
         credit: eligibility.limits.credit,
         cohortAccess: eligibility.limits.cohortAccess,
+        registrationWindow: eligibility.limits.registrationWindow,
+        duplicateSubject: eligibility.limits.duplicateSubject,
         eligibility,
         validationErrors,
       },
@@ -232,6 +239,7 @@ const getEligibilitySummary = async (req, res) => {
     const data = await registrationService.getStudentEligibilitySummary(
       student._id,
       req.query.classId || null,
+      req.query.semesterId || null,
     );
 
     return res.status(200).json({

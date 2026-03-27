@@ -1,0 +1,46 @@
+@startuml
+hide footbox
+title Home View - Display Home Page for Student / Parent
+
+actor PrimaryActor as "Student / Parent User"
+participant Screen as "Screen (Home)"
+participant API as "API"
+participant Router as "Router"
+participant Controller as "Controller"
+participant Service as "Service"
+participant Model as "Model"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Open Home page
+activate Screen
+Screen -> API: (2) call GET
+activate API
+API -> Router: (3) forward GET
+activate Router
+Router -> Controller: (4) getHomeData({ userId })
+activate Controller
+Controller -> Service: (5) getHomeData(userId)
+activate Service
+Service -> Model: (6) findTasksForUser(userId, { limit, filters })
+activate Model
+Model -> DB: (7) db query
+activate DB
+DB --> Model: (8) rows[]
+deactivate DB
+Model --> Service: (9) tasks data
+deactivate Model
+Service -> Service: (10) apply business rules (visibility, grouping)
+Service --> Controller: (11) homePayload { tasks[], announcements[] }
+deactivate Service
+Controller --> Router: (12) 200 OK { homePayload }
+deactivate Controller
+Router --> API: (13) 200 OK { homePayload }
+API --> Screen: (14) render home widgets (tasks, announcements)
+Screen --> PrimaryActor: (15) display home view
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

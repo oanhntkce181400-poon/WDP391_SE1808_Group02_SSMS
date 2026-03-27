@@ -1,19 +1,18 @@
-@startuml
+﻿@startuml
 title UC06 - Create Registration Period - Configure New Registration Period
 
-hide footbox
-
-actor PrimaryActor as "Admin"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant RegPeriodRouter as "RegistrationPeriodRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant ValidationMiddleware as "ValidationMiddleware"
-participant RegPeriodController as "RegistrationPeriodController"
-participant RegPeriodService as "RegistrationPeriodService"
-participant RegPeriodModel as "RegistrationPeriodModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "RegistrationPeriodRouter" as RegPeriodRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "ValidationMiddleware" as ValidationMiddleware <<control>>
+participant "RegistrationPeriodController" as RegPeriodController <<control>>
+participant "RegistrationPeriodService" as RegPeriodService <<control>>
+participant "RegistrationPeriodModel" as RegPeriodModel <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) click "Create Registration Period" button
 activate Screen
@@ -22,7 +21,7 @@ Screen -> Screen: (1.1) display Create Period form
 PrimaryActor -> Screen: (2) fill form and click "Create"
 note right
   Form data:
-  - Period Name: "Đăng ký Kỳ 1 2025-2026"
+  - Period Name: "ﾄ斉ハg kﾃｽ K盻ｳ 1 2025-2026"
   - Start Date: 2025-08-01 08:00
   - End Date: 2025-08-15 23:59
   - Allowed Cohorts: [18, 19, 20]

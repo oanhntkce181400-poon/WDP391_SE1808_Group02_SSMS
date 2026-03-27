@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import lecturerService from '../../services/lecturerService';
 import scheduleService from '../../services/scheduleService';
 import subjectService from '../../services/subjectService';
 import roomService from '../../services/roomService';
@@ -50,15 +49,13 @@ function formatDateRange(startDate, endDate) {
 
 export default function TeachingSchedulePage() {
   const [userRole, setUserRole] = useState('');
+  const [roleResolved, setRoleResolved] = useState(false);
   const isAdminOrStaff = userRole === 'admin' || userRole === 'staff';
 
   const [loading, setLoading] = useState(false);
-  const [loadingLecturers, setLoadingLecturers] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [data, setData] = useState(null);
-  const [lecturers, setLecturers] = useState([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState('');
 
   const [subjects, setSubjects] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -132,7 +129,7 @@ export default function TeachingSchedulePage() {
         className: cls.className,
         subject: cls.subject,
         room: schedule.room || cls.room,
-        timeslot: cls.timeslot,
+        timeslot: schedule.timeslot || cls.timeslot,
         dayOfWeek: schedule.dayOfWeek,
         startDate: schedule.startDate,
         endDate: schedule.endDate,
@@ -146,17 +143,21 @@ export default function TeachingSchedulePage() {
     // Gom các timeslot unique từ toàn bộ classes của giảng viên,
     // để render ra các hàng "CA1, CA2..." trên bảng lịch.
     const slotMap = new Map();
-    teachingClasses.forEach((cls) => {
-      if (!cls?.timeslot?._id) return;
-      slotMap.set(String(cls.timeslot._id), cls.timeslot);
+    scheduleEntries.forEach((entry) => {
+      if (!entry?.timeslot?._id) return;
+      slotMap.set(String(entry.timeslot._id), entry.timeslot);
     });
 
     return Array.from(slotMap.values()).sort((a, b) => {
+      const byStartPeriod = Number(a?.startPeriod || 0) - Number(b?.startPeriod || 0);
+      if (byStartPeriod !== 0) return byStartPeriod;
+      const byEndPeriod = Number(a?.endPeriod || 0) - Number(b?.endPeriod || 0);
+      if (byEndPeriod !== 0) return byEndPeriod;
       const byStart = String(a?.startTime || '').localeCompare(String(b?.startTime || ''));
       if (byStart !== 0) return byStart;
       return String(a?.groupName || '').localeCompare(String(b?.groupName || ''));
     });
-  }, [teachingClasses]);
+  }, [scheduleEntries]);
 
   const classesWithoutSchedules = useMemo(
     () => teachingClasses.filter((cls) => !Array.isArray(cls.schedules) || cls.schedules.length === 0),
@@ -186,24 +187,31 @@ export default function TeachingSchedulePage() {
     setHint('');
 
     try {
-      // API này chính là BE của feature "View Lecturer Timetable".
-      // Nếu teacherId rỗng thì ưu tiên lấy lịch theo account hiện tại.
       const params = teacherId ? { teacherId } : {};
       const response = await scheduleService.getTeachingSchedule(params);
       setData(response?.data?.data || null);
     } catch (err) {
-      const message = err?.response?.data?.message || 'Không tải được lịch giảng dạy';
+      const message = err?.response?.data?.message || 'Khong tai duoc lich giang day';
       setData(null);
-
-      if (!teacherId && message.includes('Please select a lecturer')) {
-        setHint('Tài khoản hiện tại không gắn với hồ sơ giảng viên. Hãy chọn một giảng viên để xem lịch.');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const loadGeneratorMasterData = async () => {
     try {
@@ -229,32 +237,54 @@ export default function TeachingSchedulePage() {
       setUserRole(role);
     } catch {
       setUserRole('');
+    } finally {
+      setRoleResolved(true);
     }
 
-    const loadLecturers = async () => {
-      setLoadingLecturers(true);
-      try {
-        const response = await lecturerService.getAll({ limit: 100 });
-        setLecturers(normalizeLecturerOptions(response));
-      } catch (err) {
-        console.error('Failed to load lecturers for filter', err);
-      } finally {
-        setLoadingLecturers(false);
-      }
-    };
 
-    loadLecturers();
-    if (isAdminOrStaff) {
-      loadGeneratorMasterData();
-      fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear, '');
-    }
-    fetchSchedule('');
-  }, [isAdminOrStaff]);
+
+
+
+
+
+
+
+
+
+
+
+
+  }, []);
 
   useEffect(() => {
-    if (!selectedTeacherId) return;
-    fetchSchedule(selectedTeacherId);
-  }, [selectedTeacherId]);
+    if (!roleResolved) return;
+
+    if (isAdminOrStaff) {
+      loadGeneratorMasterData();
+      fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
+      setHint('');
+      fetchSchedule('');
+      return;
+    }
+
+
+    fetchSchedule('');
+  }, [roleResolved, isAdminOrStaff]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const toggleSubject = (subjectId) => {
     setSelectedSubjectIds((prev) =>
@@ -298,7 +328,7 @@ export default function TeachingSchedulePage() {
         timeoutPromise,
       ]);
       setGenerateResult(response?.data?.data || null);
-      await fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear, selectedTeacherId);
+      await fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
     } catch (err) {
       setGenerateError(err?.response?.data?.message || err?.message || 'Tạo lịch giảng dạy thất bại.');
     } finally {
@@ -306,14 +336,14 @@ export default function TeachingSchedulePage() {
     }
   };
 
-  const fetchGeneratedFromDb = async (semester, academicYear, teacherId = '') => {
+  const fetchGeneratedFromDb = async (semester, academicYear) => {
     try {
       const response = await scheduleService.getGeneratedTimetables({
         semester: Number(semester),
         academicYear,
-        ...(teacherId ? { teacherId } : {}),
       });
       const data = response?.data?.data || null;
+
       if (data?.generated?.length > 0) {
         setGenerateResult(data);
       }
@@ -617,37 +647,39 @@ export default function TeachingSchedulePage() {
           </div>
 
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="teacherId">
-              Giảng viên
-            </label>
-            <div className="flex gap-3">
-              <select
-                id="teacherId"
-                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-slate-500"
-                value={selectedTeacherId}
-                onChange={(event) => setSelectedTeacherId(event.target.value)}
-                disabled={loadingLecturers}
-              >
-                <option value="">Tài khoản hiện tại</option>
-                {lecturers.map((lecturer) => (
-                  <option key={lecturer.id} value={lecturer.id}>
-                    {lecturer.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                onClick={() => fetchSchedule(selectedTeacherId)}
-                disabled={loading}
-              >
-                {loading ? 'Đang tải...' : 'Xem lịch'}
-              </button>
+            <div className="text-sm font-medium text-slate-700">
+              {isAdminOrStaff ? 'Pham vi hien thi' : 'Tai khoan hien tai'}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Nếu đang đăng nhập bằng tài khoản giảng viên, bạn có thể để trống bộ lọc này.
+            <p className="mt-2 text-sm text-slate-600">
+              {isAdminOrStaff
+                ? 'Dang hien lich giang day cua toan bo giang vien trong hoc ky hien tai.'
+                : 'Dang hien lich giang day cua giang vien dang dang nhap.'}
             </p>
+            <button
+              type="button"
+              className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              onClick={() => fetchSchedule('')}
+              disabled={loading}
+            >
+              {loading ? 'Dang tai...' : 'Tai lai lich'}
+            </button>
           </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         </div>
 
         {loading && (

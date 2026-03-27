@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import ExamScheduleSummary from '../../components/features/ExamScheduleSummary';
 import CountdownWidget from '../../components/features/CountdownWidget';
 import announcementService from '../../services/announcementService';
+import registrationPeriodService from '../../services/registrationPeriodService';
+import { useSocket } from '../../contexts/SocketContext';
+import { STUDENT_LOCAL_NOTIFICATION_EVENT } from '../../hooks/useStudentRealtimeNotifications';
 
 // Data arrays - procedures, lookupItems, reportItems, regulationItems
 // (newsItems will be fetched from API)
@@ -23,13 +26,6 @@ const lookupItems = [
   { label: 'Đánh giá lớp học',           badge: null, isLink: true, path: '/student/feedback' },
 ];
 
-lookupItems.splice(1, 0, {
-  label: 'Đăng ký môn học',
-  badge: 'MỚI',
-  icon: '📝',
-  path: '/student/registration',
-});
-
 const reportItems = [
   { label: 'Điểm danh (Attendance)',  path: '/student/schedule' },
   { label: 'Bảng điểm học tập',       path: null },
@@ -44,14 +40,35 @@ const regulationItems = [
   { label: 'Quy trình thi cử' },
 ];
 
+const REGISTRATION_TYPE_LABELS = {
+  all: 'Tất cả loại đơn',
+  change_class: 'Chuyển lớp',
+  drop: 'Hủy môn',
+  cross_student_exchange: 'Đổi chéo sinh viên',
+  overseas_study: 'Học môn học tại nước ngoài',
+  elective_course_registration: 'Đăng ký môn tự chọn',
+  health_insurance_registration: 'Đăng ký bảo hiểm y tế',
+};
+
 export default function StudentHome() {
   const [user, setUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedItems, setHighlightedItems] = useState(new Set());
   const [newsItems, setNewsItems] = useState([]); // State for announcements
   const [loadingNews, setLoadingNews] = useState(false);
+  const [procedureBanner, setProcedureBanner] = useState(null);
   const itemRefs = useRef({});
   const navigate = useNavigate();
+  const { socket } = useSocket();
+
+  const pushRegistrationBannerToBell = (payload = {}) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent(STUDENT_LOCAL_NOTIFICATION_EVENT, {
+        detail: payload,
+      }),
+    );
+  };
 
   // Helper functions
   const formatDate = (dateString) => {
@@ -76,6 +93,96 @@ export default function StudentHome() {
       setUser(JSON.parse(authUser));
     }
   }, []);
+
+  useEffect(() => {
+    const loadOpenRegistrationBanner = async () => {
+      try {
+        const response = await registrationPeriodService.getOpenRequestTypes();
+        const data = response?.data?.data;
+        if (!data?.isOpen || !Array.isArray(data?.periods) || data.periods.length === 0) {
+          setProcedureBanner(null);
+          return;
+        }
+
+        const latestPeriod = [...data.periods].sort(
+          (a, b) => new Date(b.createdAt || b.startDate || 0) - new Date(a.createdAt || a.startDate || 0),
+        )[0];
+
+        if (!latestPeriod) {
+          setProcedureBanner(null);
+          return;
+        }
+
+        const typeLabel = REGISTRATION_TYPE_LABELS[latestPeriod.requestType] || latestPeriod.requestType;
+        const periodId = latestPeriod._id || latestPeriod.id || 'unknown';
+        const bannerTitle = `Mới mở đợt đăng ký: ${typeLabel}`;
+        const bannerMessage = latestPeriod.periodName
+          ? `${latestPeriod.periodName}. Nhấn vào để gửi đơn ngay.`
+          : 'Một đợt đăng ký mới vừa mở. Nhấn vào để gửi đơn ngay.';
+
+        setProcedureBanner({
+          title: bannerTitle,
+          message: bannerMessage,
+        });
+
+        pushRegistrationBannerToBell({
+          id: `registration-period-${periodId}-banner-active`,
+          dedupeKey: `registration-period:${periodId}:status-updated:active`,
+          title: 'Thông báo đợt đăng ký',
+          message: bannerMessage,
+          type: 'registration-period',
+          typeLabel: 'Đăng ký',
+          period: latestPeriod,
+          sourceType: 'registration-period',
+          sourceId: periodId,
+          timestamp: latestPeriod.updatedAt || latestPeriod.createdAt || new Date().toISOString(),
+        });
+      } catch (error) {
+        setProcedureBanner(null);
+      }
+    };
+
+    loadOpenRegistrationBanner();
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNotification = (payload) => {
+      if (payload?.type !== 'registration-period') return;
+
+      const period = payload.period || payload.currentPeriod || null;
+      const periodId = period?._id || period?.id || payload.sourceId || 'unknown';
+      const nextTitle = payload.title || 'Mới mở đợt đăng ký';
+      const nextMessage = payload.message || 'Đợt đăng ký mới đã mở. Nhấn vào để gửi đơn ngay.';
+
+      setProcedureBanner({
+        title: nextTitle,
+        message: nextMessage,
+      });
+
+      pushRegistrationBannerToBell({
+        id: payload.id || `registration-period-${periodId}-${payload.action || 'updated'}-${payload.timestamp || Date.now()}`,
+        dedupeKey:
+          payload.dedupeKey ||
+          `registration-period:${periodId}:${payload.action || 'updated'}:${period?.status || 'unknown'}`,
+        title: 'Thông báo đợt đăng ký',
+        message: nextMessage,
+        type: 'registration-period',
+        typeLabel: 'Đăng ký',
+        period,
+        sourceType: 'registration-period',
+        sourceId: periodId,
+        timestamp: payload.timestamp || new Date().toISOString(),
+      });
+    };
+
+    socket.on('notification', handleNotification);
+
+    return () => {
+      socket.off('notification', handleNotification);
+    };
+  }, [socket]);
 
   // Fetch announcements (top 4 mới nhất)
   useEffect(() => {
@@ -301,6 +408,15 @@ export default function StudentHome() {
                 <span className="text-2xl">📝</span>
                 <h3 className="text-lg font-bold text-slate-900">Đơn từ & Thủ tục</h3>
               </div>
+              {procedureBanner && (
+                <button
+                  onClick={() => navigate('/student/applications')}
+                  className="mb-4 w-full rounded-lg border border-emerald-300 bg-gradient-to-r from-emerald-50 to-cyan-50 px-4 py-3 text-left transition hover:shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-emerald-800">🔔 {procedureBanner.title}</p>
+                  <p className="mt-1 text-xs text-emerald-700">{procedureBanner.message}</p>
+                </button>
+              )}
               <div className="space-y-2">
                 {procedures.map((item, index) => {
                   const itemId = `proc-${index}`;

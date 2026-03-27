@@ -1,0 +1,133 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="UC201RegisterCourseWishlist" name="UC201 Register Course Wishlist">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="&lt;b&gt;Class Diagram: UC201 Register Course Wishlist&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=top;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="520" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WishlistRouter" value="&lt;b&gt;WishlistRouter&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="240" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="WishlistRouter-route" value="+ctrl: WishlistController&#xa;+createWishlistDto: CreateWishlistDto&#xa;+wishlistSemesterQueryDto: WishlistSemesterQueryDto&#xa;--&#xa;POST /api/wishlist&#xa;GET /api/wishlist/my-wishlist&#xa;GET /api/wishlist/semester/:semesterId/breakdown" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="WishlistRouter">
+          <mxGeometry y="30" width="240" height="115" as="geometry" />
+        </mxCell>
+
+        <mxCell id="CreateWishlistDto" value="&lt;b&gt;CreateWishlistDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="260" width="230" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="CreateWishlistDto-fields" value="+subjectId: string (required)&#xa;+semesterId: string (required)&#xa;+reason: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="CreateWishlistDto">
+          <mxGeometry y="30" width="230" height="85" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WishlistSemesterQueryDto" value="&lt;b&gt;WishlistSemesterQueryDto&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="390" width="230" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="WishlistSemesterQueryDto-fields" value="+semesterId: string (required)&#xa;+subjectId: string (optional)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="WishlistSemesterQueryDto">
+          <mxGeometry y="30" width="230" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WishlistController" value="&lt;b&gt;WishlistController&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="80" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="WishlistController-methods" value="+createWishlist(req): Response&#xa;+getMyWishlist(req): Response&#xa;+getMySemesterBreakdown(req): Response" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="WishlistController">
+          <mxGeometry y="30" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="WishlistService" value="&lt;b&gt;WishlistService&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="670" y="80" width="280" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="WishlistService-methods" value="+createWishlist(userId,payload): Wishlist&#xa;+getMyWishlist(userId): Wishlist[]&#xa;+getSemesterBreakdownForStudent(userId,semesterId,subjectId): Breakdown&#xa;+assertMaxSubjectsPerSemester(...): void" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="WishlistService">
+          <mxGeometry y="30" width="280" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="CourseWishlist" value="&lt;b&gt;CourseWishlist&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="350" y="260" width="230" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="CourseWishlist-fields" value="-id: ObjectId&#xa;-student: ObjectId&#xa;-subject: ObjectId&#xa;-semester: ObjectId&#xa;-reason: string&#xa;-status: pending|approved|rejected&#xa;-reviewedBy: ObjectId&#xa;-reviewedAt: Date&#xa;-enrolledClassSection: ObjectId" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="CourseWishlist">
+          <mxGeometry y="30" width="230" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="Student" value="&lt;b&gt;Student&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="620" y="260" width="160" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Student-fields" value="-id: ObjectId&#xa;-userId: ObjectId&#xa;-studentCode: string&#xa;-academicStatus: string&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="Student">
+          <mxGeometry y="30" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="Subject" value="&lt;b&gt;Subject&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="810" y="260" width="160" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="Subject-fields" value="-id: ObjectId&#xa;-subjectCode: string&#xa;-subjectName: string" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="Subject">
+          <mxGeometry y="30" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="Semester" value="&lt;b&gt;Semester&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="260" width="180" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="Semester-fields" value="-id: ObjectId&#xa;-semesterNum: number&#xa;-academicYear: string&#xa;-isCurrent: boolean&#xa;-isActive: boolean" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="Semester">
+          <mxGeometry y="30" width="180" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ClassEnrollment" value="&lt;b&gt;ClassEnrollment&lt;/b&gt;" style="swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="670" y="420" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ClassEnrollment-fields" value="-student: ObjectId&#xa;-classSection: ObjectId&#xa;-status: enrolled|completed|dropped&#xa;-grade: number" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;fontSize=10;" vertex="1" parent="ClassEnrollment">
+          <mxGeometry y="30" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel1" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistRouter-route" target="WishlistController-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-controller" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="WishlistRouter" target="WishlistController">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-create-dto" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="WishlistRouter" target="CreateWishlistDto">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel-router-semester-dto" value="" style="endArrow=open;endFill=1;endSize=12;dashed=1;html=1;" edge="1" parent="1" source="WishlistRouter" target="WishlistSemesterQueryDto">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel2" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistController-methods" target="WishlistService-methods">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel3" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistService-methods" target="CourseWishlist-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel4" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistService-methods" target="Student-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel5" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistService-methods" target="Subject-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel6" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistService-methods" target="Semester-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rel7" value="" style="endArrow=open;endFill=1;endSize=12;html=1;" edge="1" parent="1" source="WishlistService-methods" target="ClassEnrollment-fields">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note1" value="&lt;i&gt;uses: AuthMiddleware + RBAC(student)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="190" width="210" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="note1-link" value="" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="WishlistRouter" target="note1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

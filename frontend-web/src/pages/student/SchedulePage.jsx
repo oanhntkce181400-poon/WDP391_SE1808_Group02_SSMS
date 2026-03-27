@@ -80,6 +80,61 @@ function formatDDMM(date) {
   return `${dd}/${mm}`;
 }
 
+function formatDayLabel(dayOfWeek) {
+  return DAYS.find((item) => Number(item.dayOfWeek) === Number(dayOfWeek))?.label || `Thu ${dayOfWeek}`;
+}
+
+function normalizeRosterRows(rows = []) {
+  return rows
+    .filter(Boolean)
+    .map((item, index) => ({
+      enrollmentId: item.enrollmentId || item.studentId || index,
+      studentCode: item.studentCode || item.code || item.studentId || '--',
+      fullName: item.fullName || item.name || 'Sinh vien',
+      email: item.email || '',
+      status: item.status || '',
+    }));
+}
+
+function buildFallbackClassDetails(schedule) {
+  if (!schedule) return null;
+
+  return {
+    classId: schedule.classId,
+    classCode: schedule.classCode || '',
+    className: schedule.subject?.subjectName || schedule.classCode || '',
+    subject: {
+      subjectCode: schedule.subject?.subjectCode || '',
+      subjectName: schedule.subject?.subjectName || '',
+    },
+    teacher: {
+      fullName: schedule.teacher || 'Chua cap nhat',
+    },
+    room: schedule.room || null,
+    timeslot: {
+      startTime: schedule.startTime || '',
+      endTime: schedule.endTime || '',
+    },
+    schedules: [
+      {
+        dayOfWeek: schedule.dayOfWeek,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        startPeriod: schedule.startTime || '',
+        endPeriod: schedule.endTime || '',
+        room: schedule.room || null,
+      },
+    ],
+    dayOfWeek: schedule.dayOfWeek,
+    attendanceStatus: schedule.attendanceStatus || '',
+    syllabus: '',
+    materials: [],
+    classmates: [],
+    currentEnrollment: null,
+    maxCapacity: null,
+  };
+}
+
 
 export default function SchedulePage() {
   const [weekStart, setWeekStart] = useState(() =>
@@ -92,11 +147,13 @@ export default function SchedulePage() {
 
   // State cho modal chi tiết lớp học
   const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [classDetails, setClassDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailTab, setDetailTab] = useState('overview');
   const [classRoster, setClassRoster] = useState([]);
   const [rosterError, setRosterError] = useState('');
+  const [detailError, setDetailError] = useState('');
 
   // State cho modal Waitlist
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
@@ -158,10 +215,32 @@ export default function SchedulePage() {
   const fetchClassDetails = async (classId) => {
     try {
       setLoadingDetails(true);
+      setDetailError('');
       const res = await classService.getClassDetails(classId);
-      setClassDetails(res.data.data);
+      const nextData = res?.data?.data || null;
+      setClassDetails((prev) => {
+        if (!nextData) return prev;
+        return {
+          ...prev,
+          ...nextData,
+          subject: { ...(prev?.subject || {}), ...(nextData.subject || {}) },
+          teacher: { ...(prev?.teacher || {}), ...(nextData.teacher || {}) },
+          room: nextData.room || prev?.room || null,
+          timeslot: nextData.timeslot || prev?.timeslot || null,
+          schedules: nextData.schedules?.length ? nextData.schedules : (prev?.schedules || []),
+          materials: Array.isArray(nextData.materials) ? nextData.materials : (prev?.materials || []),
+          classmates: Array.isArray(nextData.classmates) ? nextData.classmates : (prev?.classmates || []),
+        };
+      });
+      if (nextData?.classmates?.length) {
+        setClassRoster((prev) => (prev.length > 0 ? prev : normalizeRosterRows(nextData.classmates)));
+      }
     } catch (err) {
       console.error('Lỗi lấy chi tiết lớp:', err);
+      setDetailError(
+        err?.response?.data?.message ||
+          'Khong the tai thong tin chi tiet. Dang hien du lieu co san tu thoi khoa bieu.',
+      );
     } finally {
       setLoadingDetails(false);
     }
@@ -171,9 +250,9 @@ export default function SchedulePage() {
     try {
       setRosterError('');
       const res = await classService.getClassRoster(classId);
-      setClassRoster(res?.data?.data?.students || []);
+      setClassRoster(normalizeRosterRows(res?.data?.data?.students || []));
     } catch (err) {
-      setClassRoster([]);
+      setClassRoster((prev) => (prev.length > 0 ? prev : normalizeRosterRows(classDetails?.classmates || [])));
       setRosterError(err?.response?.data?.message || 'Không thể tải danh sách sinh viên');
     }
   };
@@ -183,8 +262,12 @@ export default function SchedulePage() {
     // API trả về classId, không phải classSection
     if (schedule?.classId) {
       setDetailTab('overview');
-      setClassRoster([]);
+      const fallbackDetails = buildFallbackClassDetails(schedule);
+      setSelectedSchedule(schedule);
+      setClassDetails(fallbackDetails);
+      setClassRoster(normalizeRosterRows(fallbackDetails?.classmates || []));
       setRosterError('');
+      setDetailError('');
       setSelectedClass(schedule.classId);
       fetchClassDetails(schedule.classId);
       fetchClassRoster(schedule.classId);
@@ -194,9 +277,11 @@ export default function SchedulePage() {
   // Đóng modal
   const closeClassDetails = () => {
     setSelectedClass(null);
+    setSelectedSchedule(null);
     setClassDetails(null);
     setClassRoster([]);
     setRosterError('');
+    setDetailError('');
     setDetailTab('overview');
   };
 
@@ -232,6 +317,9 @@ export default function SchedulePage() {
   const weekEndStr = toDateStr(
     new Date(new Date(weekStart).getTime() + 6 * 24 * 60 * 60 * 1000)
   );
+  const rosterRows = classRoster.length > 0
+    ? classRoster
+    : normalizeRosterRows(classDetails?.classmates || []);
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
@@ -508,7 +596,7 @@ export default function SchedulePage() {
 
             {/* Content */}
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-              {loadingDetails ? (
+              {loadingDetails && !classDetails ? (
                 <div className="text-center py-10 text-slate-400">
                   <div className="animate-spin w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full mx-auto mb-3"></div>
                   <p>Đang tải thông tin...</p>
@@ -534,14 +622,26 @@ export default function SchedulePage() {
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      Danh sách sinh viên ({classRoster.length})
+                      Danh sách sinh viên ({rosterRows.length})
                     </button>
                   </div>
+
+                  {loadingDetails && classDetails ? (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                      Dang tai them thong tin chi tiet...
+                    </div>
+                  ) : null}
+
+                  {detailError ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      {detailError}
+                    </div>
+                  ) : null}
 
                   {detailTab === 'overview' && (
                     <>
                   {/* Thông tin cơ bản */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <div className="bg-slate-50 rounded-xl p-4">
                       <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
                         <GraduationCap size={16} />
@@ -557,7 +657,27 @@ export default function SchedulePage() {
                         <span>Sĩ số</span>
                       </div>
                       <p className="font-semibold text-slate-800">
-                        {classDetails.currentEnrollment} / {classDetails.maxCapacity}
+                        {classDetails.currentEnrollment ?? rosterRows.length ?? '--'} / {classDetails.maxCapacity ?? '--'}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                        <MapPin size={16} />
+                        <span>Phòng học</span>
+                      </div>
+                      <p className="font-semibold text-slate-800">
+                        {classDetails.room?.roomCode || selectedSchedule?.room?.roomCode || 'Chưa có phòng'}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                        <Calendar size={16} />
+                        <span>Buổi đã chọn</span>
+                      </div>
+                      <p className="font-semibold text-slate-800">
+                        {selectedSchedule
+                          ? `${formatDayLabel(selectedSchedule.dayOfWeek)} • ${selectedSchedule.startTime || '--'} - ${selectedSchedule.endTime || '--'}`
+                          : 'Chưa có thông tin'}
                       </p>
                     </div>
                   </div>
@@ -643,9 +763,9 @@ export default function SchedulePage() {
                       <div className="bg-slate-50 rounded-xl p-4 max-h-80 overflow-y-auto">
                         {rosterError ? (
                           <p className="text-red-500 text-sm">{rosterError}</p>
-                        ) : classRoster.length > 0 ? (
+                        ) : rosterRows.length > 0 ? (
                           <div className="space-y-2">
-                            {classRoster.map((mate, idx) => (
+                            {rosterRows.map((mate, idx) => (
                               <div key={mate.enrollmentId || idx} className="flex items-center justify-between text-sm">
                                 <span className="text-slate-800">{mate.fullName}</span>
                                 <span className="text-slate-400 text-xs">{mate.studentCode}</span>

@@ -51,6 +51,13 @@ class FeedbackController {
     } catch (error) {
       console.error('Error submitting feedback:', error);
 
+      if (error.code === 'FEEDBACK_WINDOW_CLOSED') {
+        return res.status(403).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
@@ -65,6 +72,23 @@ class FeedbackController {
         });
       }
 
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error',
+      });
+    }
+  }
+
+  async getFeedbackAvailability(req, res) {
+    try {
+      const availability = await feedbackService.getFeedbackAvailability();
+
+      return res.json({
+        success: true,
+        data: availability,
+      });
+    } catch (error) {
+      console.error('Error fetching feedback availability:', error);
       return res.status(500).json({
         success: false,
         message: error.message || 'Internal server error',

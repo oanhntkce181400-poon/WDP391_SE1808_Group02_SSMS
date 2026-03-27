@@ -286,20 +286,68 @@ class GradesController {
    */
   async getMyGrades(req, res) {
     try {
-      const studentId = req.auth?.sub || req.auth?.id;
-      if (!studentId) {
+      // Get userId from JWT token
+      const userId = req.auth?.sub || req.auth?.id;
+      
+      console.log('📊 [Grades Controller] getMyGrades called');
+      console.log('   userId from JWT:', userId);
+      
+      if (!userId) {
         return res.status(401).json({
           success: false,
           message: 'Unauthorized'
         });
       }
 
-      const result = await gradesService.getMyGrades(studentId);
+      // Find Student record by userId
+      const Student = require('../models/student.model');
+      const student = await Student.findOne({ userId: userId }).lean();
+      
+      console.log('📊 [Grades Controller] Student lookup:');
+      console.log('   Found:', !!student);
+      if (student) {
+        console.log('   studentId:', student._id);
+      }
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy thông tin sinh viên'
+        });
+      }
+
+      const result = await gradesService.getMyGrades(student._id);
+      
+      console.log('📊 [Grades Controller] Result received:', {
+        semesterGroups: result.semesterGroups?.length || 0,
+        overallGPA: result.overallGPA
+      });
+
+      // Transform response to match frontend expectations
+      const semesters = result.semesterGroups.map(
+        (group) => `${group.semester}-${group.academicYear}`
+      );
+
+      const groupedBySemester = {};
+      result.semesterGroups.forEach((group) => {
+        const semesterKey = `${group.semester}-${group.academicYear}`;
+        groupedBySemester[semesterKey] = {
+          semester: group.semester,
+          academicYear: group.academicYear,
+          totalCredits: group.totalCredits,
+          semesterGPA: group.semesterGPA,
+          enrollments: group.enrollments
+        };
+      });
 
       return res.status(200).json({
         success: true,
-        message: result.message,
-        data: result
+        data: {
+          semesters,
+          groupedBySemester,
+          overallGPA: result.overallGPA,
+          totalGrades: result.semesterGroups.length
+        }
       });
     } catch (error) {
       console.error('[GradesController] getMyGrades error:', error);
@@ -438,6 +486,98 @@ class GradesController {
       return res.status(statusCode).json({
         success: false,
         message: error.message || 'Failed to submit final grades'
+      });
+    }
+  }
+  /**
+   * GET /api/grades/export
+   * Xuất báo cáo điểm dưới dạng Excel
+   * Query params: format=excel, semester, academicYear, classSection, major
+   */
+  async exportGrades(req, res) {
+    try {
+      const studentId = req.auth?.sub || req.auth?.id;
+      const { format = 'excel', semester, academicYear, classSection, major } = req.query;
+
+      if (!studentId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      // Only allow Excel format
+      if (format.toLowerCase() !== 'excel') {
+        return res.status(400).json({
+          success: false,
+          message: 'Hiện chỉ hỗ trợ xuất định dạng Excel'
+        });
+      }
+
+      const exportService = require('../services/export.service');
+      const Student = require('../models/student.model');
+
+      // Get student info
+      let student;
+      try {
+        student = await Student.findOne({ userId: studentId }).lean();
+      } catch (err) {
+        console.error('Error finding student:', err);
+      }
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy thông tin sinh viên'
+        });
+      }
+
+      // Get export data
+      const filters = {};
+      if (semester) filters.semester = semester;
+      if (academicYear) filters.academicYear = academicYear;
+      if (classSection) filters.classSection = classSection;
+      if (major) filters.major = major;
+
+      console.log('[ExportGrades] Filters:', filters);
+
+      const enrollments = await exportService.getExportData(studentId, filters);
+
+      if (!enrollments || enrollments.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không có dữ liệu điểm để xuất'
+        });
+      }
+
+      console.log(`[ExportGrades] Found ${enrollments.length} enrollments for Excel format`);
+
+      // Generate Excel file
+      let buffer, filename, contentType;
+
+      try {
+        buffer = await exportService.generateExcel(enrollments, {
+          fullName: student.fullName || 'Unknown',
+          studentCode: student.studentCode || 'N/A'
+        });
+        filename = `BaoCaoDiem_${student.studentCode}_${new Date().getTime()}.xlsx`;
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } catch (genErr) {
+        console.error(`[ExportGrades] Error generating Excel:`, genErr);
+        throw genErr;
+      }
+
+      // Send file
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buffer);
+
+    } catch (error) {
+      console.error('[GradesController] exportGrades error:', error);
+      const statusCode = error.statusCode || 500;
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Failed to export grades'
       });
     }
   }

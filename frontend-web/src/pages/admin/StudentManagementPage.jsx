@@ -603,7 +603,7 @@ export default function StudentManagementPage() {
                         Số điện thoại
                       </th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                        Mật khẩu
+                        Mật khẩu đăng nhập
                       </th>
                       <th
                         className="px-4 py-3 text-left text-sm font-semibold text-slate-700"
@@ -641,8 +641,8 @@ export default function StudentManagementPage() {
                           {student.phoneNumber || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-600">
-                          <span className="font-mono text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200" title="Mật khẩu mặc định = CCCD/CMND hoặc 123456">
-                            {student.identityNumber || '123456'}
+                          <span className="font-mono text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200" title="Mật khẩu đăng nhập ban đầu (6 số random)">
+                            {student.initialSystemPassword || '(chưa có)'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">
@@ -1027,8 +1027,8 @@ function StudentDetailModal({ student, onClose }) {
                 <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-sm font-semibold text-amber-800">🔑 Thông tin đăng nhập:</p>
                   <p className="text-sm text-amber-700 mt-1">• Email: <span className="font-mono">{student.email}</span></p>
-                  <p className="text-sm text-amber-700">• Mật khẩu: <span className="font-mono">{student.identityNumber || '123456'}</span></p>
-                  <p className="text-xs text-amber-600 mt-2">⚠️ Mật khẩu mặc định = CCCD/CMND (nếu có) hoặc "123456"</p>
+                  <p className="text-sm text-amber-700">• Mật khẩu: <span className="font-mono">{student.initialSystemPassword || '(chưa có)'}</span></p>
+                  <p className="text-xs text-amber-600 mt-2">⚠️ Mật khẩu ban đầu là 6 số random tại thời điểm tạo tài khoản.</p>
                 </div>
                 <InfoRow
                   label="Ngày sinh"

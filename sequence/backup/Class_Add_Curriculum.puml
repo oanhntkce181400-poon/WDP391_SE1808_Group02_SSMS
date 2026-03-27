@@ -1,0 +1,56 @@
+@startuml
+hide footbox
+title Class Diagram - Add Curriculum
+
+class CurriculumController {
+  +addCurriculum(dto: AddCurriculumDto, userId: int): Curriculum
+}
+
+class CurriculumService {
+  +addCurriculum(dto: AddCurriculumDto, userId: int): Curriculum
+  -verifySemesterExists(semesterId: int): Semester
+  -ensureUniqueCodeForSemester(code:string, semesterId:int): void
+}
+
+class CurriculumRepository {
+  +findByCodeAndSemester(code:string, semesterId:int): Curriculum?
+  +create(data: CurriculumCreatePayload): Curriculum
+}
+
+class AddCurriculumDto {
+  +name: string
+  +code: string
+  +semester_id: int
+  +description?: string
+}
+
+class Curriculum {
+  -curriculum_id: int
+  -semester_id: int
+  -name: string
+  -code: string
+  -description: string
+  -created_by: int
+  -created_at: Date
+}
+
+class Semester {
+  -semester_id: int
+  -code: string
+  -start_date: Date
+  -end_date: Date
+}
+
+CurriculumController --> CurriculumService : uses
+CurriculumService --> CurriculumRepository : uses
+CurriculumService --> Semester : reads
+CurriculumRepository --> Curriculum : persists
+
+note right of CurriculumService
+Checks:
+- semester exists
+- curriculum.code unique per semester (service + DB unique index)
+end note
+
+@enduml
+

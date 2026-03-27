@@ -1,5 +1,6 @@
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
+const Semester = require('../models/semester.model');
 const Subject = require('../models/subject.model');
 
 /**
@@ -11,6 +12,8 @@ const getAvailableClasses = async (criteria = {}) => {
     const {
       subject_id,
       semester,
+      semesterId,
+      academicYear,
       keyword,
       page = 1,
       limit = 20,
@@ -27,8 +30,24 @@ const getAvailableClasses = async (criteria = {}) => {
       query.subject = subject_id;
     }
 
-    if (semester) {
+    if (semesterId) {
+      const semesterDoc = await Semester.findById(semesterId)
+        .select('semesterNum academicYear')
+        .lean();
+
+      if (!semesterDoc) {
+        const error = new Error('Semester not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      query.semester = Number(semesterDoc.semesterNum);
+      query.academicYear = String(semesterDoc.academicYear || '').trim();
+    } else if (semester) {
       query.semester = parseInt(semester);
+      if (academicYear) {
+        query.academicYear = String(academicYear).trim();
+      }
     }
 
     // Keyword search: tìm theo classCode, className

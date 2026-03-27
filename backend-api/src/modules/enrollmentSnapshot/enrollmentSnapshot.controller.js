@@ -780,7 +780,7 @@ async function getRoster(req, res) {
         studentCode,
         fullName,
         email,
-        status: attendance?.status || "",
+        status: attendance?.status === 'Late' ? 'Present' : (attendance?.status || 'Absent'),
         note: attendance?.note || "",
         absenceWarning: attendance?.absenceWarning || false,
       };

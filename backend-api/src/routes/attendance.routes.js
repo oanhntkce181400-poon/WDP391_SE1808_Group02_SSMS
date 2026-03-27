@@ -8,35 +8,35 @@ const router = express.Router();
 router.get(
   '/classes',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.getClasses,
 );
 
 router.get(
   '/classes/:classId/valid-attendance-dates',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.getValidAttendanceDates,
 );
 
 router.get(
   '/classes/:classId/slots',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.getClassSlots,
 );
 
 router.get(
   '/classes/:classId/slots/:slotId',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.getSlotAttendance,
 );
 
 router.post(
   '/bulk',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.bulkSave,
 );
 
@@ -44,7 +44,7 @@ router.post(
 router.post(
   '/mark',
   authMiddleware,
-  rbacMiddleware(['lecturer', 'admin', 'staff']),
+  rbacMiddleware(['lecturer']),
   attendanceController.bulkSave,
 );
 

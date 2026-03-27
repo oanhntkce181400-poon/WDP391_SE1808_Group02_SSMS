@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import feedbackService from '../../services/feedbackService';
 
+const VIETNAM_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const CRITERIA = [
   ['teachingQuality', 'Chất lượng giảng dạy'],
   ['courseContent', 'Nội dung môn học'],
@@ -17,7 +18,44 @@ const emptyForm = () => ({
 
 const formatDate = (value) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('vi-VN');
+  return Number.isNaN(date.getTime())
+    ? 'N/A'
+    : date.toLocaleDateString('vi-VN', { timeZone: VIETNAM_TIMEZONE });
+};
+
+const formatDateTime = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'N/A'
+    : date.toLocaleString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: VIETNAM_TIMEZONE,
+      });
+};
+
+const formatDuration = (value) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 phút';
+  }
+
+  const totalSeconds = Math.floor(value / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} ngày`);
+  if (hours > 0) parts.push(`${hours} giờ`);
+  if (minutes > 0) parts.push(`${minutes} phút`);
+  if (days === 0 && hours === 0) parts.push(`${seconds} giây`);
+
+  return parts.slice(0, 3).join(' ');
 };
 
 const formatSentiment = (value) =>
@@ -112,6 +150,8 @@ export default function LecturerFeedbackPortal({
   const [saving, setSaving] = useState(false);
   const [moderatingId, setModeratingId] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [feedbackAvailability, setFeedbackAvailability] = useState(null);
+  const [now, setNow] = useState(() => new Date());
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) || null,
@@ -127,6 +167,19 @@ export default function LecturerFeedbackPortal({
     setMessage({ type: '', text: '' });
     try {
       if (isStudent) {
+        const availabilityRes = await feedbackService.getFeedbackAvailability();
+        const availabilityData = availabilityRes?.data?.data || null;
+        setFeedbackAvailability(availabilityData);
+
+        if (availabilityData?.isOpen !== true) {
+          setClasses([]);
+          setMyFeedbacks([]);
+          setSelectedClassId('');
+          setClassFeedbacks([]);
+          setClassStats(null);
+          return;
+        }
+
         const [classesRes, myRes] = await Promise.all([
           feedbackService.getMyClasses(),
           feedbackService.getMyFeedback(),
@@ -140,6 +193,7 @@ export default function LecturerFeedbackPortal({
         setMyFeedbacks(nextMine);
         setSelectedClassId(nextSelected);
       } else {
+        setFeedbackAvailability(null);
         const [classesRes, pendingRes] = await Promise.all([
           feedbackService.getClassList(),
           showModeration ? feedbackService.getPendingFeedback(50, 0) : Promise.resolve(null),
@@ -155,6 +209,9 @@ export default function LecturerFeedbackPortal({
       }
     } catch (error) {
       console.error('Error loading feedback base data:', error);
+      if (isStudent) {
+        setFeedbackAvailability(null);
+      }
       setMessage({
         type: 'error',
         text: error?.response?.data?.message || 'Không thể tải dữ liệu đánh giá.',
@@ -191,6 +248,18 @@ export default function LecturerFeedbackPortal({
   useEffect(() => {
     loadBaseData();
   }, [isStudent, showModeration]);
+
+  useEffect(() => {
+    if (!isStudent) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [isStudent]);
 
   useEffect(() => {
     setForm(
@@ -283,6 +352,88 @@ export default function LecturerFeedbackPortal({
     }
   }
 
+  const liveFeedbackAvailability = useMemo(() => {
+    if (!feedbackAvailability) {
+      return null;
+    }
+
+    const currentMs = now.getTime();
+    const startMs = feedbackAvailability.startsAt
+      ? new Date(feedbackAvailability.startsAt).getTime()
+      : null;
+    const endMs = feedbackAvailability.endsAt
+      ? new Date(feedbackAvailability.endsAt).getTime()
+      : null;
+    const autoRuntimeStates = new Set(['open', 'scheduled']);
+
+    if (
+      autoRuntimeStates.has(feedbackAvailability.state) &&
+      Number.isFinite(startMs) &&
+      Number.isFinite(endMs)
+    ) {
+      if (currentMs < startMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: false,
+          state: 'scheduled',
+          message: `Đợt đánh giá giảng viên sẽ mở từ ${formatDateTime(
+            feedbackAvailability.startsAt,
+          )}.`,
+        };
+      }
+
+      if (currentMs >= startMs && currentMs <= endMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: true,
+          state: 'open',
+          message: `Đợt đánh giá giảng viên đang mở đến ${formatDateTime(
+            feedbackAvailability.endsAt,
+          )}.`,
+        };
+      }
+
+      if (currentMs > endMs) {
+        return {
+          ...feedbackAvailability,
+          isOpen: false,
+          state: 'closed',
+          message: `Đợt đánh giá giảng viên đã kết thúc vào ${formatDateTime(
+            feedbackAvailability.endsAt,
+          )}.`,
+        };
+      }
+    }
+
+    return feedbackAvailability;
+  }, [feedbackAvailability, now]);
+
+  const availabilityCountdown = useMemo(() => {
+    if (!liveFeedbackAvailability) {
+      return null;
+    }
+
+    const target = liveFeedbackAvailability.isOpen
+      ? liveFeedbackAvailability.endsAt
+      : liveFeedbackAvailability.startsAt;
+
+    if (!target) {
+      return null;
+    }
+
+    const remainingMs = new Date(target).getTime() - now.getTime();
+    if (remainingMs <= 0) {
+      return null;
+    }
+
+    return liveFeedbackAvailability.isOpen
+      ? `Còn lại ${formatDuration(remainingMs)} để sinh viên gửi feedback.`
+      : `Còn ${formatDuration(remainingMs)} nữa sẽ mở feedback.`;
+  }, [liveFeedbackAvailability, now]);
+
+  const isFeedbackClosed =
+    isStudent && liveFeedbackAvailability && !liveFeedbackAvailability.isOpen;
+
   if (loading && !classes.length) {
     return (
       <div className="rounded-3xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
@@ -342,6 +493,46 @@ export default function LecturerFeedbackPortal({
           }`}
         >
           {message.text}
+        </div>
+      ) : null}
+
+      {isStudent && liveFeedbackAvailability ? (
+        <div
+          className={`rounded-3xl border p-5 shadow-sm ${
+            liveFeedbackAvailability.isOpen
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em]">
+                {liveFeedbackAvailability.isOpen ? 'Đợt feedback đang mở' : 'Đợt feedback chưa mở'}
+              </p>
+              <h2 className="mt-2 text-xl font-bold">{liveFeedbackAvailability.message}</h2>
+              <p className="mt-2 text-sm leading-6">
+                {liveFeedbackAvailability.templateName
+                  ? `Mẫu đang áp dụng: ${liveFeedbackAvailability.templateName}.`
+                  : 'Quản trị viên chưa cấu hình mẫu feedback khả dụng cho sinh viên.'}
+              </p>
+              <p className="mt-2 text-sm font-medium">
+                Bây giờ: {formatDateTime(now)}
+              </p>
+              {availabilityCountdown ? (
+                <p className="mt-1 text-sm font-medium text-sky-700">{availabilityCountdown}</p>
+              ) : null}
+            </div>
+            <div className="rounded-2xl bg-white/70 px-4 py-3 text-sm shadow-sm ring-1 ring-black/5">
+              <p>
+                <span className="font-semibold">Bắt đầu:</span>{' '}
+                {liveFeedbackAvailability.startsAtLabel || 'Chưa thiết lập'}
+              </p>
+              <p className="mt-1">
+                <span className="font-semibold">Kết thúc:</span>{' '}
+                {liveFeedbackAvailability.endsAtLabel || 'Chưa thiết lập'}
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -413,7 +604,24 @@ export default function LecturerFeedbackPortal({
         </div>
       ) : null}
 
-      {isStudent && tab === 'mine' ? (
+      {isFeedbackClosed ? (
+        <div className="rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
+          <div className="mx-auto max-w-2xl">
+            <h3 className="text-2xl font-bold text-slate-900">
+              Hiện chưa đến thời gian đánh giá giảng viên
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              Khi quản trị viên mở đợt feedback, hệ thống sẽ hiển thị danh sách lớp và form đánh
+              giá ngay tại trang này.
+            </p>
+            {liveFeedbackAvailability?.startsAt ? (
+              <p className="mt-4 text-sm font-medium text-sky-700">
+                Thời gian dự kiến: {formatDateTime(liveFeedbackAvailability.startsAt)}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : isStudent && tab === 'mine' ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {myFeedbacks.length ? (
             myFeedbacks.map((item) => (

@@ -28,6 +28,14 @@ router.get(
   feedbackController.getMyFeedback.bind(feedbackController)
 );
 
+// Get current lecturer-feedback availability for student portal
+router.get(
+  '/availability',
+  authMiddleware,
+  rbacMiddleware(['student', 'admin', 'staff']),
+  feedbackController.getFeedbackAvailability.bind(feedbackController)
+);
+
 // Authenticated approved-feedback feed for student/admin/staff viewers.
 router.get(
   '/class/:classSectionId',

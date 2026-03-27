@@ -14,12 +14,35 @@ import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, setItem } from '../../utils/storage';
 
-export default function LoginScreen() {
+export default function LoginScreen({ onForgotPassword }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  function normalizeRole(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function normalizeEmailInput(value) {
+    return String(value || '')
+      .replace(/\s+/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
+  function buildPasswordCandidates(value) {
+    const raw = String(value ?? '');
+    const noZeroWidth = raw.replace(/[\u200B-\u200D\uFEFF]/g, '');
+    const trimmed = noZeroWidth.trim();
+
+    const candidates = [raw, noZeroWidth, trimmed]
+      .filter((item) => item.length > 0)
+      .filter((item, index, arr) => arr.indexOf(item) === index);
+
+    return candidates;
+  }
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
@@ -31,10 +54,34 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      const response = await authService.login({
-        email: email.trim(),
-        password,
-      });
+      const normalizedEmail = normalizeEmailInput(email);
+      const passwordCandidates = buildPasswordCandidates(password);
+
+      let response = null;
+      let lastError = null;
+
+      for (const candidatePassword of passwordCandidates) {
+        try {
+          // Try progressively sanitized password variants for copy/paste artifacts.
+          // eslint-disable-next-line no-await-in-loop
+          response = await authService.login({
+            email: normalizedEmail,
+            password: candidatePassword,
+          });
+          lastError = null;
+          break;
+        } catch (attemptError) {
+          lastError = attemptError;
+          const backendMessage = String(attemptError?.response?.data?.message || '').toLowerCase();
+          if (!backendMessage.includes('invalid credentials')) {
+            throw attemptError;
+          }
+        }
+      }
+
+      if (!response) {
+        throw lastError || new Error('Invalid credentials.');
+      }
 
       const user = response?.data?.user || null;
       const accessToken = response?.data?.tokens?.accessToken || null;
@@ -42,6 +89,11 @@ export default function LoginScreen() {
 
       if (!accessToken) {
         setError('Đăng nhập chưa nhận được access token từ server');
+        return;
+      }
+
+      if (normalizeRole(user?.role) === 'student' && !user?.student) {
+        setError('Tài khoản sinh viên chưa được liên kết hồ sơ. Vui lòng liên hệ quản trị viên.');
         return;
       }
 
@@ -99,6 +151,13 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Đăng nhập</Text>
           )}
         </Pressable>
+        <Pressable
+          onPress={onForgotPassword}
+          style={styles.linkButton}
+          disabled={loading || typeof onForgotPassword !== 'function'}
+        >
+          <Text style={styles.linkText}>Forgot password?</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -151,5 +210,14 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#ffffff',
     fontWeight: '700',
+  },
+  linkButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  linkText: {
+    color: '#2563eb',
+    fontWeight: '600',
   },
 });

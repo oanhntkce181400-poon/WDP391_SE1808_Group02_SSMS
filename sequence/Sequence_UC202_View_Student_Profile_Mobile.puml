@@ -1,0 +1,121 @@
+@startuml UC202 View Student Profile Mobile
+title UC202 - View Student Profile (Mobile)
+
+hide footbox
+
+actor Student as "Student"
+participant ProfileScreen as "ProfileScreen (Mobile)"
+participant UseProfileHook as "useProfile Hook"
+participant APIClient as "API Client (Mobile)"
+participant StudentRouter as "StudentRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant StudentController as "StudentController"
+participant StudentService as "StudentService"
+participant GPAService as "GPAService"
+participant StudentModel as "StudentModel"
+participant GPARepo as "ClassEnrollment/Grade Repository"
+database DB as "Database"
+
+activate Student
+Student -> ProfileScreen: (1) open Profile screen
+activate ProfileScreen
+ProfileScreen -> UseProfileHook: (2) mount + fetchProfile(false)
+activate UseProfileHook
+UseProfileHook -> APIClient: (2.1) GET /api/students/me
+activate APIClient
+APIClient -> StudentRouter: (2.2) forward request
+activate StudentRouter
+
+StudentRouter -> AuthMiddleware: (2.3) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> StudentRouter: (2.3.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  StudentRouter --> APIClient: (2.3.1.1) return 401
+  APIClient --> UseProfileHook: (2.3.1.2) throw auth error
+  UseProfileHook --> ProfileScreen: (2.3.1.3) set error state
+  ProfileScreen --> Student: (2.3.1.4) show login required
+else valid token
+  AuthMiddleware --> StudentRouter: (2.3.2) token valid
+  deactivate AuthMiddleware
+
+  StudentRouter -> RBACMiddleware: (2.4) check role = student
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> StudentRouter: (2.4.1) 403 Forbidden
+    
+    StudentRouter --> APIClient: (2.4.1.1) return 403
+    APIClient --> UseProfileHook: (2.4.1.2) throw permission error
+    UseProfileHook --> ProfileScreen: (2.4.1.3) set permission error
+    ProfileScreen --> Student: (2.4.1.4) show access denied
+  else authorized
+    RBACMiddleware --> StudentRouter: (2.4.2) role accepted
+    deactivate RBACMiddleware
+
+    StudentRouter -> StudentController: (2.5) getMyProfile(req)
+    activate StudentController
+    StudentController -> StudentService: (2.5.1) getStudentByUserId(userId)
+    activate StudentService
+    StudentService -> StudentModel: (2.5.2) findOne({userId})
+    activate StudentModel
+    StudentModel -> DB: (2.5.2.1) db query student
+    activate DB
+    DB --> StudentModel: (2.5.2.2) student row/null
+    deactivate DB
+    StudentModel --> StudentService: (2.5.2.3) return student/null
+    deactivate StudentModel
+    StudentService --> StudentController: (2.5.3) return student/null
+    deactivate StudentService
+
+    StudentController --> StudentController: (2.5.4) check student exists
+    activate StudentController
+    deactivate StudentController
+    alt student not found
+      StudentController --> StudentRouter: (2.5.4.1) return 404 not found
+      StudentRouter --> APIClient: (2.5.4.2) error response
+      APIClient --> UseProfileHook: (2.5.4.3) set error
+      UseProfileHook --> ProfileScreen: (2.5.4.4) show retry state
+      ProfileScreen --> Student: (2.5.4.5) display failure message
+    else student found
+      StudentController -> GPAService: (2.5.5) calculateStudentGPA(studentId)
+      activate GPAService
+      GPAService -> GPARepo: (2.5.5.1) aggregate grade components
+      activate GPARepo
+      GPARepo -> DB: (2.5.5.2) db query enrollments/grades
+      activate DB
+      DB --> GPARepo: (2.5.5.3) grade rows
+      deactivate DB
+      GPARepo --> GPAService: (2.5.5.4) GPA result
+      deactivate GPARepo
+      GPAService --> StudentController: (2.5.5.5) gpa + totalCredits
+      deactivate GPAService
+
+      StudentController --> StudentRouter: (2.5.6) 200 OK profile payload
+      deactivate StudentController
+      StudentRouter --> APIClient: (2.5.7) success response
+      APIClient --> UseProfileHook: (2.5.8) normalize profile data
+      UseProfileHook --> ProfileScreen: (2.5.9) render profile sections
+      ProfileScreen --> Student: (2.5.10) show profile data
+    end
+  end
+end
+
+
+
+
+
+== PULL TO REFRESH ==
+
+Student -> ProfileScreen: (10) pull to refresh
+ProfileScreen -> UseProfileHook: (10.1) fetchProfile(true)
+UseProfileHook -> APIClient: (10.2) GET /api/students/me
+APIClient -> StudentRouter: (10.3) repeat flow 2.2..2.5.10
+StudentRouter --> APIClient: (10.4) refreshed response
+APIClient --> UseProfileHook: (10.5) update latest state
+UseProfileHook --> ProfileScreen: (10.6) re-render UI
+ProfileScreen --> Student: (10.7) show latest profile
+
+deactivate ProfileScreen
+
+@enduml

@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import useProfile from '../../hooks/useProfile';
+import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, removeItem } from '../../utils/storage';
 
@@ -55,7 +56,9 @@ function InfoRow({ label, value }) {
 
 export default function ProfileScreen() {
   const user = useAuthStore((state) => state.user);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
   const logout = useAuthStore((state) => state.logout);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const role = normalizeRole(user?.role);
   const isStudent = role === 'student';
   const { profile, loading, refreshing, error, refresh, reload } = useProfile({
@@ -63,8 +66,24 @@ export default function ProfileScreen() {
   });
 
   async function handleLogout() {
-    logout();
-    await removeItem(AUTH_STORAGE_KEY);
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    const tokenToRevoke = refreshToken;
+
+    try {
+      // Local logout first so user always exits app immediately.
+      logout();
+      await removeItem(AUTH_STORAGE_KEY);
+
+      if (tokenToRevoke) {
+        await authService.logout(tokenToRevoke);
+      }
+    } catch (err) {
+      // Server revoke is best-effort only.
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
 
   if (isStudent && loading && !profile) {

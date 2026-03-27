@@ -67,6 +67,7 @@ export default function Header({ mode = "admin" }) {
         { label: "Trang chủ", href: "/lecturer" },
         { label: "Lịch giảng dạy", href: "/lecturer/teaching-schedule" },
         { label: "Điểm danh", href: "/lecturer/attendance" },
+        { label: "Thống kê lớp", href: "/lecturer/class-performance" },
         { label: "Lịch thi", href: "/lecturer/exams" },
         { label: "Lịch nghỉ năm", href: "/lecturer/academic-calendar" },
         { label: "Hồ sơ cá nhân", href: "/lecturer/profile" },
@@ -79,7 +80,6 @@ export default function Header({ mode = "admin" }) {
         { label: "Người dùng", href: "/admin/users" },
         { label: "Sinh viên", href: "/admin/students" },
         { label: "Đơn từ", href: "/admin/requests" },
-        { label: "Điểm danh", href: "/admin/attendance" },
       ];
 
   const moreNav = isTeacherMode
@@ -102,8 +102,12 @@ export default function Header({ mode = "admin" }) {
         { label: "Tự động xếp lớp", href: "/admin/auto-enrollment" },
         { label: "Nhóm lớp học phần", href: "/admin/recent-classes" },
         { label: "Lịch giảng dạy", href: "/admin/teaching-schedule" },
-        { label: "Đánh giá", href: "/admin/feedback-management" },
+        { label: "Thống kê lớp", href: "/admin/class-performance" },
         { label: "Thống kê đánh giá", href: "/admin/feedback-statistics" },
+        { label: "Phân bố điểm", href: "/admin/grade-distribution-report" },
+        { label: "Danh sách xuất sắc", href: "/admin/honor-roll-students" },
+        { label: "Đánh giá", href: "/admin/feedback-management" },
+        { label: "Mẫu email", href: "/admin/email-templates" },
         { label: null, href: null },
         { label: "Cài đặt", href: "/admin/settings" },
         { label: "Nhật ký lỗi", href: "/admin/error-logs" },

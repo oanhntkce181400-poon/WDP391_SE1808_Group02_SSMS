@@ -6,7 +6,7 @@ import enrollmentSnapshotService from '../../services/enrollmentSnapshotService'
 
 const STATUS_STYLES = {
   Present: 'bg-green-100 text-green-800 border border-green-200',
-  Late:    'bg-yellow-100 text-yellow-800 border border-yellow-200',
+  Late:    'bg-green-100 text-green-800 border border-green-200',
   Absent:  'bg-red-100 text-red-800 border border-red-200',
 };
 
@@ -22,10 +22,7 @@ const STATUS_BUTTON_STYLES = {
     active: 'bg-green-500 text-white border-green-600 shadow-sm',
     idle:   'bg-white text-green-700 border-green-300 hover:bg-green-50',
   },
-  Late:    {
-    active: 'bg-yellow-400 text-white border-yellow-500 shadow-sm',
-    idle:   'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50',
-  },
+
   Absent:  {
     active: 'bg-red-500 text-white border-red-600 shadow-sm',
     idle:   'bg-white text-red-700 border-red-300 hover:bg-red-50',
@@ -349,7 +346,6 @@ export default function AttendancePage() {
       slotDate: newSlotDate,
       totalStudents: 0,
       absentCount: 0,
-      lateCount: 0,
       presentCount: 0,
       isNew: true, // Đánh dấu buổi mới chưa lưu
     };
@@ -405,7 +401,7 @@ export default function AttendancePage() {
   async function handleSave() {
     if (students.length === 0) return;
 
-    const invalid = students.filter((s) => !['Present', 'Late', 'Absent'].includes(s.status));
+    const invalid = students.filter((s) => !['Present', 'Absent'].includes(s.status));
     if (invalid.length > 0) {
       setValidationMsg(`Vui long chon trang thai diem danh cho tat ca sinh vien (${invalid.length} ban chua chon).`);
       return;
@@ -781,7 +777,7 @@ function ClassCard({ cls, onSelect }) {
       <div className="my-3 border-t border-slate-100" />
 
       {/* Dòng 3: Thống kê nhanh */}
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center">
         {/* Sĩ số */}
         <div>
           <p className="text-xl font-bold text-slate-800">{cls.enrollmentCount}</p>
@@ -799,33 +795,7 @@ function ClassCard({ cls, onSelect }) {
           <p className="text-xs text-slate-400">Buổi dạy</p>
         </div>
 
-        {/* Tỷ lệ chuyên cần */}
-        <div>
-          <p className={`text-xl font-bold ${rateColor}`}>
-            {cls.taughtSlots === 0 ? '—' : `${cls.avgAttendanceRate}%`}
-          </p>
-          <p className="text-xs text-slate-400">Chuyên cần</p>
-        </div>
       </div>
-
-      {/* Thanh tiến trình chuyên cần */}
-      {cls.taughtSlots > 0 && (
-        <div className="mt-3">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full transition-all ${
-                cls.avgAttendanceRate >= 80
-                  ? 'bg-green-500'
-                  : cls.avgAttendanceRate >= 60
-                    ? 'bg-yellow-400'
-                    : 'bg-red-500'
-              }`}
-              style={{ width: `${cls.avgAttendanceRate}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Nút xem điểm danh */}
       <button className="mt-3 w-full rounded-md bg-indigo-50 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors">
         📋 Xem Điểm danh
@@ -988,11 +958,10 @@ function SlotListView({
       {!isLoading && slots.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {/* Header */}
-          <div className="grid grid-cols-6 gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="grid grid-cols-5 gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <div className="col-span-2">Ngày học</div>
             <div className="text-center">Sĩ số</div>
             <div className="text-center text-green-700">Có mặt</div>
-            <div className="text-center text-yellow-700">Đi trễ</div>
             <div className="text-center text-red-700">Vắng</div>
           </div>
 
@@ -1000,7 +969,7 @@ function SlotListView({
             <div
               key={slot.slotId}
               onClick={() => onSelectSlot(slot)}
-              className="grid cursor-pointer grid-cols-6 gap-2 border-b border-slate-100 px-4 py-3 text-sm transition-colors last:border-0 hover:bg-indigo-50"
+              className="grid cursor-pointer grid-cols-5 gap-2 border-b border-slate-100 px-4 py-3 text-sm transition-colors last:border-0 hover:bg-indigo-50"
             >
               <div className="col-span-2">
                 <p className="font-medium text-slate-800">
@@ -1019,9 +988,6 @@ function SlotListView({
               </div>
               <div className="flex items-center justify-center font-medium text-green-700">
                 {slot.presentCount}
-              </div>
-              <div className="flex items-center justify-center font-medium text-yellow-600">
-                {slot.lateCount}
               </div>
               <div className="flex items-center justify-center font-medium text-red-600">
                 {slot.absentCount}
@@ -1051,7 +1017,7 @@ function AttendanceTableView({
 }) {
   // Thống kê nhanh (tính real-time từ state)
   const presentCount = students.filter((s) => s.status === 'Present').length;
-  const lateCount    = students.filter((s) => s.status === 'Late').length;
+  const lateCount    = 0;
   const absentCount  = students.filter((s) => s.status === 'Absent').length;
 
   const slotDateLabel = selectedSlot.slotDate
@@ -1089,13 +1055,10 @@ function AttendanceTableView({
         {/* Thống kê nhanh */}
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-            ✓ {presentCount} có mặt
-          </span>
-          <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-            ⏰ {lateCount} trễ
+            Present: {presentCount}
           </span>
           <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-            ✗ {absentCount} vắng
+            Absent: {absentCount}
           </span>
         </div>
       </div>
@@ -1215,7 +1178,7 @@ function StudentRow({ student, index, onStatusChange, onNoteChange }) {
 
       {/* Nút chọn trạng thái */}
       <div className="col-span-3 flex items-center justify-center gap-1">
-        {['Present', 'Late', 'Absent'].map((status) => {
+        {['Present', 'Absent'].map((status) => {
           const isActive = student.status === status;
           const styles = STATUS_BUTTON_STYLES[status];
           return (
@@ -1432,3 +1395,4 @@ function SnapshotClassListView({
     </div>
   );
 }
+

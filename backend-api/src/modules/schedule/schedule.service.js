@@ -1,8 +1,48 @@
 const repo = require("./schedule.repository");
 const ClassSection = require("../../models/classSection.model");
 const Room = require("../../models/room.model");
-const Teacher = require("../../models/teacher.model");
+const Schedule = require("../../models/schedule.model");
+const Timeslot = require("../../models/timeslot.model");
 const generator = require("./scheduleGenerator.service");
+
+async function syncClassSectionScheduleSnapshot(classSectionId) {
+  const activeSchedules = await Schedule.find({
+    classSection: classSectionId,
+    status: "active",
+  })
+    .sort({ dayOfWeek: 1, startPeriod: 1, endPeriod: 1, startDate: 1, _id: 1 })
+    .lean();
+
+  if (activeSchedules.length === 0) {
+    await ClassSection.findByIdAndUpdate(classSectionId, {
+      $unset: {
+        room: "",
+        timeslot: "",
+        dayOfWeek: "",
+        startDate: "",
+        endDate: "",
+      },
+    });
+    return;
+  }
+
+  const primarySchedule = activeSchedules[0];
+  const matchedTimeslot = await Timeslot.findOne({
+    startPeriod: primarySchedule.startPeriod,
+    endPeriod: primarySchedule.endPeriod,
+    status: "active",
+  })
+    .select("_id")
+    .lean();
+
+  await ClassSection.findByIdAndUpdate(classSectionId, {
+    room: primarySchedule.room || null,
+    timeslot: matchedTimeslot?._id || null,
+    dayOfWeek: primarySchedule.dayOfWeek,
+    startDate: primarySchedule.startDate,
+    endDate: primarySchedule.endDate,
+  });
+}
 
 // ─── Assign Schedule to Class ────────────────────────────────
 
@@ -97,7 +137,9 @@ async function assignScheduleToClass(classSectionId, scheduleData) {
     await ClassSection.findByIdAndUpdate(classSectionId, { status: "scheduled" });
   }
 
-  return schedule;
+  await syncClassSectionScheduleSnapshot(classSectionId);
+
+  return await repo.findScheduleById(schedule._id);
 }
 
 /**
@@ -185,7 +227,9 @@ async function updateSchedule(scheduleId, scheduleData) {
   if (startDate) updates.startDate = new Date(startDate);
   if (endDate) updates.endDate = new Date(endDate);
 
-  return await repo.updateScheduleById(scheduleId, updates);
+  const updatedSchedule = await repo.updateScheduleById(scheduleId, updates);
+  await syncClassSectionScheduleSnapshot(classSectionId);
+  return await repo.findScheduleById(updatedSchedule._id);
 }
 
 /**
@@ -205,7 +249,9 @@ async function deleteSchedule(scheduleId) {
     throw new Error("Lớp học phần đã bị khóa, không thể xóa lịch");
   }
 
-  return await repo.deleteScheduleById(scheduleId);
+  const deletedSchedule = await repo.deleteScheduleById(scheduleId);
+  await syncClassSectionScheduleSnapshot(classSectionId);
+  return deletedSchedule;
 }
 
 /**

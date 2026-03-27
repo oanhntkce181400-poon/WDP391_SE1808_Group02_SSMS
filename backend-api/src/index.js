@@ -73,6 +73,7 @@ app.use("/api/curriculums", require("./routes/curriculum.routes"));
 app.use("/api/users", require("./routes/user.routes"));
 app.use("/api/settings", require("./routes/settings.routes"));
 app.use("/api/auth", authRoutes);
+app.use("/api/push-tokens", require("./routes/pushToken.routes"));
 app.use("/api/actors", actorsRoutes);
 app.use("/api/rooms", require("./routes/room.routes"));
 app.use("/api/timeslots", require("./routes/timeslot.routes"));
@@ -100,6 +101,7 @@ app.use("/api/dashboard", require("./routes/dashboard.routes"));
 // Lecturer feedback flow used by the mobile app (submit/view/update).
 app.use("/api/feedbacks", require("./routes/feedback.routes"));
 app.use("/api/feedback-templates", require("./routes/feedbackTemplate.routes"));
+app.use("/api/email-templates", require("./routes/emailTemplate.routes"));
 app.use(
   "/api/feedback-submissions",
   require("./routes/feedbackSubmission.routes"),
@@ -120,6 +122,8 @@ app.use("/api/wallet", require("./routes/wallet.routes"));
 app.use("/api/payment", require("./routes/payment.routes"));
 app.use("/api/students", require("./routes/student.routes"));
 app.use("/api/grades", require("./routes/grades.routes"));
+app.use("/api/reports", require("./routes/reports.routes"));
+app.use("/api/honors", require("./routes/honors.routes"));
 app.use("/api/grades", require("./routes/transcript.routes"));
 app.use(
   "/api/registration-periods",
@@ -160,11 +164,8 @@ async function startServer() {
     initializeCronJobs();
 
     return new Promise((resolve, reject) => {
-      const server = httpServer.listen(PORT, () => {
-        const io = initializeSocketIO(httpServer);
-        app.set("io", io);
-
-        console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      const server = httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
         console.log("✅ Socket server is attached");
         console.log("✅ Server startup complete");
         resolve();

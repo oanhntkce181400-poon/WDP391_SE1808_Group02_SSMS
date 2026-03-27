@@ -1,0 +1,143 @@
+@startuml UC204 View Student Exam Schedules
+title UC204 - View Student Exam Schedules
+
+hide footbox
+
+actor Student as "Student"
+participant ExamPage as "Screen (ExamSchedulePage)"
+participant APIClient as "API Client (Frontend/Mobile)"
+participant StudentExamRouter as "StudentExamRouter"
+participant AuthMiddleware as "AuthMiddleware"
+participant RBACMiddleware as "RBACMiddleware"
+participant ExamController as "ExamController"
+participant WishlistService as "WishlistService"
+participant ClassEnrollmentModel as "ClassEnrollmentModel"
+participant ExamModel as "ExamModel"
+participant StudentExamModel as "StudentExamModel"
+participant StudentModel as "StudentModel"
+database DB as "Database"
+
+activate Student
+Student -> ExamPage: (1) open exam schedule screen
+activate ExamPage
+
+ExamPage -> APIClient: (2) GET /api/student-exams/my-exams
+activate APIClient
+APIClient -> StudentExamRouter: (2.1) forward request
+activate StudentExamRouter
+
+StudentExamRouter -> AuthMiddleware: (2.2) verify JWT token
+activate AuthMiddleware
+alt invalid token
+  AuthMiddleware --> StudentExamRouter: (2.2.1) 401 Unauthorized
+  deactivate AuthMiddleware
+  StudentExamRouter --> APIClient: (2.2.1.1) return 401
+  APIClient --> ExamPage: (2.2.1.2) show auth error
+  ExamPage --> Student: (2.2.1.3) stop flow
+else valid token
+  AuthMiddleware --> StudentExamRouter: (2.2.2) token valid
+  deactivate AuthMiddleware
+
+  StudentExamRouter -> RBACMiddleware: (2.3) check role = student
+  activate RBACMiddleware
+  alt forbidden role
+    RBACMiddleware --> StudentExamRouter: (2.3.1) 403 Forbidden
+    StudentExamRouter --> APIClient: (2.3.1.1) return 403
+    APIClient --> ExamPage: (2.3.1.2) show permission error
+    ExamPage --> Student: (2.3.1.3) stop flow
+  else authorized
+    RBACMiddleware --> StudentExamRouter: (2.3.2) role accepted
+    deactivate RBACMiddleware
+
+    StudentExamRouter -> ExamController: (2.4) getMyExams(req)
+    activate ExamController
+    ExamController -> StudentModel: (2.4.1) resolveStudentFromUserId(userId)
+    activate StudentModel
+    StudentModel -> DB: (2.4.1.1) db query student
+    activate DB
+    DB --> StudentModel: (2.4.1.2) student row/null
+    deactivate DB
+    StudentModel --> ExamController: (2.4.1.3) return student/null
+    deactivate StudentModel
+    ExamController --> ExamController: (2.4.1.4) check student exists
+    activate ExamController
+    deactivate ExamController
+    alt student not found
+      ExamController --> StudentExamRouter: (2.4.1.4.1) return 404 student not found
+      StudentExamRouter --> APIClient: (2.4.1.4.2) error response
+      APIClient --> ExamPage: (2.4.1.4.3) show not found message
+      ExamPage --> Student: (2.4.1.4.4) no data
+    else student found
+      ExamController -> WishlistService: (2.4.2) reconcileApprovedWishlistEnrollmentsForStudent(studentId)
+      activate WishlistService
+      WishlistService -> DB: (2.4.2.1) db reconciliation queries
+      activate DB
+      DB --> WishlistService: (2.4.2.2) reconciliation result/error
+      deactivate DB
+      WishlistService --> ExamController: (2.4.2.3) continue even if warning
+      deactivate WishlistService
+
+      ExamController -> ClassEnrollmentModel: (2.4.3) find enrolled/completed classes
+      activate ClassEnrollmentModel
+      ClassEnrollmentModel -> DB: (2.4.3.1) db query enrollments
+      activate DB
+      DB --> ClassEnrollmentModel: (2.4.3.2) enrollment rows
+      deactivate DB
+      ClassEnrollmentModel --> ExamController: (2.4.3.3) return enrollments
+      deactivate ClassEnrollmentModel
+      ExamController --> ExamController: (2.4.3.4) check enrollment count
+      activate ExamController
+      deactivate ExamController
+      alt no enrolled classes
+        ExamController --> StudentExamRouter: (2.4.3.4.1) 200 OK data=[]
+        StudentExamRouter --> APIClient: (2.4.3.4.2) success empty response
+        APIClient --> ExamPage: (2.4.3.4.3) render empty-state UI
+        ExamPage --> Student: (2.4.3.4.4) show "no exams"
+      else enrolled classes exist
+        ExamController -> ExamModel: (2.4.4) find eligible exams (class + subject-level)
+        activate ExamModel
+        ExamModel -> DB: (2.4.4.1) db query exams + populate
+        activate DB
+        DB --> ExamModel: (2.4.4.2) exam rows
+        deactivate DB
+        ExamModel --> ExamController: (2.4.4.3) return exams
+        deactivate ExamModel
+        ExamController --> ExamController: (2.4.4.4) check exam list
+        activate ExamController
+        deactivate ExamController
+         alt no eligible exams
+          ExamController --> StudentExamRouter: (   
+        alt no eligible exams
+          ExamController --> StudentExamRouter: (2.4.4.4.1) 200 OK data=[]
+          StudentExamRouter --> APIClient: (2.4.4.4.2) success empty response
+          APIClient --> ExamPage: (2.4.4.4.3) render empty calendar
+          ExamPage --> Student: (2.4.4.4.4) no exam events
+        else exams found
+          ExamController -> StudentExamModel: (2.4.5) find student exam registrations
+          activate StudentExamModel
+          StudentExamModel -> DB: (2.4.5.1) db query studentExam rows
+          activate DB
+          DB --> StudentExamModel: (2.4.5.2) registration rows
+          deactivate DB
+          StudentExamModel --> ExamController: (2.4.5.3) return registration rows
+          deactivate StudentExamModel
+
+          ExamController --> ExamController: (2.4.6) merge exam + registration (sbd, seatNumber)
+          activate ExamController
+          deactivate ExamController
+          ExamController --> StudentExamRouter: (2.4.7) 200 OK examsWithSBD
+          deactivate ExamController
+          StudentExamRouter --> APIClient: (2.4.8) success response
+          APIClient --> ExamPage: (2.4.9) render calendar + details modal
+          ExamPage --> Student: (2.4.10) view exam schedule
+        end
+      end
+    end
+  end
+end
+
+deactivate StudentExamRouter
+deactivate APIClient
+deactivate ExamPage
+
+@enduml

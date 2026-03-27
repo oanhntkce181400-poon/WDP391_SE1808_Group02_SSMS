@@ -7,8 +7,9 @@ const ClassSection = require('../models/classSection.model');
 const Teacher = require('../models/teacher.model');
 const User = require('../models/user.model');
 const GradeChangeLog = require('../models/gradeChangeLog.model');
-const mailer = require('../external/mailer');
 const scoreComponentService = require('./scoreComponent.service');
+const emailTemplateService = require('./emailTemplate.service');
+const notificationEmailService = require('./notificationEmail.service');
 
 class GradesService {
   /**
@@ -288,56 +289,19 @@ class GradesService {
   }
 
   buildGradePublishedEmail({ studentName, classCode, subjectName, grade, teacherName, scoreComponents = {} }) {
-    const { gk, ck, pt, bt, qt, ptAverage } = scoreComponents;
-    
-    let componentHTML = '';
-    
-    // Display score components if available
-    if (gk !== undefined && gk !== null) {
-      componentHTML += `<li>Giua ky (GK - 30%): <strong>${gk}</strong></li>`;
-    }
-    if (ck !== undefined && ck !== null) {
-      componentHTML += `<li>Cuoi ky (CK - 50%): <strong>${ck}</strong></li>`;
-    }
-    if (pt !== undefined && pt !== null) {
-      componentHTML += `<li>Kiem tra thuong xuyen (PT - 20%): <strong>${pt}</strong></li>`;
-      if (ptAverage !== undefined && ptAverage !== null) {
-        componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Trung binh PT: ${ptAverage}</li>`;
-      }
-    }
-    if (bt !== undefined && bt !== null) {
-      componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Bai tap (BT): ${bt}</li>`;
-    }
-    if (qt !== undefined && qt !== null) {
-      componentHTML += `<li style="margin-left: 24px; font-size: 13px; color: #64748b;">Qua trinh (QT): ${qt}</li>`;
-    }
-    
-    return `
-      <div style="font-family: Inter, sans-serif; background: #f8fafc; padding: 24px;">
-        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);">
-          <div style="background: #1A237E; padding: 18px 24px; color: #ffffff;">
-            <h2 style="margin: 0; font-size: 18px;">SSMS - Cong bo diem chinh thuc</h2>
-          </div>
-          <div style="padding: 24px; color: #334155;">
-            <p style="margin-top: 0;">Xin chao <strong>${studentName || 'Sinh vien'}</strong>,</p>
-            <p>Diem chinh thuc cua ban da duoc cong bo:</p>
-            <ul style="line-height: 1.8; padding-left: 18px;">
-              <li>Lop: <strong>${classCode || 'N/A'}</strong></li>
-              <li>Mon hoc: <strong>${subjectName || 'N/A'}</strong></li>
-              <li>Giang vien: <strong>${teacherName || 'N/A'}</strong></li>
-            </ul>
-            <div style="margin-top: 12px; padding: 12px; background: #f1f5f9; border-left: 4px solid #0ea5e9; border-radius: 4px;">
-              <p style="margin: 0 0 8px 0; font-weight: 600; color: #0c4a6e;">Chi tiet thanh phan diem:</p>
-              <ul style="line-height: 1.8; padding-left: 18px; margin: 0;">
-                ${componentHTML}
-                <li style="margin-top: 8px; border-top: 1px solid #cbd5e1; padding-top: 8px;">Diem tong ket: <strong style="color: #0ea5e9; font-size: 16px;">${grade ?? 'N/A'}</strong></li>
-              </ul>
-            </div>
-            <p style="margin-bottom: 0; margin-top: 12px; color: #64748b; font-size: 13px;">Vui long dang nhap he thong de xem chi tiet ca nhan va lich su diem.</p>
-          </div>
-        </div>
-      </div>
-    `;
+    return emailTemplateService.renderSystemTemplateFallback('GRADE_PUBLISHED', {
+      studentName: studentName || 'Sinh vien',
+      classCode: classCode || 'N/A',
+      subjectName: subjectName || 'N/A',
+      grade: grade ?? 'N/A',
+      teacherName: teacherName || 'N/A',
+      gk: scoreComponents.gk ?? '',
+      ck: scoreComponents.ck ?? '',
+      pt: scoreComponents.pt ?? '',
+      bt: scoreComponents.bt ?? '',
+      qt: scoreComponents.qt ?? '',
+      ptAverage: scoreComponents.ptAverage ?? '',
+    }).html;
   }
 
   /**
@@ -882,104 +846,199 @@ class GradesService {
    */
   async getMyGrades(studentId) {
     try {
+      console.log('📊 [Grades Service] getMyGrades starting, studentId:', studentId);
+      
+      const ClassSection = require('../models/classSection.model');
+      const Subject = require('../models/subject.model');
+
+      // Get enrollments with classSection populated
       const enrollments = await ClassEnrollment.find({
-        student: studentId,
-        status: { $in: ['enrolled', 'completed', 'active'] }
+        student: studentId
       })
-        .populate({
-          path: 'classSection',
-          populate: {
-            path: 'subject',
-            select: 'subjectCode subjectName credits gradingWeights'
-          }
-        })
-        .populate('student', 'studentCode fullName')
+        .populate('classSection')
         .sort({ createdAt: -1 })
         .lean();
 
+      console.log('📊 [Grades Service] Found enrollments:', enrollments?.length || 0);
+      if (enrollments && enrollments.length > 0) {
+        console.log('   First enrollment:', {
+          _id: enrollments[0]._id,
+          classSection: enrollments[0].classSection?._id,
+          grade: enrollments[0].grade
+        });
+      }
+
       if (!enrollments || enrollments.length === 0) {
+        console.log('⚠️ [Grades Service] No enrollments found, returning empty');
         return {
-          success: true,
-          message: 'Chưa có dữ liệu điểm',
-          enrollments: [],
-          groupedBySemester: {},
-          semesters: []
+          semesterGroups: [],
+          overallGPA: 0.00
         };
       }
 
-      // Group by semester
+      // Get all subject IDs from classSection
+      const subjectIds = [];
+      const classData = {};
+      
+      for (const enrollment of enrollments) {
+        if (enrollment.classSection?.subject) {
+          subjectIds.push(enrollment.classSection.subject);
+          if (!classData[enrollment.classSection._id]) {
+            classData[enrollment.classSection._id] = {
+              semester: enrollment.classSection.semester,
+              academicYear: enrollment.classSection.academicYear,
+              subjectId: enrollment.classSection.subject
+            };
+          }
+        }
+      }
+
+      console.log('📊 [Grades Service] Subject IDs to fetch:', subjectIds.length);
+
+      // Fetch all subjects
+      const subjects = await Subject.find({ _id: { $in: subjectIds } }).lean().exec();
+      
+      console.log('📊 [Grades Service] Fetched subjects:', subjects?.length || 0);
+
+      const subjectMap = {};
+      subjects.forEach(s => {
+        subjectMap[s._id.toString()] = s;
+      });
+
+      // Group by semester and calculate GPA
       const groupedBySemester = {};
-      const semesterSet = new Set();
+      let totalWeightedPoints = 0;
+      let totalCredits = 0;
 
       for (const enrollment of enrollments) {
         if (!enrollment.classSection) continue;
 
-        const semesterNumber = enrollment.classSection.semester;
-        const academicYear = enrollment.classSection.academicYear;
-        const semesterKey = `${semesterNumber}-${academicYear}`;
-        const semesterDisplay = `Kỳ ${semesterNumber} - ${academicYear}`;
+        const cs = classData[enrollment.classSection._id];
+        if (!cs) continue;
 
-        semesterSet.add(semesterKey);
+        const { semester, academicYear, subjectId } = cs;
+        const subject = subjectMap[subjectId.toString()];
+        
+        if (!semester || !academicYear || !subject) {
+          console.log('⚠️ [Grades Service] Skipping enrollment - missing data:', {
+            semester,
+            academicYear,
+            hasSubject: !!subject
+          });
+          continue;
+        }
+
+        const semesterKey = `${semester}-${academicYear}`;
+        const credits = subject?.credits || 0;
+
+        // Recalculate grade from component scores (same as gpaService)
+        // Formula: GK 30% + CK 50% + PT 20%
+        let calculatedGrade = enrollment.grade || 0;
+
+        if (enrollment.midtermScore !== null && enrollment.finalScore !== null) {
+          let grade = (enrollment.midtermScore * 0.3) + (enrollment.finalScore * 0.5);
+          
+          // Priority 1: Use PT (ProgressTest) scores
+          if (enrollment.ptScores && Array.isArray(enrollment.ptScores) && enrollment.ptScores.length > 0) {
+            const ptAverage = enrollment.ptScores.reduce((sum, pt) => sum + pt.score, 0) / enrollment.ptScores.length;
+            grade += ptAverage * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 2: Use QT (Continuous) scores if available
+          else if (enrollment.continuousScore !== null) {
+            grade += enrollment.continuousScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 3: If neither PT nor QT available, use BT (Assignment) if available
+          else if (enrollment.assignmentScore !== null) {
+            grade += enrollment.assignmentScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 4: If none available, scale up GK + CK to 10-point scale
+          else {
+            calculatedGrade = parseFloat((grade / 0.8).toFixed(2));
+          }
+        }
 
         if (!groupedBySemester[semesterKey]) {
           groupedBySemester[semesterKey] = {
-            semesterNumber,
-            academicYear,
-            semesterDisplay,
+            semester: semester,
+            academicYear: academicYear,
+            totalCredits: 0,
+            totalWeightedPoints: 0,
             enrollments: []
           };
         }
 
         groupedBySemester[semesterKey].enrollments.push({
           _id: enrollment._id,
-          subjectCode: enrollment.classSection.subject?.subjectCode || 'N/A',
-          subjectName: enrollment.classSection.subject?.subjectName || 'N/A',
-          credits: enrollment.classSection.subject?.credits || 0,
-          grade: enrollment.grade,
+          subjectCode: subject?.subjectCode || 'N/A',
+          subjectName: subject?.subjectName || 'N/A',
+          credits: credits,
+          grade: calculatedGrade,
+          subject: {
+            subjectCode: subject?.subjectCode || 'N/A',
+            subjectName: subject?.subjectName || 'N/A',
+            credits: credits
+          },
           midtermScore: enrollment.midtermScore,
           finalScore: enrollment.finalScore,
           assignmentScore: enrollment.assignmentScore,
           continuousScore: enrollment.continuousScore,
           ptScores: enrollment.ptScores || [],
-          classCode: enrollment.classSection.classCode,
-          gradingWeights: enrollment.classSection.subject?.gradingWeights || {
-            GK: 30,
-            CK: 50,
-            BT: 20,
-            PT: 0,
-            QT: 0
-          },
-          gradeComponents: {
-            GK: enrollment.midtermScore,
-            CK: enrollment.finalScore,
-            BT: enrollment.assignmentScore,
-            'Quá trình': enrollment.continuousScore
-          }
+          status: enrollment.status,
+          gradeLabel: this.getGradeLabel(calculatedGrade)
         });
+
+        groupedBySemester[semesterKey].totalCredits += credits;
+        groupedBySemester[semesterKey].totalWeightedPoints += calculatedGrade * credits;
+        totalCredits += credits;
+        totalWeightedPoints += calculatedGrade * credits;
       }
 
-      // Sort semesters (most recent first)
-      const semesters = Array.from(semesterSet)
-        .sort((a, b) => {
-          const [semA, yearA] = a.split('-');
-          const [semB, yearB] = b.split('-');
-          const yearDiff = yearB.localeCompare(yearA);
-          if (yearDiff !== 0) return yearDiff;
-          return parseInt(semB) - parseInt(semA);
-        });
+      // Calculate semester GPA and prepare response
+      const semesterGroups = Object.values(groupedBySemester).map(group => ({
+        semester: group.semester,
+        academicYear: group.academicYear,
+        totalCredits: group.totalCredits,
+        totalWeightedPoints: group.totalWeightedPoints,
+        semesterGPA: group.totalCredits > 0 
+          ? (group.totalWeightedPoints / group.totalCredits).toFixed(2)
+          : '0.00',
+        enrollments: group.enrollments
+      }));
+
+      // Calculate overall GPA
+      const overallGPA = totalCredits > 0 
+        ? (totalWeightedPoints / totalCredits).toFixed(2)
+        : '0.00';
+
+      console.log('📊 [Grades Service] Final result:', {
+        semesterGroupsCount: semesterGroups.length,
+        overallGPA,
+        totalCredits,
+        totalWeightedPoints
+      });
 
       return {
-        success: true,
-        message: 'Lấy dữ liệu điểm thành công',
-        enrollments,
-        groupedBySemester,
-        semesters,
-        totalGrades: enrollments.length
+        semesterGroups,
+        overallGPA
       };
     } catch (error) {
-      console.error('Error getting my grades:', error);
+      console.error('❌ [Grades Service] Error getting my grades:', error);
       throw new Error(`Lỗi lấy dữ liệu điểm: ${error.message}`);
     }
+  }
+
+  getGradeLabel(grade) {
+    const g = Number(grade);
+    if (Number.isNaN(g)) return 'N/A';
+    if (g >= 8.5) return 'Xuất sắc';
+    if (g >= 8.0) return 'Giỏi';
+    if (g >= 7.0) return 'Khá';
+    if (g >= 5.5) return 'Trung bình';
+    if (g >= 4.0) return 'Yếu';
+    return 'Kém';
   }
 
   /**
@@ -1307,7 +1366,7 @@ class GradesService {
           
           await enrollment.save();
 
-          const studentName = enrollment.student?.fullName || 'Sinh vien';
+          const studentName = enrollment.student?.fullName || 'Sinh viên';
           const studentEmail = enrollment.student?.email;
           const studentUserId = enrollment.student?.userId;
           const classCode = enrollment.classSection?.classCode || 'N/A';
@@ -1316,8 +1375,8 @@ class GradesService {
           if (studentUserId && io && typeof io.sendToUser === 'function') {
             io.sendToUser(String(studentUserId), 'grade-finalized', {
               type: 'grade-finalized',
-              title: 'Cong bo diem chinh thuc',
-              message: `${subjectName} (${classCode}) da duoc cong bo diem`,
+              title: 'Công bố điểm chính thức',
+              message: `${subjectName} (${classCode}) đã được công bố điểm`,
               classSectionId,
               grade: finalGrade,
               studentCode: enrollment.student?.studentCode,
@@ -1327,27 +1386,30 @@ class GradesService {
           }
 
           if (studentEmail) {
-            const emailHtml = this.buildGradePublishedEmail({
+            const templateVariables = {
               studentName,
               classCode,
               subjectName,
               grade: finalGrade,
-              teacherName: requester.role || 'Giang vien',
+              teacherName: requester.fullName || requester.role || 'Giang vien',
               scoreComponents: {
                 gk,
                 ck,
                 pt: enrollment.ptScores && enrollment.ptScores.length > 0 ? enrollment.ptScores.length + ' lan' : null,
                 bt,
                 qt,
-                ptAverage
-              }
-            });
+                ptAverage,
+              },
+            };
 
-            const emailResult = await mailer.sendMail({
-              to: studentEmail,
-              subject: `[SSMS] Cong bo diem ${subjectName}`,
-              text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}): GK=${gk}, CK=${ck}, Diem tong ket=${finalGrade}.`,
-              html: emailHtml,
+            const emailResult = await notificationEmailService.sendGradePublishedEmail({
+              studentEmail,
+              variables: templateVariables,
+              fallback: () => ({
+                subject: `[SSMS] Cong bo diem ${subjectName}`,
+                text: `Diem chinh thuc cua ban cho ${subjectName} (${classCode}) la ${finalGrade}.`,
+                html: this.buildGradePublishedEmail(templateVariables),
+              }),
             });
 
             if (emailResult?.sent) {

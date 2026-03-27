@@ -4,28 +4,39 @@ const feedbackSubmissionController = require('../controllers/feedbackSubmission.
 const authMiddleware = require('../middlewares/auth.middleware');
 const rbacMiddleware = require('../middlewares/rbac.middleware');
 
-// Sinh viên gửi đánh giá
 router.post(
   '/',
   authMiddleware,
   rbacMiddleware(['student']),
-  feedbackSubmissionController.submitFeedback.bind(feedbackSubmissionController)
+  feedbackSubmissionController.submitFeedback.bind(feedbackSubmissionController),
 );
 
-// Lấy thống kê đánh giá cho một template
 router.get(
-  '/:templateId/statistics',
+  '/me',
+  authMiddleware,
+  rbacMiddleware(['student']),
+  feedbackSubmissionController.getMySubmissions.bind(feedbackSubmissionController),
+);
+
+router.get(
+  '/',
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
-  feedbackSubmissionController.getStatistics.bind(feedbackSubmissionController)
+  feedbackSubmissionController.listSubmissions.bind(feedbackSubmissionController),
 );
 
-// Lấy tóm tắt đánh giá của giáo viên
 router.get(
   '/teacher/:teacherId/summary',
   authMiddleware,
   rbacMiddleware(['admin', 'staff']),
-  feedbackSubmissionController.getTeacherFeedbackSummary.bind(feedbackSubmissionController)
+  feedbackSubmissionController.getTeacherFeedbackSummary.bind(feedbackSubmissionController),
+);
+
+router.get(
+  '/:templateId/statistics',
+  authMiddleware,
+  rbacMiddleware(['admin', 'staff']),
+  feedbackSubmissionController.getStatistics.bind(feedbackSubmissionController),
 );
 
 module.exports = router;

@@ -302,9 +302,6 @@ export default function AttendanceReportPage() {
           {filteredItems.map((item) => {
             const classId = String(item.classSection?._id || '');
             const stats = item.attendanceStats || {};
-            const attendance = Number(stats.participationRateToDate || 0);
-            const absence = Number(stats.absenceRateToDate || 0);
-            const score = Number(stats.attendanceScore || (100 - absence));
             return (
               <button
                 key={classId}
@@ -323,7 +320,7 @@ export default function AttendanceReportPage() {
                     <div className="text-sm text-slate-600">
                       Bắt đầu: {formatDate(item.classSection?.startDate)} · Kết thúc: {formatDate(item.classSection?.endDate)}
                     </div>
-                    <div className={`mt-2 text-2xl font-extrabold ${getAttendanceTextColor(attendance)}`}>
+                    <div className="mt-2 text-2xl font-extrabold text-slate-900">
                       Đã tham gia: {stats.attendedSessions || 0}/{stats.sessionsElapsed || 0}
                     </div>
                     {(stats.unmarkedSessions || 0) > 0 ? (
@@ -333,10 +330,10 @@ export default function AttendanceReportPage() {
                     ) : null}
                   </div>
 
-                  <div className="min-w-[100px] text-center">
-                    <DeductionRing absenceRate={absence} />
-                    <div className={`mt-2 text-sm font-semibold ${getRateTextColor(absence)}`}>
-                      Vắng: {absence}% · Điểm: {Math.round(score)}
+                  <div className="min-w-[150px] rounded-xl bg-slate-50 px-4 py-3 text-left">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attendance</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900">
+                      Vang: {stats.absentSessions || 0} buoi
                     </div>
                   </div>
                 </div>

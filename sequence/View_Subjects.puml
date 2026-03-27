@@ -1,0 +1,57 @@
+@startuml
+title View Subjects - Retrieve and Display Subjects List
+
+hide footbox
+
+actor PrimaryActor as "Admin / Academic Staff"
+participant Screen as "Screen"
+participant APIClient as "API Client (Frontend)"
+participant SubjectRouter as "SubjectRouter"
+participant Validation as "ValidationMiddleware"
+participant SubjectController as "SubjectController"
+participant SubjectService as "SubjectService"
+participant SubjectModel as "SubjectModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open subject list
+activate Screen
+
+Screen -> APIClient: (2) GET /api/subjects
+activate APIClient
+APIClient -> SubjectRouter: (3) forward GET
+activate SubjectRouter
+
+SubjectRouter -> Validation: (4) validate query
+activate Validation
+Validation --> SubjectRouter: (4.1) return validated query
+deactivate Validation
+
+SubjectRouter -> SubjectController: (5) request data
+activate SubjectController
+SubjectController -> SubjectService: (6) findSubjects()
+activate SubjectService
+
+SubjectService -> SubjectModel: (7) find()
+activate SubjectModel
+SubjectModel -> DB: (8) db query
+activate DB
+DB --> SubjectModel: (9) return rows
+deactivate DB
+SubjectModel --> SubjectService: (10) return rows
+deactivate SubjectModel
+
+SubjectService -> SubjectService: (10.1) paginate & format
+SubjectService --> SubjectController: (11) return page
+deactivate SubjectService
+
+SubjectController --> SubjectRouter: (12) 200 OK
+deactivate SubjectController
+SubjectRouter --> APIClient: (13) 200 OK
+APIClient --> Screen: (14) render subjects
+Screen --> PrimaryActor: (15) display results
+deactivate SubjectRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml

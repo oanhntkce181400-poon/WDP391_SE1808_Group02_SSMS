@@ -1,22 +1,21 @@
-@startuml
+﻿@startuml
 title UC03 - Create Student - Register New Student with User Account
 
-hide footbox
-
-actor PrimaryActor as "Admin / Staff"
-participant Screen as "Screen"
-participant APIClient as "API Client (Frontend)"
-participant StudentRouter as "StudentRouter"
-participant AuthMiddleware as "AuthMiddleware"
-participant ValidationMiddleware as "ValidationMiddleware"
-participant StudentController as "StudentController"
-participant StudentService as "StudentService"
-participant UserModel as "UserModel"
-participant StudentModel as "StudentModel"
-participant WalletModel as "WalletModel"
-participant MajorModel as "MajorModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Staff" as PrimaryActor
+participant "Screen" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "StudentRouter" as StudentRouter <<control>>
+participant "AuthMiddleware" as AuthMiddleware <<control>>
+participant "ValidationMiddleware" as ValidationMiddleware <<control>>
+participant "StudentController" as StudentController <<control>>
+participant "StudentService" as StudentService <<control>>
+participant "UserModel" as UserModel <<entity>>
+participant "StudentModel" as StudentModel <<entity>>
+participant "WalletModel" as WalletModel <<entity>>
+participant "MajorModel" as MajorModel <<entity>>
+database "Database" as DB
 activate PrimaryActor
 PrimaryActor -> Screen: (1) click "Add Student" button
 activate Screen

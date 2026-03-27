@@ -1,0 +1,51 @@
+@startuml
+hide footbox
+title Search Task - Search tasks on Home page
+
+actor PrimaryActor as "Student / Parent User"
+participant Screen as "Screen (Home)"
+participant API as "API"
+participant Router as "Router"
+participant Validation as "Validation"
+participant Controller as "Controller"
+participant Service as "Service"
+participant Model as "Model"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) Enter search query and press Search
+activate Screen
+Screen -> API: (2) call GET
+activate API
+API -> Router: (3) forward GET
+activate Router
+Router -> Validation: (4) validate query params (q required)
+activate Validation
+Validation --> Router: (4.1) ValidationResult { valid: true, errors: [] }
+deactivate Validation
+Router -> Controller: (5) searchTasks({ q, page, limit, userId })
+activate Controller
+Controller -> Service: (6) searchTasks(q, { page, limit, userId })
+activate Service
+Service -> Model: (7) textSearch({ q, userId, filters })
+activate Model
+Model -> DB: (8) db query
+activate DB
+DB --> Model: (9) rows[], totalCount
+deactivate DB
+Model --> Service: (10) search results
+deactivate Model
+Service -> Service: (11) apply ranking/sorting
+Service --> Controller: (12) paginated results { tasks[], total }
+deactivate Service
+Controller --> Router: (13) 200 OK { tasks[], total }
+deactivate Controller
+Router --> API: (14) 200 OK { tasks[], total }
+API --> Screen: (15) render search results
+Screen --> PrimaryActor: (16) display search results
+deactivate Router
+deactivate API
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+

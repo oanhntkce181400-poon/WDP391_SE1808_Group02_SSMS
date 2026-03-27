@@ -1,18 +1,58 @@
 const ClassSection = require('../../models/classSection.model');
 require('../../models/subject.model');
 require('../../models/room.model');
-require('../../models/timeslot.model');
+const Timeslot = require('../../models/timeslot.model');
 const Schedule = require('../../models/schedule.model');
 const Semester = require('../../models/semester.model');
 const Teacher = require('../../models/teacher.model');
 const User = require('../../models/user.model');
+const { filterClassesBySemesterContext } = require('../../utils/semesterMatch.util');
 
-// Tìm đúng hồ sơ Teacher để lấy lịch dạy.
-// Hệ thống cho phép resolve theo nhiều đường:
-// - teacherId: admin/staff chọn đích danh một giảng viên
-// - teacherCode: dùng mã GV nếu FE/API truyền kiểu search
-// - userId hiện tại: giảng viên tự xem lịch của mình
-// - fallback theo email account hiện tại
+function buildTimeslotKey(startPeriod, endPeriod) {
+  const normalizedStart = Number(startPeriod);
+  const normalizedEnd = Number(endPeriod);
+  if (!Number.isFinite(normalizedStart) || !Number.isFinite(normalizedEnd)) {
+    return null;
+  }
+  return `${normalizedStart}:${normalizedEnd}`;
+}
+
+function buildSyntheticTimeslot(schedule, fallbackTimeslot = null) {
+  const startPeriod = Number(schedule?.startPeriod || fallbackTimeslot?.startPeriod || 0);
+  const endPeriod = Number(schedule?.endPeriod || fallbackTimeslot?.endPeriod || startPeriod || 0);
+  if (!Number.isFinite(startPeriod) || !Number.isFinite(endPeriod) || startPeriod <= 0 || endPeriod <= 0) {
+    return fallbackTimeslot || null;
+  }
+
+  return {
+    _id: `period:${startPeriod}:${endPeriod}`,
+    groupName:
+      fallbackTimeslot?.groupName ||
+      (startPeriod === endPeriod ? `Tiet ${startPeriod}` : `Tiet ${startPeriod}-${endPeriod}`),
+    startPeriod,
+    endPeriod,
+    startTime: fallbackTimeslot?.startTime || '',
+    endTime: fallbackTimeslot?.endTime || '',
+  };
+}
+
+function resolveScheduleTimeslot(schedule, fallbackTimeslot, timeslotByPeriodKey) {
+  const periodKey = buildTimeslotKey(schedule?.startPeriod, schedule?.endPeriod);
+  if (periodKey && timeslotByPeriodKey.has(periodKey)) {
+    return timeslotByPeriodKey.get(periodKey);
+  }
+
+  if (
+    fallbackTimeslot &&
+    Number(fallbackTimeslot.startPeriod) === Number(schedule?.startPeriod) &&
+    Number(fallbackTimeslot.endPeriod) === Number(schedule?.endPeriod)
+  ) {
+    return fallbackTimeslot;
+  }
+
+  return buildSyntheticTimeslot(schedule, fallbackTimeslot);
+}
+
 async function resolveTeacher({ userId, teacherId, teacherCode }) {
   if (teacherId) {
     const teacher = await Teacher.findOne({ _id: teacherId, isActive: true }).lean();
@@ -37,113 +77,200 @@ async function resolveTeacher({ userId, teacherId, teacherCode }) {
   return teacher;
 }
 
-// Hàm lõi của feature "View Lecturer Timetable".
-// Luồng xử lý:
-// 1. resolve giảng viên cần xem lịch
-// 2. xác định học kỳ cần lọc (semesterId / semester + academicYear / current semester)
-// 3. lấy toàn bộ class section của giảng viên trong học kỳ đó
-// 4. lấy thêm schedule của từng class
-// 5. trả về payload để FE render:
-//    - teacher info
-//    - semester info
-//    - classes + room + timeslot + schedules
+async function resolveSemesterContext(filters, includeAllClasses) {
+  let semesterNum = filters.semester ? Number(filters.semester) : null;
+  let academicYear = String(filters.academicYear || '').trim() || null;
+  let semesterDoc = null;
+
+  if (filters.semesterId) {
+    semesterDoc = await Semester.findById(filters.semesterId).lean();
+    if (!semesterDoc) {
+      const error = new Error('Semester not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      semesterDoc,
+      semesterNum: semesterDoc.semesterNum,
+      academicYear: semesterDoc.academicYear,
+    };
+  }
+
+  if (semesterNum != null && academicYear) {
+    semesterDoc = await Semester.findOne({
+      semesterNum,
+      academicYear,
+      isActive: true,
+    })
+      .sort({ isCurrent: -1, createdAt: -1 })
+      .lean();
+
+    return {
+      semesterDoc,
+      semesterNum,
+      academicYear,
+    };
+  }
+
+  if (includeAllClasses) {
+    return {
+      semesterDoc: null,
+      semesterNum,
+      academicYear,
+    };
+  }
+
+  if (semesterNum != null || academicYear) {
+    semesterDoc = await Semester.findOne({
+      isActive: true,
+      ...(semesterNum != null ? { semesterNum } : {}),
+      ...(academicYear ? { academicYear } : {}),
+    })
+      .sort({ isCurrent: -1, academicYear: -1, semesterNum: -1, createdAt: -1 })
+      .lean();
+
+    return {
+      semesterDoc,
+      semesterNum: semesterNum ?? semesterDoc?.semesterNum ?? null,
+      academicYear: academicYear || semesterDoc?.academicYear || null,
+    };
+  }
+
+  semesterDoc = await Semester.findOne({ isCurrent: true, isActive: true }).lean();
+  if (!semesterDoc) {
+    semesterDoc = await Semester.findOne({ isActive: true })
+      .sort({ academicYear: -1, semesterNum: -1, createdAt: -1 })
+      .lean();
+  }
+
+  return {
+    semesterDoc,
+    semesterNum: semesterDoc?.semesterNum ?? null,
+    academicYear: semesterDoc?.academicYear ?? null,
+  };
+}
+
 async function getTeachingSchedule(userId, filters = {}) {
-  const teacher = await resolveTeacher({
-    userId,
-    teacherId: filters.teacherId,
-    teacherCode: filters.teacherCode,
-  });
-  if (!teacher) {
+  const user = await User.findById(userId).select('role').lean();
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const isAdminOrStaff = normalizedRole === 'admin' || normalizedRole === 'staff';
+  const showAllTeachers = isAdminOrStaff && !filters.teacherId && !filters.teacherCode;
+
+  const teacher = showAllTeachers
+    ? null
+    : await resolveTeacher({
+        userId,
+        teacherId: filters.teacherId,
+        teacherCode: filters.teacherCode,
+      });
+
+  if (!showAllTeachers && !teacher) {
     const error = new Error(
       filters.teacherId || filters.teacherCode
         ? 'Teacher not found'
-        : 'Teacher profile not found for this account. Please select a lecturer.',
+        : 'Teacher profile not found for this account.',
     );
     error.statusCode = 404;
     throw error;
   }
 
-  let semesterNum = filters.semester ? Number(filters.semester) : null;
-  let academicYear = filters.academicYear || null;
   const includeAllClasses = String(filters.includeAllClasses || '').toLowerCase() === 'true';
-
-  if (filters.semesterId) {
-    const semester = await Semester.findById(filters.semesterId).lean();
-    if (!semester) {
-      const error = new Error('Semester not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    semesterNum = semester.semesterNum;
-    academicYear = semester.academicYear;
-  }
-
-  if (!includeAllClasses && (!semesterNum || !academicYear)) {
-    // Lecturer thường chỉ xem học kỳ current, nên nếu FE không truyền filter
-    // thì service tự fallback về học kỳ current của hệ thống.
-    const currentSemester = await Semester.findOne({ isCurrent: true }).lean();
-    if (currentSemester) {
-      semesterNum = semesterNum || currentSemester.semesterNum;
-      academicYear = academicYear || currentSemester.academicYear;
-    }
-  }
+  const semesterContext = await resolveSemesterContext(filters, includeAllClasses);
 
   const classFilter = {
-    teacher: teacher._id,
     status: { $ne: 'cancelled' },
   };
 
-  if (semesterNum) classFilter.semester = semesterNum;
-  if (academicYear) classFilter.academicYear = academicYear;
+  if (teacher?._id) {
+    classFilter.teacher = teacher._id;
+  }
 
-  const classes = await ClassSection.find(classFilter)
+  if (semesterContext.semesterNum != null) {
+    classFilter.semester = Number(semesterContext.semesterNum);
+  }
+
+  const rawClasses = await ClassSection.find(classFilter)
     .populate('subject', 'subjectCode subjectName credits')
+    .populate('teacher', 'teacherCode fullName department')
     .populate('room', 'roomCode roomName roomNumber')
-    .populate('timeslot', 'groupName startTime endTime')
+    .populate('timeslot', 'groupName startTime endTime startPeriod endPeriod')
     .sort({ semester: -1, classCode: 1 })
     .lean();
 
-  // schedule nằm ở collection riêng, nên phải query tiếp theo classSection ids
-  // rồi group lại theo từng class để FE dựng bảng timetable.
+  const classes =
+    semesterContext.semesterDoc || semesterContext.semesterNum != null || semesterContext.academicYear
+      ? filterClassesBySemesterContext(rawClasses, {
+          semesterNum: semesterContext.semesterNum,
+          academicYear: semesterContext.academicYear,
+          startDate: semesterContext.semesterDoc?.startDate,
+          endDate: semesterContext.semesterDoc?.endDate,
+        })
+      : rawClasses;
+
   const classIds = classes.map((cls) => cls._id);
+  const timeslots = await Timeslot.find({ status: 'active' })
+    .select('groupName startTime endTime startPeriod endPeriod')
+    .lean();
+  const timeslotByPeriodKey = new Map(
+    timeslots
+      .map((slot) => [buildTimeslotKey(slot.startPeriod, slot.endPeriod), slot])
+      .filter(([key]) => Boolean(key)),
+  );
+  const classesById = new Map(classes.map((cls) => [String(cls._id), cls]));
   const schedules = classIds.length
     ? await Schedule.find({ classSection: { $in: classIds }, status: 'active' })
         .populate('room', 'roomCode roomName roomNumber')
+        .sort({ dayOfWeek: 1, startPeriod: 1, endPeriod: 1, startDate: 1, _id: 1 })
         .lean()
     : [];
 
   const schedulesByClass = schedules.reduce((acc, item) => {
     const classId = String(item.classSection);
+    const classInfo = classesById.get(classId);
+    const fallbackTimeslot = classInfo?.timeslot || null;
     if (!acc[classId]) acc[classId] = [];
-    acc[classId].push(item);
+    acc[classId].push({
+      ...item,
+      timeslot: resolveScheduleTimeslot(item, fallbackTimeslot, timeslotByPeriodKey),
+    });
     return acc;
   }, {});
 
   return {
     teacher: {
-      id: teacher._id,
-      teacherCode: teacher.teacherCode,
-      fullName: teacher.fullName,
-      department: teacher.department,
+      id: teacher?._id || null,
+      teacherCode: teacher?.teacherCode || (showAllTeachers ? 'ALL' : ''),
+      fullName: teacher?.fullName || (showAllTeachers ? 'Tất cả giảng viên' : ''),
+      department: teacher?.department || (showAllTeachers ? 'Toàn trường' : ''),
     },
     semester: {
-      semesterNum,
-      academicYear,
+      id: semesterContext.semesterDoc?._id || null,
+      code: semesterContext.semesterDoc?.code || null,
+      name: semesterContext.semesterDoc?.name || null,
+      semesterNum: semesterContext.semesterNum,
+      academicYear: semesterContext.academicYear,
     },
-    classes: classes.map((cls) => ({
-      _id: cls._id,
-      id: cls._id,
-      classCode: cls.classCode,
-      className: cls.className,
-      semester: cls.semester,
-      academicYear: cls.academicYear,
-      currentEnrollment: cls.currentEnrollment,
-      maxCapacity: cls.maxCapacity,
-      subject: cls.subject,
-      room: cls.room,
-      timeslot: cls.timeslot,
-      schedules: schedulesByClass[String(cls._id)] || [],
-    })),
+    classes: classes.map((cls) => {
+      const classSchedules = schedulesByClass[String(cls._id)] || [];
+      const primarySchedule = classSchedules[0] || null;
+
+      return {
+        _id: cls._id,
+        id: cls._id,
+        classCode: cls.classCode,
+        className: cls.className,
+        semester: cls.semester,
+        academicYear: cls.academicYear,
+        currentEnrollment: cls.currentEnrollment,
+        maxCapacity: cls.maxCapacity,
+        subject: cls.subject,
+        teacher: cls.teacher || null,
+        room: cls.room || primarySchedule?.room || null,
+        timeslot: cls.timeslot || primarySchedule?.timeslot || null,
+        schedules: classSchedules,
+      };
+    }),
   };
 }
 

@@ -1,6 +1,15 @@
 const SystemSettings = require('../models/systemSettings.model');
 const { uploadImage, deleteImage } = require('../external/cloudinary.provider');
 
+function parseBoolean(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
 // Get system settings
 exports.getSettings = async (req, res) => {
   try {
@@ -32,7 +41,7 @@ exports.updateSettings = async (req, res) => {
     console.log('updateSettings req.body:', req.body);
     console.log('updateSettings req.file:', req.file ? 'File provided' : 'No file');
 
-    const { schoolName, schoolCode, contactEmail, contactPhone, address, website, description, primaryColor, secondaryColor } = req.body;
+    const { schoolName, schoolCode, contactEmail, contactPhone, address, website, description, primaryColor, secondaryColor, emailNotificationsEnabled } = req.body;
 
     let settings = await SystemSettings.findOne();
     if (!settings) {
@@ -49,6 +58,12 @@ exports.updateSettings = async (req, res) => {
     if (description) settings.description = description;
     if (primaryColor) settings.primaryColor = primaryColor;
     if (secondaryColor) settings.secondaryColor = secondaryColor;
+    if (emailNotificationsEnabled !== undefined) {
+      settings.emailNotificationsEnabled = parseBoolean(
+        emailNotificationsEnabled,
+        settings.emailNotificationsEnabled,
+      );
+    }
 
     // Handle logo upload if provided
     if (req.file) {

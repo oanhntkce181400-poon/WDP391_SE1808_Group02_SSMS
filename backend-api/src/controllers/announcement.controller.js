@@ -1,4 +1,6 @@
 const announcementService = require('../services/announcement.service');
+const { emitToStudents } = require('../services/realtimeNotification.service');
+const firebasePushService = require('../services/firebasePush.service');
 
 /**
  * Controller xử lý requests cho Announcement
@@ -43,6 +45,36 @@ class AnnouncementController {
         { title, category, content, file },
         userId
       );
+
+      const io = req.app.get('io');
+      if (io) {
+        const notificationPayload = {
+          id: `announcement-${announcement._id}`,
+          title: announcement.title || 'Thong bao moi',
+          message: announcement.content
+            ? String(announcement.content).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+            : 'Co thong bao moi vua duoc dang.',
+          type: announcement.category || 'announcement',
+          eventName: 'announcement-created',
+          sourceType: 'announcement',
+          sourceId: announcement._id,
+          timestamp: announcement.createdAt || new Date().toISOString(),
+        };
+        emitToStudents(io, 'announcement-created', notificationPayload);
+        emitToStudents(io, 'notification', notificationPayload);
+      }
+
+      try {
+        const pushResult = await firebasePushService.sendAnnouncementCreatedToStudents(
+          announcement
+        );
+        console.log('[AnnouncementController] Firebase push result:', pushResult);
+      } catch (pushError) {
+        console.error(
+          '[AnnouncementController] Firebase push failed:',
+          pushError.message
+        );
+      }
 
       res.status(201).json({
         success: true,

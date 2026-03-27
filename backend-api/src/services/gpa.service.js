@@ -56,28 +56,33 @@ class GPAService {
           continue;
         }
 
-        // IMPORTANT: Recalculate grade from component scores (GK + CK) to ensure accuracy
+        // IMPORTANT: Recalculate grade from component scores to ensure accuracy
         // Don't use the stored grade directly, as it may be outdated or inconsistent with component scores
         let calculatedGrade = null;
         
         if (enrollment.midtermScore !== null && enrollment.finalScore !== null) {
           // Recalculate from component scores to be accurate
-          // Formula: GK 30% + CK 50% + [BT 20% or PT 20% if available]
+          // Formula: GK 30% + CK 50% + PT 20%
           
           let grade = (enrollment.midtermScore * 0.3) + (enrollment.finalScore * 0.5);
           
-          // Check if assignment score exists
-          if (enrollment.assignmentScore !== null) {
-            grade += enrollment.assignmentScore * 0.2;
-            calculatedGrade = parseFloat(grade.toFixed(2));
-          } 
-          // Check if PT scores exist
-          else if (enrollment.ptScores && Array.isArray(enrollment.ptScores) && enrollment.ptScores.length > 0) {
+          // Priority 1: Use PT (ProgressTest) scores
+          if (enrollment.ptScores && Array.isArray(enrollment.ptScores) && enrollment.ptScores.length > 0) {
             const ptAverage = enrollment.ptScores.reduce((sum, pt) => sum + pt.score, 0) / enrollment.ptScores.length;
             grade += ptAverage * 0.2;
             calculatedGrade = parseFloat(grade.toFixed(2));
           }
-          // If neither BT nor PT available, scale up GK + CK to 10-point scale
+          // Priority 2: Use QT (Continuous) scores if available
+          else if (enrollment.continuousScore !== null) {
+            grade += enrollment.continuousScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 3: If neither PT nor QT available, use BT (Assignment) if available
+          else if (enrollment.assignmentScore !== null) {
+            grade += enrollment.assignmentScore * 0.2;
+            calculatedGrade = parseFloat(grade.toFixed(2));
+          }
+          // Priority 4: If none available, scale up GK + CK to 10-point scale
           else {
             calculatedGrade = parseFloat((grade / 0.8).toFixed(2));
           }

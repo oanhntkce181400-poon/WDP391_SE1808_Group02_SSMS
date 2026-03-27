@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LoginScreen from '../screens/auth/LoginScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import HomeScreen from '../screens/student/HomeScreen';
 import FeedbackLecturerScreen from '../screens/student/FeedbackLecturerScreen';
 import ApplicationStatusScreen from '../screens/student/ApplicationStatusScreen';
@@ -9,8 +10,15 @@ import ProfileScreen from '../screens/student/ProfileScreen';
 import AcademicCalendarScreen from '../screens/student/AcademicCalendarScreen';
 import ExamScheduleScreen from '../screens/student/ExamScheduleScreen';
 import AttendanceReportScreen from '../screens/student/AttendanceReportScreen';
+import GradeReportScreen from '../screens/student/GradeReportScreen';
+import GradeDetailScreen from '../screens/student/GradeDetailScreen';
+import WishlistScreen from '../screens/student/WishlistScreen';
+import ScheduleScreen from '../screens/student/ScheduleScreen';
+import NotificationListScreen from '../screens/student/NotificationListScreen';
+import NotificationDetailScreen from '../screens/student/NotificationDetailScreen';
+import authService from '../services/authService';
 import useAuthStore from '../stores/useAuthStore';
-import { AUTH_STORAGE_KEY, getItem } from '../utils/storage';
+import { AUTH_STORAGE_KEY, getItem, removeItem } from '../utils/storage';
 
 function normalizeRole(value) {
   return String(value || '').trim().toLowerCase();
@@ -19,6 +27,8 @@ function normalizeRole(value) {
 export default function AppNavigator() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
+  const [routeParams, setRouteParams] = useState(null);
+  const [authView, setAuthView] = useState('login');
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUser = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -35,11 +45,36 @@ export default function AppNavigator() {
        */
       const persisted = await getItem(AUTH_STORAGE_KEY);
       if (mounted && persisted?.accessToken) {
-        setAuth({
+        const nextAuth = {
           user: persisted.user || null,
           accessToken: persisted.accessToken,
           refreshToken: persisted.refreshToken || null,
-        });
+        };
+
+        setAuth(nextAuth);
+
+        try {
+          const meResponse = await authService.me();
+          const meUser = meResponse?.data?.user || null;
+          const meRole = normalizeRole(meUser?.role);
+
+          if (meRole === 'student' && !meUser?.student) {
+            throw new Error('Student profile not found');
+          }
+
+          if (mounted && meUser) {
+            const validatedAuth = {
+              ...nextAuth,
+              user: meUser,
+            };
+            setAuth(validatedAuth);
+          }
+        } catch {
+          if (mounted) {
+            setAuth({ user: null, accessToken: null, refreshToken: null });
+          }
+          await removeItem(AUTH_STORAGE_KEY);
+        }
       }
 
       if (mounted) {
@@ -64,9 +99,12 @@ export default function AppNavigator() {
 
     return [
       { key: 'home', icon: 'home', label: 'Trang chủ' },
-      { key: 'feedback', icon: 'star', label: 'Đánh giá' },
+      { key: 'notification', icon: 'notifications', label: 'Thông báo' },
+      { key: 'schedule', icon: 'calendar', label: 'Lịch học' },
       { key: 'exam', icon: 'document-text', label: 'Lịch thi' },
-      { key: 'calendar', icon: 'calendar', label: 'Lịch học vụ' },
+      { key: 'grades', icon: 'bar-chart', label: 'Điểm' },
+      { key: 'wishlist', icon: 'bookmark', label: 'Yêu cầu' },
+      { key: 'feedback', icon: 'star', label: 'Đánh giá' },
       { key: 'application', icon: 'chatbubble', label: 'Đơn từ' },
       { key: 'profile', icon: 'person', label: 'Tài khoản' },
     ];
@@ -77,17 +115,34 @@ export default function AppNavigator() {
       return;
     }
 
+    const extraScreens = isAdminViewer
+      ? new Set()
+      : new Set(['attendance', 'academicCalendar', 'notification-detail', 'grades', 'gradeDetail', 'wishlist']);
     const availableTabs = new Set(tabs.map((item) => item.key));
     const defaultTab = isAdminViewer ? 'feedback' : 'home';
 
-    if (!availableTabs.has(activeTab)) {
+    if (!availableTabs.has(activeTab) && !extraScreens.has(activeTab)) {
       setActiveTab(defaultTab);
+      setRouteParams(null);
     }
+    setAuthView('login');
   }, [accessToken, activeTab, isAdminViewer, tabs]);
+
+  function handleNavigate(nextTab, params = null) {
+    setActiveTab(nextTab);
+    setRouteParams(params);
+  }
 
   if (bootstrapping) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#f8fafc',
+        }}
+      >
         <ActivityIndicator size="large" color="#2563eb" />
         <Text style={{ marginTop: 8, color: '#475569' }}>Đang khởi tạo ứng dụng...</Text>
       </View>
@@ -95,23 +150,63 @@ export default function AppNavigator() {
   }
 
   if (!accessToken) {
-    return <LoginScreen />;
+    if (authView === 'forgot-password') {
+      return <ForgotPasswordScreen onBackToLogin={() => setAuthView('login')} />;
+    }
+
+    return <LoginScreen onForgotPassword={() => setAuthView('forgot-password')} />;
   }
 
-  let screen = isAdminViewer ? <FeedbackLecturerScreen onNavigate={setActiveTab} /> : <HomeScreen onNavigate={setActiveTab} />;
+  let screen = isAdminViewer ? (
+    <FeedbackLecturerScreen onNavigate={handleNavigate} />
+  ) : (
+    <HomeScreen onNavigate={handleNavigate} />
+  );
+
   if (activeTab === 'feedback') {
-    screen = <FeedbackLecturerScreen onNavigate={setActiveTab} />;
+    screen = <FeedbackLecturerScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'notification') {
+    screen = <NotificationListScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'notification-detail') {
+    screen = (
+      <NotificationDetailScreen
+        announcementId={routeParams?.announcementId || routeParams?.notification?.sourceId}
+        notification={routeParams?.notification || null}
+        onBack={() => handleNavigate('notification')}
+      />
+    );
+  }
+  if (activeTab === 'schedule') {
+    screen = <ScheduleScreen />;
   }
   if (activeTab === 'exam') {
     screen = <ExamScheduleScreen />;
   }
   if (activeTab === 'attendance') {
-    screen = <AttendanceReportScreen onNavigate={setActiveTab} />;
+    screen = <AttendanceReportScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'grades') {
+    screen = <GradeReportScreen onNavigate={handleNavigate} />;
+  }
+  if (activeTab === 'gradeDetail') {
+    screen = (
+      <GradeDetailScreen
+        route={{ params: routeParams }}
+        navigation={{
+          goBack: () => handleNavigate('grades')
+        }}
+      />
+    );
+  }
+  if (activeTab === 'wishlist') {
+    screen = <WishlistScreen />;
   }
   if (activeTab === 'application') {
     screen = <ApplicationStatusScreen />;
   }
-  if (activeTab === 'calendar') {
+  if (activeTab === 'academicCalendar') {
     screen = <AcademicCalendarScreen />;
   }
   if (activeTab === 'profile') {
@@ -146,7 +241,7 @@ export default function AppNavigator() {
           return (
             <Pressable
               key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => handleNavigate(tab.key)}
               style={{
                 width: 46,
                 height: 46,

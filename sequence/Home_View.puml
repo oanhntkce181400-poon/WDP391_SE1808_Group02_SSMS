@@ -1,0 +1,59 @@
+@startuml
+title Home View - Display Home Page for Student / Parent
+
+hide footbox
+
+actor PrimaryActor as "Student / Parent"
+participant Screen as "Screen (Home)"
+participant APIClient as "API Client (Frontend)"
+participant HomeRouter as "HomeRouter"
+participant Validation as "ValidationMiddleware"
+participant Controller as "HomeController"
+participant Service as "HomeService"
+participant TaskModel as "TaskModel"
+database DB as "Database"
+
+activate PrimaryActor
+PrimaryActor -> Screen: (1) open home page
+activate Screen
+
+Screen -> APIClient: (2) GET /api/home
+activate APIClient
+APIClient -> HomeRouter: (3) forward GET
+activate HomeRouter
+
+HomeRouter -> Validation: (4) validate query
+activate Validation
+Validation --> HomeRouter: (5) valid
+deactivate Validation
+
+HomeRouter -> Controller: (6) request data
+activate Controller
+Controller -> Service: (7) getHomeData()
+activate Service
+
+Service -> TaskModel: (8) findTasksForUser()
+activate TaskModel
+TaskModel -> DB: (9) db query
+activate DB
+DB --> TaskModel: (10) return rows
+deactivate DB
+TaskModel --> Service: (11) return rows
+deactivate TaskModel
+
+Service -> Service: (11.1) apply business rules
+Service --> Controller: (12) return payload
+deactivate Service
+
+Controller --> HomeRouter: (13) 200 OK
+deactivate Controller
+HomeRouter --> APIClient: (14) 200 OK
+APIClient --> Screen: (15) render home
+Screen --> PrimaryActor: (16) display home
+deactivate HomeRouter
+deactivate APIClient
+deactivate Screen
+deactivate PrimaryActor
+@enduml
+
+

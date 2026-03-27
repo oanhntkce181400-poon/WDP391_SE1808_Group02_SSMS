@@ -18,6 +18,18 @@ function loadInboxFromStorage() {
   }
 }
 
+function getNotificationBadgeClass(type) {
+  const badgeClasses = {
+    hoc_vu: 'bg-blue-100 text-blue-700',
+    tai_chinh: 'bg-emerald-100 text-emerald-700',
+    su_kien: 'bg-violet-100 text-violet-700',
+    khac: 'bg-slate-100 text-slate-700',
+    'registration-period': 'bg-amber-100 text-amber-700',
+  };
+
+  return badgeClasses[type] || 'bg-slate-100 text-slate-700';
+}
+
 export default function StudentLayout() {
   const location = useLocation();
   const { socket } = useSocket();
@@ -182,7 +194,7 @@ export default function StudentLayout() {
     { name: 'Hồ sơ cá nhân', path: '/student/profile', icon: '👤' },
     { name: 'Thông báo', path: '/student/announcements', icon: '📢' },
     { name: 'Khung chương trình của tôi', path: '/student/curriculum', icon: '📖' },
-    { name: 'Đăng ký tín chỉ', path: '/student/registration', icon: '📝' },
+    { name: 'Đăng ký học lại/học vượt', path: '/student/registration', icon: '📝' },
     { name: 'Lịch thi của tôi', path: '/student/exams', icon: '📅' },
     { name: 'Báo cáo điểm danh', path: '/student/attendance-report', icon: '✅' },
     { name: 'Đơn từ & Thủ tục', path: '/student/applications', icon: '📄' },
@@ -196,7 +208,6 @@ export default function StudentLayout() {
   ];
 
   // Removed duplicate /student/registration - already exists in menu above
-
   const handleLogout = async () => {
     try {
       // Try to logout on server

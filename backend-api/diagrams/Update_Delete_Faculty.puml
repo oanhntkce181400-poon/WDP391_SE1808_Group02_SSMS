@@ -1,18 +1,17 @@
-@startuml Update and Delete Faculty
+﻿@startuml
 title Update and Delete Faculty
 
-hide footbox
-
-actor PrimaryActor as "Admin / Academic Staff"
-participant Screen as "Screen (Faculty Detail/Edit Modal)"
-participant APIClient as "API Client (Frontend)"
-participant FacultyRouter as "FacultyRouter"
-participant Validation as "ValidationMiddleware"
-participant FacultyController as "FacultyController"
-participant FacultyService as "FacultyService"
-participant FacultyModel as "FacultyModel"
-database DB as "Database"
-
+skinparam participantStyle rectangle
+skinparam shadowing false
+actor "Admin / Academic Staff" as PrimaryActor
+participant "Screen (Faculty Detail/Edit Modal)" as Screen <<boundary>>
+participant "API Client (Frontend)" as APIClient <<control>>
+participant "FacultyRouter" as FacultyRouter <<control>>
+participant "ValidationMiddleware" as Validation <<control>>
+participant "FacultyController" as FacultyController <<control>>
+participant "FacultyService" as FacultyService <<control>>
+participant "FacultyModel" as FacultyModel <<entity>>
+database "Database" as DB
 == UPDATE FACULTY ==
 
 activate PrimaryActor
@@ -22,7 +21,7 @@ Screen -> PrimaryActor: (1.1) display edit form with current data
 
 PrimaryActor -> Screen: (2) modify faculty fields\n(facultyCode, facultyName, shortName, description, isActive)
 Screen -> APIClient: (3) PUT /api/faculties/:id\n{ facultyCode, facultyName, shortName, description, isActive }
-APIClientactivate 
+activate APIClient
 
 APIClient -> FacultyRouter: (4) forward request
 activate FacultyRouter
@@ -58,7 +57,7 @@ else valid
     FacultyService --> FacultyController: (5.2.1.1.5) return null
     FacultyController --> FacultyRouter: (5.2.1.1.6) 404 Not Found
     FacultyRouter --> APIClient: (5.2.1.1.7) 404 response
-    APIClient --> Screen: (5.2.1.1.8) show error: "Không tìm thấy khoa"
+    APIClient --> Screen: (5.2.1.1.8) show error: "Khﾃｴng tﾃｬm th蘯･y khoa"
     Screen --> PrimaryActor: (5.2.1.1.9) display error
   else updated successfully
     FacultyService --> FacultyController: (5.2.1.2.1) return updated faculty
@@ -77,7 +76,7 @@ activate APIClient
 deactivate APIClient
 
 alt success
-  Screen --> PrimaryActor: (8.1) show success message\n"Cập nhật khoa thành công"
+  Screen --> PrimaryActor: (8.1) show success message\n"C蘯ｭp nh蘯ｭt khoa thﾃnh cﾃｴng"
 else error
   Screen --> PrimaryActor: (8.2) show error message
 end
@@ -121,7 +120,7 @@ else Confirm delete
     FacultyService --> FacultyController: (12.1.5) return null
     FacultyController --> FacultyRouter: (12.1.6) 404 Not Found
     FacultyRouter --> APIClient: (12.1.7) 404 response
-    APIClient --> Screen: (12.1.8) show error: "Không tìm thấy khoa"
+    APIClient --> Screen: (12.1.8) show error: "Khﾃｴng tﾃｬm th蘯･y khoa"
     Screen --> PrimaryActor: (12.1.9) display error
   else deleted successfully
     FacultyService --> FacultyController: (12.2.1) return success
@@ -137,7 +136,7 @@ else Confirm delete
     activate APIClient
     deactivate APIClient
 
-    Screen --> PrimaryActor: (15) show success message\n"Xóa khoa thành công"\nand refresh faculty list
+    Screen --> PrimaryActor: (15) show success message\n"Xﾃｳa khoa thﾃnh cﾃｴng"\nand refresh faculty list
   end
 end
 

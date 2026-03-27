@@ -6,7 +6,9 @@ const Schedule = require("../../models/schedule.model");
 const Student = require("../../models/student.model");
 const User = require("../../models/user.model");
 const Teacher = require("../../models/teacher.model");
+const Semester = require("../../models/semester.model");
 const registrationService = require("../../services/registration.service");
+const notificationEmailService = require("../../services/notificationEmail.service");
 
 const REQUIRED_CLASS_FIELDS = [
   "classCode",
@@ -18,6 +20,14 @@ const REQUIRED_CLASS_FIELDS = [
   "academicYear",
   "maxCapacity",
 ];
+
+function normalizeClassCodePart(value, { preserveDash = false } = {}) {
+  const pattern = preserveDash ? /[^0-9A-Za-z-]/g : /[^0-9A-Za-z]/g;
+  return String(value || "")
+    .trim()
+    .replace(pattern, "")
+    .toUpperCase();
+}
 
 // ─── Class Section ────────────────────────────────
 
@@ -132,6 +142,28 @@ async function getClassById(classId) {
   const cls = await repo.findClassById(classId);
   if (!cls) throw new Error("Class section not found");
   return cls;
+}
+
+async function findStudentProfileByUser(userId) {
+  if (!userId) {
+    throw new Error("Unauthorized user");
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  let student = await Student.findOne({ userId }).lean();
+  if (!student && user.email) {
+    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
+  }
+
+  if (!student) {
+    throw new Error("Student record not found");
+  }
+
+  return { user, student };
 }
 
 async function createClassSection(body = {}) {
@@ -378,27 +410,26 @@ async function enrollStudent(classId, studentId, options = {}) {
     isOverload: options.isOverload === true,
   });
   await repo.incrementEnrollmentCount(classId);
+
+  if (student?.email) {
+    try {
+      await notificationEmailService.sendRegistrationSuccessEmail({
+        studentEmail: student.email,
+        studentName: student.fullName,
+        classCode: cls.classCode,
+        subjectName: cls.subject?.subjectName,
+        semesterName: `HK ${cls.semester} - ${cls.academicYear}`,
+      });
+    } catch (error) {
+      console.warn("[classSection] Failed to send registration email:", error?.message || error);
+    }
+  }
+
   return enrollment;
 }
 
 async function selfEnroll(userId, classId) {
-  if (!userId) {
-    throw new Error("Unauthorized user");
-  }
-
-  const user = await User.findById(userId).lean();
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  let student = await Student.findOne({ userId }).lean();
-  if (!student && user.email) {
-    student = await Student.findOne({ email: String(user.email).toLowerCase() }).lean();
-  }
-
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const [prerequisites, capacity, wallet, scheduleConflict, eligibility] = await Promise.all([
     registrationService.validatePrerequisites(student._id, classId),
@@ -415,7 +446,12 @@ async function selfEnroll(userId, classId) {
   if (scheduleConflict?.hasConflict) errors.push(scheduleConflict.message);
   if (!eligibility.limits.overload.allowed) errors.push(eligibility.limits.overload.message);
   if (!eligibility.limits.credit.allowed) errors.push(eligibility.limits.credit.message);
-  if (!eligibility.limits.cohortAccess.allowed) errors.push(eligibility.limits.cohortAccess.message);
+  if (!eligibility.limits.registrationWindow.allowed) {
+    errors.push(eligibility.limits.registrationWindow.message);
+  }
+  if (!eligibility.limits.duplicateSubject.allowed) {
+    errors.push(eligibility.limits.duplicateSubject.message);
+  }
 
   if (errors.length > 0) {
     throw new Error(errors.join(" | "));
@@ -693,11 +729,7 @@ async function getMyClasses(userId) {
   const Student = require("../../models/student.model");
   const ClassEnrollment = require("../../models/classEnrollment.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Find enrollments for this student
   const enrollments = await ClassEnrollment.find({
@@ -733,6 +765,8 @@ async function searchAvailableClasses(criteria = {}) {
   const {
     subject_id,
     semester,
+    semesterId,
+    academicYear,
     keyword,
     page = 1,
     limit = 20,
@@ -749,7 +783,31 @@ async function searchAvailableClasses(criteria = {}) {
   };
 
   if (subject_id) filter.subject = subject_id;
-  if (semester) filter.semester = parseInt(semester, 10);
+
+  // Ưu tiên lọc theo semesterId (từ module học kỳ) để đảm bảo đúng kỳ + năm học.
+  if (semesterId) {
+    const selectedSemester = await Semester.findById(semesterId)
+      .select('semesterNum academicYear')
+      .lean();
+
+    if (!selectedSemester) {
+      return {
+        classes: [],
+        pagination: {
+          total: 0,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: 0,
+        },
+      };
+    }
+
+    filter.semester = Number(selectedSemester.semesterNum);
+    filter.academicYear = selectedSemester.academicYear;
+  } else {
+    if (semester) filter.semester = parseInt(semester, 10);
+    if (academicYear) filter.academicYear = academicYear;
+  }
 
   // Keyword search
   if (keyword) {
@@ -830,14 +888,9 @@ async function getClassListWithCapacity() {
 
 async function getClassDetails(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
   const Schedule = require("../../models/schedule.model");
 
-  // Find student by userId
-  const student = await Student.findOne({ userId });
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   // Check if student is enrolled in this class
   const enrollment = await ClassEnrollment.findOne({
@@ -852,11 +905,7 @@ async function getClassDetails(classId, userId) {
 
   // Get class with all related data
   const repo = require("./classSection.repository");
-  const cls = await repo.findClassById(classId)
-    .populate("subject")
-    .populate("teacher")
-    .populate("room")
-    .populate("timeslot");
+  const cls = await repo.findClassById(classId);
 
   if (!cls) {
     throw new Error("Class section not found");
@@ -911,13 +960,9 @@ async function getClassDetails(classId, userId) {
 
 async function getClassRosterForStudent(classId, userId) {
   const ClassEnrollment = require("../../models/classEnrollment.model");
-  const Student = require("../../models/student.model");
 
   // BR17: Authorization dựa trên enrollment hợp lệ
-  const student = await Student.findOne({ userId }).lean();
-  if (!student) {
-    throw new Error("Student record not found");
-  }
+  const { student } = await findStudentProfileByUser(userId);
 
   const cls = await repo.findClassById(classId);
   if (!cls) {
@@ -1078,8 +1123,20 @@ async function bulkCreateClassSectionsFromCurriculum(
         continue;
       }
 
-      // Tạo classCode duy nhất
-      const classCode = `${subject.subjectCode}-${academicYear.replace("/", "")}-${semester}-${String(newGroupIndex).padStart(2, "0")}`;
+      // Tạo classCode duy nhất cho nhóm mới.
+      // Dùng classGroup thực tế thay vì chỉ groupIndex để tránh đụng mã với nhóm/prefix khác.
+      const normalizedAcademicYear = normalizeClassCodePart(academicYear);
+      const normalizedClassGroup = normalizeClassCodePart(newClassGroup, {
+        preserveDash: true,
+      });
+      const classCode = [
+        normalizeClassCodePart(subject.subjectCode),
+        normalizedAcademicYear,
+        `S${Number(semester)}`,
+        normalizedClassGroup,
+      ]
+        .filter(Boolean)
+        .join("-");
 
       // Kiểm tra classCode đã tồn tại chưa
       const exists = await ClassSection.findOne({ classCode }).lean();
