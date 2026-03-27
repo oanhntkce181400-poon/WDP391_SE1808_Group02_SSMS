@@ -39,11 +39,17 @@ function normalizeGrades(raw = {}) {
 }
 
 export default function useGrades(options = {}) {
-  const { enabled = true } = options;
+  const { 
+    enabled = true,
+    autoRefresh = false,
+    refreshInterval = 30000,
+  } = options;
+
   const [grades, setGrades] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const fetchGrades = useCallback(async (isRefresh = false) => {
     if (!enabled) {
@@ -66,6 +72,7 @@ export default function useGrades(options = {}) {
       const response = await gradeService.getMyGrades();
       const normalized = normalizeGrades(response?.data);
       setGrades(normalized);
+      setLastUpdated(new Date());
     } catch (err) {
       const message = err?.response?.data?.message || 'Lỗi khi tải điểm';
       setError(message);
@@ -79,6 +86,17 @@ export default function useGrades(options = {}) {
     fetchGrades();
   }, [fetchGrades]);
 
+  // Auto-refresh interval
+  useEffect(() => {
+    if (!autoRefresh || !enabled) return;
+
+    const interval = setInterval(() => {
+      fetchGrades(true);
+    }, refreshInterval);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, enabled, refreshInterval, fetchGrades]);
+
   const refresh = useCallback(
     () => fetchGrades(true),
     [fetchGrades]
@@ -89,11 +107,29 @@ export default function useGrades(options = {}) {
     [fetchGrades]
   );
 
+  // Computed values
+  const totalCredits = grades?.semesterGroups?.reduce((sum, group) => sum + (group.totalCredits || 0), 0) || 0;
+  const totalWeightedPoints = grades?.semesterGroups?.reduce((sum, group) => sum + (group.totalWeightedPoints || 0), 0) || 0;
+  const allEnrollments = grades?.semesterGroups?.flatMap(group => group.enrollments || []) || [];
+  const failedCourses = allEnrollments.filter(e => e.grade && parseFloat(e.grade) < 5) || [];
+  const passedCourses = allEnrollments.filter(e => e.grade && parseFloat(e.grade) >= 5) || [];
+
   return {
     grades,
     loading,
     refreshing,
     error,
+    lastUpdated,
+    
+    // Computed values
+    overallGPA: grades?.overallGPA || '0.00',
+    totalCredits,
+    totalWeightedPoints,
+    allEnrollments,
+    failedCourses,
+    passedCourses,
+    
+    // Methods
     refresh,
     reload,
   };

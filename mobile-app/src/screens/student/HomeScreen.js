@@ -98,6 +98,13 @@ export default function HomeScreen({ onNavigate }) {
       icon: <MaterialCommunityIcons name="chart-line" size={24} color="#10b981" />,
     },
     {
+      key: 'tuition-fee',
+      title: 'Học phí',
+      subtitle: 'Quản lý học phí và thanh toán',
+      tone: '#059669',
+      icon: <MaterialCommunityIcons name="wallet-outline" size={24} color="#059669" />,
+    },
+    {
       key: 'application',
       title: 'Đơn từ',
       subtitle: 'Theo dõi yêu cầu và biểu mẫu',

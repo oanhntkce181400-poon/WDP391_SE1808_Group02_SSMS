@@ -239,7 +239,7 @@ const gradesService = {
     const names = {
       midtermScore: 'Giữa kỳ (GK)',
       finalScore: 'Cuối kỳ (CK)',
-      assignmentScore: 'Bài tập (BT)',
+      assignmentScore: 'Progress Test (PT)',
       continuousScore: 'Quá trình'
     };
     return names[componentType] || componentType;

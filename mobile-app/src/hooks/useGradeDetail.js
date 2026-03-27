@@ -80,10 +80,16 @@ function normalizeGradeDetail(raw = {}) {
 }
 
 export default function useGradeDetail(enrollmentId, options = {}) {
-  const { enabled = true } = options;
+  const { 
+    enabled = true,
+    fetchChangeLogs = false 
+  } = options;
+
   const [detail, setDetail] = useState(null);
+  const [changeLogs, setChangeLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const fetchDetail = useCallback(async () => {
     if (!enabled || !enrollmentId) {
@@ -97,9 +103,21 @@ export default function useGradeDetail(enrollmentId, options = {}) {
     setError('');
 
     try {
-      const response = await gradeService.getGradeDetails(enrollmentId);
-      const normalized = normalizeGradeDetail(response?.data);
+      // Fetch grade details and change logs in parallel if requested
+      const detailPromise = gradeService.getGradeDetails(enrollmentId);
+      const changeLogsPromise = fetchChangeLogs 
+        ? gradeService.getEnrollmentGradeChangeLogs(enrollmentId)
+        : Promise.resolve({ data: [] });
+
+      const [detailRes, changeLogsRes] = await Promise.all([
+        detailPromise,
+        changeLogsPromise,
+      ]);
+
+      const normalized = normalizeGradeDetail(detailRes?.data);
       setDetail(normalized);
+      setChangeLogs(Array.isArray(changeLogsRes?.data) ? changeLogsRes.data : []);
+      setLastUpdated(new Date());
     } catch (err) {
       const message = err?.response?.data?.message || 'Lỗi khi tải chi tiết điểm';
       setError(message);
@@ -107,7 +125,7 @@ export default function useGradeDetail(enrollmentId, options = {}) {
     } finally {
       setLoading(false);
     }
-  }, [enabled, enrollmentId]);
+  }, [enabled, enrollmentId, fetchChangeLogs]);
 
   useEffect(() => {
     fetchDetail();
@@ -118,10 +136,27 @@ export default function useGradeDetail(enrollmentId, options = {}) {
     [fetchDetail]
   );
 
+  // Computed values
+  const getComponentColor = (score) => {
+    return gradeService.getScoreColor(score);
+  };
+
+  const getComponentName = (code) => {
+    return gradeService.getComponentName(code);
+  };
+
   return {
     detail,
+    changeLogs,
     loading,
     error,
+    lastUpdated,
+    
+    // Helper methods
+    getComponentColor,
+    getComponentName,
+    
+    // Methods
     reload,
   };
 }

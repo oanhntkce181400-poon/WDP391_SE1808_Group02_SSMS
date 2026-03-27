@@ -852,8 +852,10 @@ class GradesService {
       const Subject = require('../models/subject.model');
 
       // Get enrollments with classSection populated
+      // Only show grades when instructor has submitted/saved (submittedAt !== null)
       const enrollments = await ClassEnrollment.find({
-        student: studentId
+        student: studentId,
+        submittedAt: { $ne: null }  // ← Chỉ lấy khi giáo viên đã lưu điểm
       })
         .populate('classSection')
         .sort({ createdAt: -1 })
