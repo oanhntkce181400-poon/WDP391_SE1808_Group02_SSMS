@@ -77,7 +77,7 @@ export default function Header({ mode = "admin" }) {
         { label: "Môn học", href: "/admin/subjects" },
         { label: "Phòng học", href: "/admin/rooms" },
         { label: "Khung chương trình", href: "/admin/curriculum-list" },
-        { label: "Người dùng", href: "/admin/users" },
+        // { label: "Người dùng", href: "/admin/users" },
         { label: "Sinh viên", href: "/admin/students" },
         { label: "Đơn từ", href: "/admin/requests" },
         { label: "Điểm danh", href: "/admin/attendance" },
