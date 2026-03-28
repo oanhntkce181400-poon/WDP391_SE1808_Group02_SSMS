@@ -8,6 +8,8 @@ const Teacher = require('../../models/teacher.model');
 const User = require('../../models/user.model');
 const { filterClassesBySemesterContext } = require('../../utils/semesterMatch.util');
 
+const VISIBLE_TEACHING_CLASS_STATUSES = ['published', 'locked', 'completed'];
+
 function buildTimeslotKey(startPeriod, endPeriod) {
   const normalizedStart = Number(startPeriod);
   const normalizedEnd = Number(endPeriod);
@@ -179,7 +181,7 @@ async function getTeachingSchedule(userId, filters = {}) {
   const semesterContext = await resolveSemesterContext(filters, includeAllClasses);
 
   const classFilter = {
-    status: { $ne: 'cancelled' },
+    status: { $in: VISIBLE_TEACHING_CLASS_STATUSES },
   };
 
   if (teacher?._id) {
@@ -198,7 +200,7 @@ async function getTeachingSchedule(userId, filters = {}) {
     .sort({ semester: -1, classCode: 1 })
     .lean();
 
-  const classes =
+  const semesterScopedClasses =
     semesterContext.semesterDoc || semesterContext.semesterNum != null || semesterContext.academicYear
       ? filterClassesBySemesterContext(rawClasses, {
           semesterNum: semesterContext.semesterNum,
@@ -208,7 +210,7 @@ async function getTeachingSchedule(userId, filters = {}) {
         })
       : rawClasses;
 
-  const classIds = classes.map((cls) => cls._id);
+  const classIds = semesterScopedClasses.map((cls) => cls._id);
   const timeslots = await Timeslot.find({ status: 'active' })
     .select('groupName startTime endTime startPeriod endPeriod')
     .lean();
@@ -217,7 +219,7 @@ async function getTeachingSchedule(userId, filters = {}) {
       .map((slot) => [buildTimeslotKey(slot.startPeriod, slot.endPeriod), slot])
       .filter(([key]) => Boolean(key)),
   );
-  const classesById = new Map(classes.map((cls) => [String(cls._id), cls]));
+  const classesById = new Map(semesterScopedClasses.map((cls) => [String(cls._id), cls]));
   const schedules = classIds.length
     ? await Schedule.find({ classSection: { $in: classIds }, status: 'active' })
         .populate('room', 'roomCode roomName roomNumber')
@@ -236,6 +238,10 @@ async function getTeachingSchedule(userId, filters = {}) {
     });
     return acc;
   }, {});
+
+  const classes = semesterScopedClasses.filter(
+    (cls) => (schedulesByClass[String(cls._id)] || []).length > 0,
+  );
 
   return {
     teacher: {

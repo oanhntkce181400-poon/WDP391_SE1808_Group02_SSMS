@@ -41,6 +41,8 @@ async function listClasses(query = {}) {
     search,
     curriculumId,
     createdAfter,
+    sortBy = "createdAt",
+    sortOrder = "desc",
     page = 1,
     limit = 10,
   } = query;
@@ -121,11 +123,18 @@ async function listClasses(query = {}) {
     }
   }
 
+  const sortOptions = {};
+  sortOptions[sortBy || "createdAt"] = sortOrder === "asc" ? 1 : -1;
+  if (!Object.prototype.hasOwnProperty.call(sortOptions, "_id")) {
+    sortOptions._id = sortOrder === "asc" ? 1 : -1;
+  }
+
   const [total, data] = await Promise.all([
     repo.countClasses(filter),
     repo.findClasses(filter, {
       skip: (pageNum - 1) * limitNum,
       limit: limitNum,
+      sort: sortOptions,
     }),
   ]);
 
@@ -443,17 +452,26 @@ async function selfEnroll(userId, classId) {
   ]);
 
   const errors = [];
-  if (!prerequisites.eligible) errors.push(prerequisites.message);
-  if (capacity.isFull) errors.push(capacity.message);
-  if (!wallet.isSufficient) errors.push(wallet.message);
-  if (scheduleConflict?.hasConflict) errors.push(scheduleConflict.message);
-  if (!eligibility.limits.overload.allowed) errors.push(eligibility.limits.overload.message);
-  if (!eligibility.limits.credit.allowed) errors.push(eligibility.limits.credit.message);
+  const pushError = (message) => {
+    if (message && !errors.includes(message)) {
+      errors.push(message);
+    }
+  };
+
+  if (!prerequisites.eligible) pushError(prerequisites.message);
+  if (capacity.isFull) pushError(capacity.message);
+  if (!wallet.isSufficient) pushError(wallet.message);
+  if (scheduleConflict?.hasConflict) pushError(scheduleConflict.message);
+  if (!eligibility.limits.overload.allowed) pushError(eligibility.limits.overload.message);
+  if (!eligibility.limits.credit.allowed) pushError(eligibility.limits.credit.message);
+  if (!eligibility.limits.cohortAccess.allowed) {
+    pushError(eligibility.limits.cohortAccess.message);
+  }
   if (!eligibility.limits.registrationWindow.allowed) {
-    errors.push(eligibility.limits.registrationWindow.message);
+    pushError(eligibility.limits.registrationWindow.message);
   }
   if (!eligibility.limits.duplicateSubject.allowed) {
-    errors.push(eligibility.limits.duplicateSubject.message);
+    pushError(eligibility.limits.duplicateSubject.message);
   }
 
   if (errors.length > 0) {

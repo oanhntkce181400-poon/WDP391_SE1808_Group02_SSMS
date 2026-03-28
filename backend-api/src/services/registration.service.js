@@ -343,6 +343,83 @@ async function resolveRegistrationWindow(student, classSection, overloadInfo, se
   };
 }
 
+function normalizeAllowedCohorts(period) {
+  return Array.isArray(period?.allowedCohorts)
+    ? period.allowedCohorts
+        .map((cohort) => Number(cohort))
+        .filter((cohort) => !Number.isNaN(cohort))
+    : [];
+}
+
+function buildCohortAccessFromPeriodCheck(requestType, periodCheck) {
+  return {
+    hasActivePeriod: Boolean(periodCheck?.period),
+    allowed: periodCheck?.isOpen === true,
+    message: periodCheck?.message || 'No registration period information',
+    requestType,
+    allowedCohorts:
+      periodCheck?.cohortInfo?.allowedCohorts || normalizeAllowedCohorts(periodCheck?.period),
+    period: periodCheck?.period || null,
+    reason: periodCheck?.reason || null,
+  };
+}
+
+function buildCohortAccessFromRegistrationWindow(registrationWindow) {
+  return {
+    hasActivePeriod: Boolean(registrationWindow?.period),
+    allowed: registrationWindow?.allowed === true,
+    message: registrationWindow?.message || 'No registration window information',
+    requestType: registrationWindow?.requestType || 'all',
+    allowedCohorts: normalizeAllowedCohorts(registrationWindow?.period),
+    period: registrationWindow?.period || null,
+    reason: registrationWindow?.reason || null,
+  };
+}
+
+async function getRepeatOverloadCohortAccess(student, semester = null) {
+  const registrationOptions = {
+    semesterId: semester?._id || null,
+    semesterNum: semester?.semesterNum || null,
+    academicYear: semester?.academicYear || null,
+  };
+
+  const [repeatWindow, overloadWindow] = await Promise.all([
+    registrationPeriodService.isRegistrationOpen('repeat', student.cohort, registrationOptions),
+    registrationPeriodService.isRegistrationOpen('overload', student.cohort, registrationOptions),
+  ]);
+
+  const repeat = buildCohortAccessFromPeriodCheck('repeat', repeatWindow);
+  const overload = buildCohortAccessFromPeriodCheck('overload', overloadWindow);
+  const allowed = repeat.allowed || overload.allowed;
+
+  let message = 'No active repeat/overload registration period in the selected semester';
+  if (repeat.allowed && overload.allowed) {
+    message = `Cohort K${student.cohort} is allowed for repeat and overload registration`;
+  } else if (repeat.allowed) {
+    message = `Cohort K${student.cohort} is allowed for repeat registration`;
+  } else if (overload.allowed) {
+    message = `Cohort K${student.cohort} is allowed for overload registration`;
+  } else if (repeat.reason === 'COHORT_NOT_ALLOWED' || overload.reason === 'COHORT_NOT_ALLOWED') {
+    message = `Cohort K${student.cohort} is not allowed for repeat/overload registration in this semester`;
+  }
+
+  return {
+    hasActivePeriod: repeat.hasActivePeriod || overload.hasActivePeriod,
+    allowed,
+    message,
+    requestType: 'repeat_or_overload',
+    allowedCohorts: Array.from(
+      new Set([...(repeat.allowedCohorts || []), ...(overload.allowedCohorts || [])]),
+    ).sort((left, right) => left - right),
+    period: repeat.period || overload.period || null,
+    reason: allowed ? 'OPEN' : repeat.reason || overload.reason || null,
+    requestTypes: {
+      repeat,
+      overload,
+    },
+  };
+}
+
 // Xác định "bộ môn chuẩn" mà curriculum cho phép trong kỳ hiện tại của sinh viên.
 // Đây là chìa khóa để phân biệt:
 // - môn đúng chương trình học
@@ -356,11 +433,25 @@ async function getCurriculumSubjectIdSet(student, semester) {
     cohort: student.cohort,
   });
 
-  if (!curriculum || !semester) {
+  if (!semester) {
     return {
       curriculum: null,
       subjectIdSet: new Set(),
       curriculumSemesterOrder: null,
+      resolved: false,
+      reason: 'SEMESTER_NOT_FOUND',
+      message: 'Cannot evaluate overload because the target semester could not be resolved',
+    };
+  }
+
+  if (!curriculum) {
+    return {
+      curriculum: null,
+      subjectIdSet: new Set(),
+      curriculumSemesterOrder: null,
+      resolved: false,
+      reason: 'CURRICULUM_NOT_FOUND',
+      message: 'Cannot evaluate overload because no active curriculum matches this student',
     };
   }
 
@@ -368,6 +459,17 @@ async function getCurriculumSubjectIdSet(student, semester) {
     student,
     { currentSystemSemester: semester },
   );
+
+  if (!Number.isFinite(Number(curriculumSemesterOrder))) {
+    return {
+      curriculum,
+      subjectIdSet: new Set(),
+      curriculumSemesterOrder: null,
+      resolved: false,
+      reason: 'CURRICULUM_SEMESTER_NOT_RESOLVED',
+      message: 'Cannot evaluate overload because the curriculum semester could not be determined',
+    };
+  }
 
   const subjects = await curriculumService.getSubjectsBySemester(
     curriculum._id,
@@ -384,6 +486,12 @@ async function getCurriculumSubjectIdSet(student, semester) {
     curriculum,
     subjectIdSet,
     curriculumSemesterOrder,
+    resolved: subjectIdSet.size > 0,
+    reason: subjectIdSet.size > 0 ? null : 'CURRICULUM_SUBJECTS_NOT_FOUND',
+    message:
+      subjectIdSet.size > 0
+        ? 'Curriculum subjects resolved successfully'
+        : 'Cannot evaluate overload because the curriculum has no linked subjects for this semester',
   };
 }
 
@@ -698,8 +806,27 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
       subjectId: resolveEntityId(item.classSection?.subject)?.toString(),
     }));
 
-  const { subjectIdSet } = await getCurriculumSubjectIdSet(student, semester);
+  const curriculumContext = await getCurriculumSubjectIdSet(student, semester);
+  const {
+    subjectIdSet,
+    resolved: curriculumResolved,
+    message: curriculumContextMessage,
+    reason: curriculumContextReason,
+  } = curriculumContext;
   const historicalSubjectIdSet = await getHistoricalSubjectIdSet(studentId);
+
+  if (!curriculumResolved) {
+    return {
+      allowed: false,
+      message: curriculumContextMessage,
+      maxOverloadCourses: 2,
+      currentOverloadCount: 0,
+      projectedOverloadCount: 0,
+      enrollingCourseIsOverload: false,
+      curriculumResolved: false,
+      reason: curriculumContextReason,
+    };
+  }
 
   // currentOverloadCount = số môn overload mà sinh viên đã đăng ký từ trước.
   const currentOverloadCount = normalizedEnrollments.filter((enrollment) => {
@@ -743,6 +870,8 @@ async function checkOverloadLimit(studentId, semesterId, classId = null) {
     currentOverloadCount,
     projectedOverloadCount,
     enrollingCourseIsOverload,
+    curriculumResolved: true,
+    reason: null,
   };
 }
 
@@ -816,7 +945,9 @@ async function getStudentEligibilitySummary(studentId, classId = null, semesterI
     classSection?.subject?.credits || 0,
     20,
   );
-  const cohortAccess = await registrationPeriodService.validateCurrentPeriodCohort(student.cohort);
+  const cohortAccess = classSection
+    ? buildCohortAccessFromRegistrationWindow(registrationWindow)
+    : await getRepeatOverloadCohortAccess(student, semester);
   const duplicateSubject = classSection
     ? await (async () => {
         const existingEnrollment = await findSameSubjectEnrollmentInSemester(studentId, classSection);
@@ -873,6 +1004,7 @@ async function getStudentEligibilitySummary(studentId, classId = null, semesterI
     canRegister:
       overload.allowed &&
       credit.allowed &&
+      cohortAccess.allowed &&
       registrationWindow.allowed &&
       duplicateSubject.allowed,
   };

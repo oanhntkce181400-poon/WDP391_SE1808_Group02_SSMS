@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import feedbackService from '../../services/feedbackService';
+import StudentFeedbackCampaignView from './StudentFeedbackCampaignView';
 import useAuthStore from '../../stores/useAuthStore';
 
 /*
@@ -178,6 +179,10 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
   const user = useAuthStore((state) => state.user);
   const role = normalizeRole(user?.role);
   const isStudent = role === 'student';
+
+  if (isStudent) {
+    return <StudentFeedbackCampaignView onNavigate={onNavigate} />;
+  }
 
   const [classes, setClasses] = useState([]);
   const [myFeedbacks, setMyFeedbacks] = useState([]);

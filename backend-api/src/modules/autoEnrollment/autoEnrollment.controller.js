@@ -99,8 +99,12 @@ async function trigger(req, res) {
     // success=true ở đây nghĩa là request API đã được xử lý xong và service đã trả kết quả.
     // Kết quả chi tiết của từng sinh viên, số fail, số waitlist... nằm trong data.summary và data.logs.
     return res.status(200).json({
-      success: true,
-      message: dryRun === true ? 'Auto enrollment dry run completed' : 'Auto enrollment completed',
+      success: result?.success !== false,
+      message:
+        result?.message ||
+        (dryRun === true
+          ? 'Auto enrollment dry run completed'
+          : 'Auto enrollment completed'),
       data: result,
     });
   } catch (error) {

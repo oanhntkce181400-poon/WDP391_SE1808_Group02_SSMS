@@ -163,7 +163,23 @@ function sanitizeUser(user) {
   };
 }
 
-async function buildAuthUserProfile(user) {
+function shouldAutoCreateStudentProfile(user, options = {}) {
+  if (options.autoCreateStudentProfile === true) {
+    return true;
+  }
+
+  if (options.autoCreateStudentProfile === false) {
+    return false;
+  }
+
+  return (
+    normalizeRole(user?.role, 'student') === 'student' &&
+    user?.authProvider === 'google' &&
+    String(process.env.GOOGLE_AUTO_CREATE_STUDENT_PROFILE || 'true').toLowerCase() !== 'false'
+  );
+}
+
+async function buildAuthUserProfile(user, options = {}) {
   const sanitized = sanitizeUser(user);
   if (!sanitized) return null;
 
@@ -171,6 +187,8 @@ async function buildAuthUserProfile(user) {
     const studentView = await getStudentViewForUserId(user?._id, {
       email: user?.email,
       autoLinkByEmail: true,
+      autoCreateMissingProfile: shouldAutoCreateStudentProfile(user, options),
+      user,
     });
     if (!studentView) {
       throw new Error('Student profile not found. Please contact admin.');
@@ -389,7 +407,7 @@ async function loginWithGoogle(req, { idToken }) {
   });
 
   return {
-    user: await buildAuthUserProfile(user),
+    user: await buildAuthUserProfile(user, { autoCreateStudentProfile: true }),
     tokens: {
       accessToken,
       refreshToken,

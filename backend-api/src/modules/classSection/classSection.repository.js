@@ -15,7 +15,7 @@ async function findClasses(filter, { skip, limit, sort } = {}) {
     .populate("teacher", "teacherCode fullName email department")
     .populate("room", "roomCode roomName capacity")
     .populate("timeslot", "groupName startTime endTime")
-    .sort(sort || { academicYear: -1, semester: -1, classCode: 1 })
+    .sort(sort || { createdAt: -1, _id: -1 })
     .skip(skip || 0)
     .limit(limit || 10)
     .lean()

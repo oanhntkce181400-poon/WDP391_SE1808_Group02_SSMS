@@ -249,7 +249,12 @@ export default function LecturerManagement() {
     async (page = 1, keyword = "", activeFilters = {}) => {
       setLoading(true);
       try {
-        const params = { page, limit: 12 };
+        const params = {
+          page,
+          limit: 12,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        };
         if (keyword) params.name = keyword;
         if (activeFilters.dept) params.dept = activeFilters.dept;
         if (activeFilters.degree) params.degree = activeFilters.degree;
