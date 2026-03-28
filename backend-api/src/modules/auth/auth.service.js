@@ -17,7 +17,10 @@ const {
   verifyRefreshToken,
 } = require('../../utils/token.util');
 const { normalizeRole, isValidUserRole } = require('../../utils/role.util');
-const { getStudentViewForUserId } = require('../../services/studentUserView.service');
+const {
+  getStudentViewForUserId,
+  resolveStudentForUser,
+} = require('../../services/studentUserView.service');
 
 function extractRequestContext(req) {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -142,6 +145,10 @@ function buildSessionsFromTokens(tokens, currentFamilyId) {
   });
 }
 
+function isUserInactive(user) {
+  return !user || user.status !== 'active' || user.isActive === false;
+}
+
 function sanitizeUser(user) {
   if (!user) return null;
   return {
@@ -161,7 +168,10 @@ async function buildAuthUserProfile(user) {
   if (!sanitized) return null;
 
   if (sanitized.role === 'student') {
-    const studentView = await getStudentViewForUserId(user?._id);
+    const studentView = await getStudentViewForUserId(user?._id, {
+      email: user?.email,
+      autoLinkByEmail: true,
+    });
     if (!studentView) {
       throw new Error('Student profile not found. Please contact admin.');
     }
@@ -192,20 +202,11 @@ async function upsertGoogleUser(googleProfile) {
       avatarUrl,
       isActive: true,
       status: 'active',
-      lastLoginAt: new Date(),
     });
     return user;
   }
 
-  const updates = {
-    authProvider: 'google',
-    googleId,
-    avatarUrl: avatarUrl || user.avatarUrl,
-    fullName: fullName || user.fullName,
-    lastLoginAt: new Date(),
-  };
-
-  return repo.updateUser(user._id, updates);
+  return user;
 }
 
 function issueTokenPair({ userId, role, familyId }) {
@@ -257,6 +258,42 @@ async function persistRefreshToken({
   });
 }
 
+async function endDeviceSessionsForTokens(tokens = []) {
+  const deviceSessionIds = Array.from(
+    new Set(
+      tokens
+        .map((token) => token?.deviceSession?._id || token?.deviceSession)
+        .filter(Boolean)
+        .map((id) => String(id)),
+    ),
+  );
+
+  for (const deviceSessionId of deviceSessionIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await repo.endDeviceSession(deviceSessionId);
+  }
+
+  return deviceSessionIds.length;
+}
+
+async function revokeAllSessionsForUser(userId, reason) {
+  if (!userId) {
+    return {
+      tokens: [],
+      revokeResult: { modifiedCount: 0 },
+    };
+  }
+
+  const tokens = await repo.listRefreshTokensByUser(userId);
+  const revokeResult = await repo.revokeAllFamiliesForUser(userId, reason);
+  await endDeviceSessionsForTokens(tokens);
+
+  return {
+    tokens,
+    revokeResult,
+  };
+}
+
 async function recordLoginEvent({
   userId,
   deviceSessionId,
@@ -292,7 +329,27 @@ async function loginWithGoogle(req, { idToken }) {
     throw new Error('Google email is not verified.');
   }
 
-  const user = await upsertGoogleUser(googleProfile);
+  let user = await upsertGoogleUser(googleProfile);
+
+  if (isUserInactive(user)) {
+    await recordLoginEvent({
+      userId: user?._id,
+      ip,
+      userAgent,
+      eventType: 'login',
+      success: false,
+      failureReason: 'user-inactive',
+    });
+    throw new Error('User is inactive.');
+  }
+
+  user = await repo.updateUser(user._id, {
+    authProvider: 'google',
+    googleId: googleProfile.googleId,
+    avatarUrl: googleProfile.avatarUrl || user.avatarUrl,
+    fullName: googleProfile.fullName || user.fullName,
+    lastLoginAt: new Date(),
+  });
 
   const deviceSession = await repo.createDeviceSession({
     user: user._id,
@@ -354,9 +411,13 @@ async function loginWithPassword(req, { email, password }) {
   }
 
   const student = await repo.findStudentByEmail(normalizedEmail);
-  let user = null;
+  let user = await repo.findUserByEmail(normalizedEmail);
 
-  if (student) {
+  if (!user && student?.userId) {
+    user = await repo.findUserById(student.userId);
+  }
+
+  if (student && !user) {
     if (!student.userId) {
       await recordLoginEvent({
         ip,
@@ -379,7 +440,9 @@ async function loginWithPassword(req, { email, password }) {
       });
       throw new Error('Sinh viên chưa liên kết userId');
     }
-  } else {
+  }
+
+  if (!user) {
     user = await repo.findUserByEmail(normalizedEmail);
     if (!user) {
       await recordLoginEvent({
@@ -391,6 +454,14 @@ async function loginWithPassword(req, { email, password }) {
       });
       throw new Error('Không tìm thấy sinh viên theo email');
     }
+  }
+
+  if (student && user && normalizeRole(user.role, 'student') === 'student') {
+    await resolveStudentForUser({
+      userId: user._id,
+      email: normalizedEmail,
+      autoLinkByEmail: true,
+    });
   }
 
   const isValidPassword = await verifyPassword(password, user?.password);
@@ -407,7 +478,7 @@ async function loginWithPassword(req, { email, password }) {
     throw new Error('Sai mật khẩu');
   }
 
-  if (user.status !== 'active' || user.isActive === false) {
+  if (isUserInactive(user)) {
     await recordLoginEvent({
       userId: user._id,
       ip,
@@ -539,9 +610,17 @@ async function refreshTokens(req, { refreshToken }) {
   await repo.touchRefreshTokenUsage(tokenDoc._id, { ip, userAgent });
 
   const user = await repo.findUserById(tokenDoc.user);
-  if (!user || user.status !== 'active') {
+  if (isUserInactive(user)) {
     await repo.revokeFamily(tokenDoc.familyId, 'user-inactive');
     throw new Error('User is inactive or not found.');
+  }
+
+  if (user.passwordChangedAt) {
+    const passwordChangedAtSeconds = Math.floor(new Date(user.passwordChangedAt).getTime() / 1000);
+    if (passwordChangedAtSeconds > (Number(payload?.iat) || 0)) {
+      await repo.revokeFamily(tokenDoc.familyId, 'password-changed');
+      throw new Error('Refresh token is no longer valid.');
+    }
   }
 
   const { accessToken, refreshToken: newRefreshToken, accessJti, refreshJti } = issueTokenPair(
@@ -732,6 +811,7 @@ async function resetPassword(req, { email, otp, newPassword }) {
     mustChangePassword: false,
     passwordChangedAt: new Date(),
   });
+  await revokeAllSessionsForUser(user._id, 'password-reset');
 
   await recordLoginEvent({
     userId: user._id,
@@ -764,17 +844,7 @@ async function logoutAllSessions(req) {
 
   const tokens = await repo.listRefreshTokensByUser(userId);
   const sessions = buildSessionsFromTokens(tokens, req.auth?.familyId);
-
-  const revokeResult = await repo.revokeAllFamiliesForUser(userId, 'logout-all');
-
-  // End device sessions best-effort.
-  const deviceSessionIds = tokens
-    .map((t) => t?.deviceSession?._id || t?.deviceSession)
-    .filter(Boolean);
-  for (const deviceSessionId of deviceSessionIds) {
-    // eslint-disable-next-line no-await-in-loop
-    await repo.endDeviceSession(deviceSessionId);
-  }
+  const { revokeResult } = await revokeAllSessionsForUser(userId, 'logout-all');
 
   await recordLoginEvent({
     userId,
@@ -809,14 +879,7 @@ async function revokeSession(req, { familyId }) {
   }
 
   const revokeResult = await repo.revokeFamilyForUser(userId, familyId, 'session-revoked');
-
-  const deviceSessionIds = tokensInFamily
-    .map((t) => t?.deviceSession?._id || t?.deviceSession)
-    .filter(Boolean);
-  for (const deviceSessionId of deviceSessionIds) {
-    // eslint-disable-next-line no-await-in-loop
-    await repo.endDeviceSession(deviceSessionId);
-  }
+  await endDeviceSessionsForTokens(tokensInFamily);
 
   await recordLoginEvent({
     userId,

@@ -13,6 +13,7 @@ function formatPermission(permissionDoc) {
     module: permissionDoc.module,
     action: permissionDoc.action,
     description: permissionDoc.description,
+    isActive: permissionDoc.isActive !== false,
   };
 }
 
@@ -53,8 +54,8 @@ async function resolvePermissionsInput({ permissionIds, permissionCodes }) {
   return deduped;
 }
 
-async function buildRolePermissionsMap(roleIds) {
-  const rolePermissions = await repo.listRolePermissions(roleIds);
+async function buildRolePermissionsMap(roleIds, options = {}) {
+  const rolePermissions = await repo.listRolePermissions(roleIds, options);
   const map = new Map();
 
   rolePermissions.forEach((rp) => {
@@ -73,9 +74,11 @@ async function buildRolePermissionsMap(roleIds) {
 }
 
 async function viewRoles() {
-  const roles = await repo.listRoles();
+  const roles = await repo.listRoles({ includeInactive: true });
   const roleIds = roles.map((r) => r._id);
-  const permissionsMap = await buildRolePermissionsMap(roleIds);
+  const permissionsMap = await buildRolePermissionsMap(roleIds, {
+    includeInactivePermissions: true,
+  });
 
   return roles.map((role) => {
     const perms = permissionsMap.get(String(role._id)) || [];
@@ -84,7 +87,7 @@ async function viewRoles() {
 }
 
 async function viewPermissions() {
-  const permissions = await repo.listPermissions();
+  const permissions = await repo.listPermissions({ includeInactive: true });
   return permissions.map(formatPermission);
 }
 

@@ -14,57 +14,73 @@ import authService from '../../services/authService';
 import useAuthStore from '../../stores/useAuthStore';
 import { AUTH_STORAGE_KEY, setItem } from '../../utils/storage';
 
+function normalizeRole(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeEmailInput(value) {
+  return String(value || '')
+    .replace(/\s+/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function buildPasswordCandidates(value) {
+  const raw = String(value ?? '');
+  const noZeroWidth = raw.replace(/[\u200B-\u200D\uFEFF]/g, '');
+  const trimmed = noZeroWidth.trim();
+
+  return [raw, noZeroWidth, trimmed]
+    .filter((item) => item.length > 0)
+    .filter((item, index, arr) => arr.indexOf(item) === index);
+}
+
 export default function LoginScreen({ onForgotPassword }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  function normalizeRole(value) {
-    return String(value || '').trim().toLowerCase();
-  }
+  async function finalizeLogin(payload) {
+    const user = payload?.data?.user || null;
+    const accessToken = payload?.data?.tokens?.accessToken || null;
+    const refreshToken = payload?.data?.tokens?.refreshToken || null;
 
-  function normalizeEmailInput(value) {
-    return String(value || '')
-      .replace(/\s+/g, '')
-      .trim()
-      .toLowerCase();
-  }
+    if (!accessToken) {
+      throw new Error('Phản hồi đăng nhập không chứa access token.');
+    }
 
-  function buildPasswordCandidates(value) {
-    const raw = String(value ?? '');
-    const noZeroWidth = raw.replace(/[\u200B-\u200D\uFEFF]/g, '');
-    const trimmed = noZeroWidth.trim();
+    if (normalizeRole(user?.role) === 'student' && !user?.student) {
+      throw new Error('Không tìm thấy hồ sơ sinh viên. Vui lòng liên hệ quản trị viên.');
+    }
 
-    const candidates = [raw, noZeroWidth, trimmed]
-      .filter((item) => item.length > 0)
-      .filter((item, index, arr) => arr.indexOf(item) === index);
-
-    return candidates;
+    const authPayload = { user, accessToken, refreshToken };
+    setAuth(authPayload);
+    await setItem(AUTH_STORAGE_KEY, authPayload);
   }
 
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
-      setError('Vui lòng nhập email và mật khẩu');
+      setError('Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     setError('');
 
     try {
       const normalizedEmail = normalizeEmailInput(email);
       const passwordCandidates = buildPasswordCandidates(password);
 
-      let response = null;
+      let loginResponse = null;
       let lastError = null;
 
       for (const candidatePassword of passwordCandidates) {
         try {
-          // Try progressively sanitized password variants for copy/paste artifacts.
+          // Retry with sanitized variants in case the password was pasted with hidden characters.
           // eslint-disable-next-line no-await-in-loop
-          response = await authService.login({
+          loginResponse = await authService.login({
             email: normalizedEmail,
             password: candidatePassword,
           });
@@ -79,27 +95,11 @@ export default function LoginScreen({ onForgotPassword }) {
         }
       }
 
-      if (!response) {
-        throw lastError || new Error('Invalid credentials.');
+      if (!loginResponse) {
+        throw lastError || new Error('Email hoặc mật khẩu không đúng.');
       }
 
-      const user = response?.data?.user || null;
-      const accessToken = response?.data?.tokens?.accessToken || null;
-      const refreshToken = response?.data?.tokens?.refreshToken || null;
-
-      if (!accessToken) {
-        setError('Đăng nhập chưa nhận được access token từ server');
-        return;
-      }
-
-      if (normalizeRole(user?.role) === 'student' && !user?.student) {
-        setError('Tài khoản sinh viên chưa được liên kết hồ sơ. Vui lòng liên hệ quản trị viên.');
-        return;
-      }
-
-      const authPayload = { user, accessToken, refreshToken };
-      setAuth(authPayload);
-      await setItem(AUTH_STORAGE_KEY, authPayload);
+      await finalizeLogin(loginResponse);
     } catch (err) {
       const backendMessage = err?.response?.data?.message;
       if (backendMessage) {
@@ -108,7 +108,7 @@ export default function LoginScreen({ onForgotPassword }) {
         setError(`Không kết nối được API. Hãy kiểm tra backend tại ${API_BASE_URL} rồi thử lại.`);
       }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -126,6 +126,7 @@ export default function LoginScreen({ onForgotPassword }) {
           placeholder="Email"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           value={email}
           onChangeText={setEmail}
         />
@@ -142,21 +143,22 @@ export default function LoginScreen({ onForgotPassword }) {
 
         <Pressable
           onPress={handleLogin}
-          style={[styles.button, loading && styles.buttonDisabled]}
-          disabled={loading}
+          style={[styles.button, styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+          disabled={isSubmitting}
         >
-          {loading ? (
+          {isSubmitting ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>Đăng nhập</Text>
+            <Text style={styles.primaryButtonText}>Đăng nhập</Text>
           )}
         </Pressable>
+
         <Pressable
           onPress={onForgotPassword}
           style={styles.linkButton}
-          disabled={loading || typeof onForgotPassword !== 'function'}
+          disabled={isSubmitting || typeof onForgotPassword !== 'function'}
         >
-          <Text style={styles.linkText}>Forgot password?</Text>
+          <Text style={styles.linkText}>Quên mật khẩu?</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -174,16 +176,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 16,
+    gap: 10,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: '#1e3a8a',
-    marginBottom: 6,
   },
   subtitle: {
     color: '#64748b',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
@@ -191,28 +193,30 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 10,
   },
   error: {
     color: '#dc2626',
-    marginBottom: 10,
     fontSize: 12,
   },
   button: {
-    backgroundColor: '#2563eb',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+  },
+  primaryButton: {
+    backgroundColor: '#2563eb',
   },
   buttonDisabled: {
     opacity: 0.7,
   },
-  buttonText: {
+  primaryButtonText: {
     color: '#ffffff',
     fontWeight: '700',
   },
   linkButton: {
-    marginTop: 12,
+    marginTop: 4,
     alignItems: 'center',
     paddingVertical: 4,
   },

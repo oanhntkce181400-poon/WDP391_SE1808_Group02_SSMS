@@ -1,7 +1,83 @@
 const mongoose = require("mongoose");
 const Student = require("../models/student.model");
+const User = require("../models/user.model");
 const EnrollmentSnapshot = require("../models/enrollmentSnapshot.model");
 const Semester = require("../models/semester.model");
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function findStudentByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const exact = await Student.findOne({ email: normalizedEmail }).lean();
+  if (exact) return exact;
+
+  const pattern = new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i");
+  return Student.findOne({ email: { $regex: pattern } }).lean();
+}
+
+async function resolveStudentForUser({ userId, email, autoLinkByEmail = false } = {}) {
+  if (!userId) return null;
+
+  let student = await Student.findOne({ userId }).lean();
+  if (student || !autoLinkByEmail) {
+    return student;
+  }
+
+  const emailMatchedStudent = await findStudentByEmail(email);
+  if (!emailMatchedStudent) {
+    return null;
+  }
+
+  const currentLinkedUserId = emailMatchedStudent.userId
+    ? String(emailMatchedStudent.userId)
+    : "";
+  const targetUserId = String(userId);
+
+  if (currentLinkedUserId === targetUserId) {
+    return emailMatchedStudent;
+  }
+
+  let relinkFilter = null;
+
+  if (!currentLinkedUserId) {
+    relinkFilter = {
+      _id: emailMatchedStudent._id,
+      $or: [{ userId: { $exists: false } }, { userId: null }],
+    };
+  } else {
+    const linkedUserExists = await User.exists({ _id: emailMatchedStudent.userId });
+    if (!linkedUserExists) {
+      relinkFilter = {
+        _id: emailMatchedStudent._id,
+        userId: emailMatchedStudent.userId,
+      };
+    }
+  }
+
+  if (!relinkFilter) {
+    return null;
+  }
+
+  student = await Student.findOneAndUpdate(
+    relinkFilter,
+    { $set: { userId } },
+    { new: true },
+  ).lean();
+
+  if (student) {
+    return student;
+  }
+
+  return Student.findOne({ userId }).lean();
+}
 
 /**
  * Tên lớp trong "Lịch sử xếp lớp (đã lưu)" = EnrollmentSnapshot.title (VD: SE101, SE102).
@@ -55,9 +131,15 @@ async function findPlacementSnapshotTitleForStudent(studentDoc) {
   return findTitle({});
 }
 
-async function getStudentViewForUserId(userId) {
+async function getStudentViewForUserId(userId, options = {}) {
   if (!userId) return null;
-  const student = await Student.findOne({ userId }).lean();
+
+  const student = await resolveStudentForUser({
+    userId,
+    email: options.email,
+    autoLinkByEmail: Boolean(options.autoLinkByEmail),
+  });
+
   if (!student) return null;
 
   const placementClassName = await findPlacementSnapshotTitleForStudent(student);
@@ -76,5 +158,6 @@ async function getStudentViewForUserId(userId) {
 
 module.exports = {
   getStudentViewForUserId,
+  resolveStudentForUser,
   findPlacementSnapshotTitleForStudent,
 };

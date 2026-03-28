@@ -117,7 +117,9 @@ class FeedbackService {
       });
 
       if (existingFeedback) {
-        throw new Error('You have already submitted feedback for this class');
+        const duplicateError = new Error('You have already submitted feedback for this class');
+        duplicateError.code = 'FEEDBACK_ALREADY_SUBMITTED';
+        throw duplicateError;
       }
 
       const feedback = new Feedback({
@@ -144,6 +146,13 @@ class FeedbackService {
 
       return feedback;
     } catch (error) {
+      if (error?.code === 11000) {
+        const duplicateError = new Error('You have already submitted feedback for this class');
+        duplicateError.code = 'FEEDBACK_ALREADY_SUBMITTED';
+        console.error('Duplicate feedback submission blocked:', error);
+        throw duplicateError;
+      }
+
       console.error('Error creating feedback:', error);
       throw error;
     }
@@ -382,14 +391,11 @@ class FeedbackService {
   }
 
   /**
-   * Students are allowed to update only their own record, but the mobile
-   * product requirement expects that once a student has submitted lecturer
-   * feedback they can come back and refine it later from the same screen.
+   * Students may update only their own record while the active lecturer
+   * feedback window is still open.
    *
-   * The previous implementation reused the template feedback window check here.
-   * That created an inconsistent flow where create could succeed but an
-   * immediate update could still be blocked. We therefore keep ownership
-   * validation and the whitelist of editable fields, but remove the time gate.
+   * This intentionally mirrors the create flow so the mobile UI and the API
+   * enforce the same business rule instead of drifting apart.
    */
   async updateFeedback(feedbackId, userId, updateData) {
     try {
@@ -402,6 +408,8 @@ class FeedbackService {
       if (!feedback.submittedBy || feedback.submittedBy.toString() !== userId.toString()) {
         throw new Error('You do not have permission to update this feedback');
       }
+
+      await this.assertFeedbackWindowOpen();
 
       const allowedFields = ['rating', 'comment', 'criteria'];
       const update = {};

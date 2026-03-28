@@ -4,8 +4,8 @@ import gradesService from '../../services/gradesService';
 import scheduleService from '../../services/scheduleService';
 
 function getEnrollmentStatusLabel(status) {
-  if (status === 'completed') return 'Da hoan thanh';
-  if (status === 'enrolled') return 'Dang hoc';
+  if (status === 'completed') return 'Đã hoàn thành';
+  if (status === 'enrolled') return 'Đang học';
   return status || '-';
 }
 
@@ -21,7 +21,7 @@ export default function LecturerClassStudentsPage() {
 
   const loadClassStudents = async () => {
     if (!classSectionId) {
-      setError('Khong tim thay ID lop hoc.');
+      setError('Không tìm thấy ID lớp học.');
       setLoading(false);
       return;
     }
@@ -47,7 +47,7 @@ export default function LecturerClassStudentsPage() {
       if (!targetClass) {
         setStudents([]);
         setClassInfo(null);
-        setError('Ban khong co quyen xem lop nay hoac lop khong ton tai.');
+        setError('Bạn không có quyền xem lớp này hoặc lớp không tồn tại.');
         return;
       }
 
@@ -56,7 +56,7 @@ export default function LecturerClassStudentsPage() {
     } catch (err) {
       setStudents([]);
       setClassInfo(null);
-      setError(err?.response?.data?.message || 'Khong the tai danh sach sinh vien cua lop.');
+      setError(err?.response?.data?.message || 'Không thể tải danh sách sinh viên của lớp.');
     } finally {
       setLoading(false);
     }
@@ -89,10 +89,10 @@ export default function LecturerClassStudentsPage() {
             onClick={() => navigate('/lecturer')}
             className="mb-3 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
           >
-            Quay lai trang chu
+            Quay lại trang chủ
           </button>
-          <h1 className="text-2xl font-bold text-slate-900">Chi tiet lop hoc</h1>
-          <p className="mt-1 text-sm text-slate-600">Danh sach sinh vien da dang ky trong lop duoc phan cong.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Chi tiết lớp học</h1>
+          <p className="mt-1 text-sm text-slate-600">Danh sách sinh viên đã đăng ký trong lớp được phân công.</p>
         </div>
 
         <div className="w-full max-w-md">
@@ -100,7 +100,7 @@ export default function LecturerClassStudentsPage() {
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Tim theo ma SV, ten, email..."
+            placeholder="Tìm theo mã SV, tên, email..."
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
           />
         </div>
@@ -110,22 +110,22 @@ export default function LecturerClassStudentsPage() {
         <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Ma lop</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Mã lớp</div>
               <div className="mt-1 font-semibold text-slate-900">{classInfo.classCode || '-'}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Mon hoc</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Môn học</div>
               <div className="mt-1 font-semibold text-slate-900">{classInfo.subject?.subjectCode || '-'}</div>
               <div className="text-slate-500">{classInfo.subject?.subjectName || '-'}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Hoc ky</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Học kỳ</div>
               <div className="mt-1 font-semibold text-slate-900">
                 {classInfo.semester || '-'} / {classInfo.academicYear || '-'}
               </div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">Si so hien tai</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Sĩ số hiện tại</div>
               <div className="mt-1 font-semibold text-slate-900">
                 {Number(classInfo.currentEnrollment || 0)}/{Number(classInfo.maxCapacity || 0)}
               </div>
@@ -136,13 +136,13 @@ export default function LecturerClassStudentsPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Danh sach sinh vien</h2>
-          <div className="text-sm text-slate-500">{filteredStudents.length} sinh vien</div>
+          <h2 className="text-lg font-semibold text-slate-900">Danh sách sinh viên</h2>
+          <div className="text-sm text-slate-500">{filteredStudents.length} sinh viên</div>
         </div>
 
         {loading ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            Dang tai danh sach sinh vien...
+            Đang tải danh sách sinh viên...
           </div>
         ) : null}
 
@@ -156,10 +156,10 @@ export default function LecturerClassStudentsPage() {
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left">
                   <th className="px-3 py-2">#</th>
-                  <th className="px-3 py-2">Ma sinh vien</th>
-                  <th className="px-3 py-2">Ho va ten</th>
+                  <th className="px-3 py-2">Mã sinh viên</th>
+                  <th className="px-3 py-2">Họ và tên</th>
                   <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Trang thai</th>
+                  <th className="px-3 py-2">Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -182,7 +182,7 @@ export default function LecturerClassStudentsPage() {
                 {filteredStudents.length === 0 ? (
                   <tr>
                     <td className="px-3 py-8 text-center text-slate-500" colSpan={5}>
-                      Khong tim thay sinh vien phu hop.
+                      Không tìm thấy sinh viên phù hợp.
                     </td>
                   </tr>
                 ) : null}

@@ -58,6 +58,13 @@ class FeedbackController {
         });
       }
 
+      if (error.code === 'FEEDBACK_ALREADY_SUBMITTED') {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,
@@ -250,9 +257,8 @@ class FeedbackController {
   /**
    * PUT /api/feedbacks/:id
    *
-   * Only the student who created the feedback can update it. The service keeps
-   * the ownership guard and editable-field whitelist, but no longer blocks
-   * updates behind a global template time window.
+   * Only the student who created the feedback can update it, and only while the
+   * active lecturer-feedback window remains open.
    */
   async updateFeedback(req, res) {
     try {
@@ -287,6 +293,13 @@ class FeedbackController {
       });
     } catch (error) {
       console.error('Error updating feedback:', error);
+
+      if (error.code === 'FEEDBACK_WINDOW_CLOSED') {
+        return res.status(403).json({
+          success: false,
+          message: error.message,
+        });
+      }
 
       if (error.message.includes('not found')) {
         return res.status(404).json({

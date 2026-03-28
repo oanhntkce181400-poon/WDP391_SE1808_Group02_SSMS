@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthSessionStorage, storeAuthSession } from '../utils/authStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -22,6 +23,17 @@ axiosClient.interceptors.request.use(
 let isRefreshing = false;
 let pendingQueue = [];
 
+function shouldSkipRefreshRetry(url) {
+  const normalizedUrl = String(url || '');
+  return [
+    '/auth/login',
+    '/auth/google',
+    '/auth/refresh',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+  ].some((path) => normalizedUrl.includes(path));
+}
+
 function resolveQueue(error) {
   pendingQueue.forEach(({ reject }) => reject(error));
   pendingQueue = [];
@@ -42,8 +54,7 @@ axiosClient.interceptors.response.use(
       throw error;
     }
 
-    const isAuthRoute = String(originalRequest.url || '').includes('/auth/');
-    if (status !== 401 || isAuthRoute) {
+    if (status !== 401 || shouldSkipRefreshRetry(originalRequest.url)) {
       throw error;
     }
 
@@ -61,10 +72,15 @@ axiosClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      await axiosClient.post('/auth/refresh');
+      const refreshResponse = await axiosClient.post('/auth/refresh');
+      storeAuthSession({
+        user: refreshResponse?.data?.user,
+        accessToken: refreshResponse?.data?.tokens?.accessToken,
+      });
       retryQueue();
       return axiosClient(originalRequest);
     } catch (refreshError) {
+      clearAuthSessionStorage();
       resolveQueue(refreshError);
       throw refreshError;
     } finally {

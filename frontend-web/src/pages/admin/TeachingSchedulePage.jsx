@@ -191,7 +191,7 @@ export default function TeachingSchedulePage() {
       const response = await scheduleService.getTeachingSchedule(params);
       setData(response?.data?.data || null);
     } catch (err) {
-      const message = err?.response?.data?.message || 'Khong tai duoc lich giang day';
+      const message = err?.response?.data?.message || 'Không tải được lịch giảng dạy';
       setData(null);
       setError(message);
     } finally {
@@ -648,12 +648,12 @@ export default function TeachingSchedulePage() {
 
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-sm font-medium text-slate-700">
-              {isAdminOrStaff ? 'Pham vi hien thi' : 'Tai khoan hien tai'}
+              {isAdminOrStaff ? 'Phạm vi hiển thị' : 'Tài khoản hiện tại'}
             </div>
             <p className="mt-2 text-sm text-slate-600">
               {isAdminOrStaff
-                ? 'Dang hien lich giang day cua toan bo giang vien trong hoc ky hien tai.'
-                : 'Dang hien lich giang day cua giang vien dang dang nhap.'}
+                ? 'Đang hiển thị lịch giảng dạy của toàn bộ giảng viên trong học kỳ hiện tại.'
+                : 'Đang hiển thị lịch giảng dạy của giảng viên đang đăng nhập.'}
             </p>
             <button
               type="button"
@@ -661,7 +661,7 @@ export default function TeachingSchedulePage() {
               onClick={() => fetchSchedule('')}
               disabled={loading}
             >
-              {loading ? 'Dang tai...' : 'Tai lai lich'}
+              {loading ? 'Đang tải...' : 'Tải lại lịch'}
             </button>
           </div>
 
@@ -742,7 +742,7 @@ export default function TeachingSchedulePage() {
                   <table className="w-full min-w-[980px] border-collapse text-sm">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="border border-slate-200 p-3 text-left">Ca hoc</th>
+                        <th className="border border-slate-200 p-3 text-left">Ca học</th>
                         {DAYS.map((day) => (
                           <th key={day.value} className="border border-slate-200 p-3 text-left">
                             {day.label}
@@ -754,7 +754,7 @@ export default function TeachingSchedulePage() {
                       {timetableSlots.map((slot) => (
                         <tr key={slot._id}>
                           <td className="border border-slate-200 bg-slate-50 p-3 align-top">
-                            <div className="font-semibold text-slate-900">{slot.groupName || 'Ca hoc'}</div>
+                            <div className="font-semibold text-slate-900">{slot.groupName || 'Ca học'}</div>
                             <div className="text-xs text-slate-500">
                               {slot.startTime || '--'} - {slot.endTime || '--'}
                             </div>
@@ -775,7 +775,7 @@ export default function TeachingSchedulePage() {
                                       <div className="text-xs text-slate-600">{card.subject?.subjectName || '-'}</div>
                                       <div className="mt-2 text-xs text-slate-600">Phòng: {formatRoomLabel(card.room)}</div>
                                       <div className="text-xs text-slate-600">
-                                        Si so: {Number(card.currentEnrollment || 0)}/{Number(card.maxCapacity || 0)}
+                                        Sĩ số: {Number(card.currentEnrollment || 0)}/{Number(card.maxCapacity || 0)}
                                       </div>
                                     </div>
                                   ))}
@@ -835,7 +835,7 @@ export default function TeachingSchedulePage() {
                           <div className="mt-1 font-medium text-slate-900">{formatRoomLabel(cls.room)}</div>
                         </div>
                         <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Ca hoc</div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Ca học</div>
                           <div className="mt-1 font-medium text-slate-900">{formatTimeslotLabel(cls.timeslot)}</div>
                         </div>
                       </div>

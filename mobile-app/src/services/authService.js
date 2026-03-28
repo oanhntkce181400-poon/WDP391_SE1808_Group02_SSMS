@@ -5,6 +5,10 @@ const authService = {
     return axiosClient.post('/auth/login', data);
   },
 
+  loginWithGoogle(idToken) {
+    return axiosClient.post('/auth/google', { idToken });
+  },
+
   me() {
     return axiosClient.get('/auth/me');
   },

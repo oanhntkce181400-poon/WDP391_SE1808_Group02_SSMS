@@ -59,6 +59,11 @@ const feedbackService = {
     return axiosClient.get(`/feedbacks/${feedbackId}/window`);
   },
 
+  // Availability hiện tại cho luồng tạo feedback mới.
+  getFeedbackAvailability() {
+    return axiosClient.get('/feedbacks/availability');
+  },
+
   submitFeedback(data) {
     return axiosClient.post('/feedbacks', data);
   },
