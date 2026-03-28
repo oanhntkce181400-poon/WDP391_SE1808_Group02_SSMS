@@ -5,6 +5,8 @@ const Subject = require("../../models/subject.model");
 const mongoose = require("mongoose");
 const curriculumService = require("../../services/curriculum.service");
 const paymentValidationService = require("../../services/paymentValidation.service");
+const registrationPeriodService = require("../../services/registrationPeriod.service");
+const registrationService = require("../../services/registration.service");
 const repo = require("./autoEnrollment.repository");
 const classSectionService = require("../classSection/classSection.service");
 
@@ -110,6 +112,8 @@ function buildStudentStateMap(existingEnrollments, classSectionsById) {
       stateByStudent.set(studentId, {
         activeSubjectIds: new Set(),
         occupiedClassSectionIds: new Set(),
+        pendingCredits: 0,
+        pendingOverloadCount: 0,
       });
     }
 
@@ -149,6 +153,8 @@ function getOrCreateStudentState(stateByStudent, studentId) {
     stateByStudent.set(key, {
       activeSubjectIds: new Set(),
       occupiedClassSectionIds: new Set(),
+      pendingCredits: 0,
+      pendingOverloadCount: 0,
     });
   }
 
@@ -738,6 +744,53 @@ function isBetterClassSectionCandidate(currentBest, candidate) {
   );
 }
 
+function getAvailableClassSectionCandidates(
+  subjectId,
+  classSectionsBySubject,
+  occupiedClassSectionIds,
+  studentClassGroup,
+  curriculumSemesterOrder,
+) {
+  const subjectKey = String(subjectId);
+  const pool = classSectionsBySubject.get(subjectKey) || [];
+  const matchingGroup = [];
+  const fallbackGroup = [];
+
+  for (const classSection of pool) {
+    if (occupiedClassSectionIds?.has(String(classSection._id))) {
+      continue;
+    }
+    if (classSection.currentEnrollment >= classSection.maxCapacity) {
+      continue;
+    }
+    if (curriculumSemesterOrder != null) {
+      const clsCurriculumOrder = classSection.curriculumSemesterOrder;
+      if (
+        clsCurriculumOrder != null &&
+        clsCurriculumOrder !== curriculumSemesterOrder
+      ) {
+        continue;
+      }
+    }
+
+    if (!studentClassGroup || classSection.classGroup === studentClassGroup) {
+      matchingGroup.push(classSection);
+    } else {
+      fallbackGroup.push(classSection);
+    }
+  }
+
+  const sorter = (left, right) => {
+    if (isBetterClassSectionCandidate(left, right)) return -1;
+    if (isBetterClassSectionCandidate(right, left)) return 1;
+    return 0;
+  };
+
+  matchingGroup.sort(sorter);
+  fallbackGroup.sort(sorter);
+  return [...matchingGroup, ...fallbackGroup];
+}
+
 function pickAvailableClassSection(
   subjectId,
   classSectionsBySubject,
@@ -839,6 +892,69 @@ function formatCurriculumError(match, student) {
     default:
       return `Curriculum not found (majorCode=${majorCode}, enrollmentYear=${enrollmentYear}, cohort=${cohort})`;
   }
+}
+
+async function validateNormalModeAutoEnrollmentCandidate({
+  student,
+  subject,
+  classSection,
+  semester,
+  studentState,
+}) {
+  const [prerequisites, overload, credit, cohortAccess] = await Promise.all([
+    registrationService.validatePrerequisites(student._id, classSection._id),
+    registrationService.checkOverloadLimit(
+      student._id,
+      semester?._id || null,
+      classSection._id,
+    ),
+    registrationService.checkCreditLimit(
+      student._id,
+      semester?._id || null,
+      subject?.credits || 0,
+      20,
+    ),
+    registrationPeriodService.validateCurrentPeriodCohort(student.cohort),
+  ]);
+
+  const pendingCredits = Number(studentState?.pendingCredits || 0);
+  const pendingOverloadCount = Number(studentState?.pendingOverloadCount || 0);
+  const creditsToAdd = Number(subject?.credits || 0);
+  const projectedCredits =
+    Number(credit?.currentCredits || 0) + pendingCredits + creditsToAdd;
+  const maxCredits = Number(credit?.maxCredits || 20);
+  const projectedOverloadCount =
+    Number(overload?.currentOverloadCount || 0) +
+    pendingOverloadCount +
+    (overload?.enrollingCourseIsOverload ? 1 : 0);
+  const maxOverloadCourses = Number(overload?.maxOverloadCourses || 2);
+  const errors = [];
+
+  if (prerequisites?.eligible === false && prerequisites?.message) {
+    errors.push(prerequisites.message);
+  }
+  if (projectedOverloadCount > maxOverloadCourses) {
+    errors.push(
+      `You have exceeded the overload limit (maximum ${maxOverloadCourses} courses)`,
+    );
+  }
+  if (projectedCredits > maxCredits) {
+    errors.push(`Credit limit exceeded (${projectedCredits}/${maxCredits})`);
+  }
+  if (cohortAccess?.allowed === false && cohortAccess?.message) {
+    errors.push(cohortAccess.message);
+  }
+
+  return {
+    eligible: errors.length === 0,
+    errors,
+    creditsToAdd,
+    projectedCredits,
+    maxCredits,
+    projectedOverloadCount,
+    maxOverloadCourses,
+    enrollingCourseIsOverload: overload?.enrollingCourseIsOverload === true,
+  };
 }
 
 // Preflight là phần tổng quan để biết dữ liệu nền có đủ sạch để chạy batch hay không.
@@ -1769,6 +1885,7 @@ async function prepareAutoEnrollmentBatchContext(
 async function triggerAutoEnrollment(semesterId, options = {}) {
   const startedAt = Date.now();
   const dryRun = options.dryRun === true;
+  const atomic = options.atomic === true;
   const ctx = await prepareAutoEnrollmentBatchContext(semesterId, options, {
     applyStudentLimit: true,
   });
@@ -2135,13 +2252,46 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         }
 
         // Chọn lớp phù hợp nhất cho đúng subject này từ pool lớp đang mở.
-        const classSection = pickAvailableClassSection(
+        const candidateSections = getAvailableClassSectionCandidates(
           subjectId,
           classSectionsBySubject,
           studentState.occupiedClassSectionIds,
           studentClassGroup,
           curriculumSemesterOrder,
         );
+        let classSection = null;
+        let validationResult = null;
+        const validationErrors = new Set();
+
+        for (const candidateSection of candidateSections) {
+          const candidateValidation =
+            await validateNormalModeAutoEnrollmentCandidate({
+              student,
+              subject,
+              classSection: candidateSection,
+              semester,
+              studentState,
+            });
+          if (candidateValidation.eligible) {
+            classSection = candidateSection;
+            validationResult = candidateValidation;
+            break;
+          }
+
+          candidateValidation.errors
+            .filter(Boolean)
+            .forEach((message) => validationErrors.add(message));
+        }
+
+        if (!classSection && candidateSections.length > 0) {
+          studentLog.skipped.push(
+            `${subject.subjectCode}: ${
+              Array.from(validationErrors).join(" | ") ||
+              "No eligible class section passed auto-enrollment validation"
+            }`,
+          );
+          continue;
+        }
 
         // Nếu không còn lớp mở cho môn này, sinh viên được đưa sang waitlist thay vì bỏ qua im lặng.
         if (!classSection) {
@@ -2207,7 +2357,7 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
           classSection: classSection._id,
           enrollmentDate: new Date(),
           status: "enrolled",
-          isOverload: false,
+          isOverload: validationResult?.enrollingCourseIsOverload === true,
           note: `Auto enrolled by semester trigger ${semester.code} (${semesterPaymentCode})`,
         });
         incrementMapCounter(classSectionIncrementMap, classSection._id, 1);
@@ -2221,6 +2371,10 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         // Nhờ vậy các môn/lớp xử lý tiếp theo trong cùng vòng lặp sẽ nhìn thấy trạng thái mới nhất.
         studentState.activeSubjectIds.add(subjectId);
         studentState.occupiedClassSectionIds.add(String(classSection._id));
+        studentState.pendingCredits += Number(validationResult?.creditsToAdd || 0);
+        if (validationResult?.enrollingCourseIsOverload === true) {
+          studentState.pendingOverloadCount += 1;
+        }
         studentLog.enrolled.push({
           subjectCode: subject.subjectCode,
           subjectName: subject.subjectName,
@@ -2247,14 +2401,37 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   // dryRun chỉ mô phỏng kết quả, tuyệt đối không ghi DB.
   // Nếu chạy thật, enrollment, seat count, và waitlist sẽ được persist ở cuối batch.
   // Chặng 6: nếu không phải dryRun thì mới bulk ghi DB thật.
-  if (!dryRun) {
+  const persistenceSkipped = !dryRun && atomic && failed > 0;
+
+  if (!dryRun && !persistenceSkipped) {
     try {
-      const enrollmentPersistResult =
-        await repo.bulkUpsertEnrollments(pendingEnrollmentDocs);
-      await repo.bulkIncrementClassSections(
-        enrollmentPersistResult.insertedClassSectionCounts,
-      );
-      await repo.bulkUpsertWaitlists(pendingWaitlistDocs);
+      if (atomic) {
+        const session = await mongoose.startSession();
+        try {
+          await session.withTransaction(async () => {
+            const enrollmentPersistResult =
+              await repo.bulkUpsertEnrollments(pendingEnrollmentDocs, {
+                session,
+              });
+            await repo.bulkIncrementClassSections(
+              enrollmentPersistResult.insertedClassSectionCounts,
+              { session },
+            );
+            await repo.bulkUpsertWaitlists(pendingWaitlistDocs, {
+              session,
+            });
+          });
+        } finally {
+          await session.endSession();
+        }
+      } else {
+        const enrollmentPersistResult =
+          await repo.bulkUpsertEnrollments(pendingEnrollmentDocs);
+        await repo.bulkIncrementClassSections(
+          enrollmentPersistResult.insertedClassSectionCounts,
+        );
+        await repo.bulkUpsertWaitlists(pendingWaitlistDocs);
+      }
     } catch (error) {
       const persistError = formatAutoEnrollmentPersistenceError(error);
       persistError.statusCode = 500;
@@ -2307,6 +2484,8 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   const result = {
     success: failed === 0,
     dryRun,
+    atomic,
+    persistenceSkipped,
     durationMs,
     curriculumSemester: null, // sẽ set bên dưới nếu batch đồng nhất
     semester: {
@@ -2350,6 +2529,12 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
   ];
   if (uniqueSemesters.length === 1) {
     result.curriculumSemester = uniqueSemesters[0];
+  }
+
+  if (persistenceSkipped) {
+    result.success = false;
+    result.message =
+      "Atomic auto enrollment aborted because some students failed validation; no enrollment or waitlist changes were persisted.";
   }
 
   return result;

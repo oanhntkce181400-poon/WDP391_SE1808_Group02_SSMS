@@ -2,7 +2,10 @@ const Student = require('../models/student.model');
 const ClassSection = require('../models/classSection.model');
 const ClassEnrollment = require('../models/classEnrollment.model');
 const Semester = require('../models/semester.model');
-const { filterClassesBySemesterContext } = require('../utils/semesterMatch.util');
+const {
+  isDateRangeOverlapped,
+  normalizeAcademicYearKey,
+} = require('../utils/semesterMatch.util');
 
 const DASHBOARD_CLASS_STATUSES = ['draft', 'scheduled', 'published', 'locked', 'completed'];
 
@@ -35,7 +38,29 @@ async function loadDashboardClasses(semester) {
     .select('_id maxCapacity currentEnrollment semester academicYear startDate endDate')
     .lean();
 
-  return semester ? filterClassesBySemesterContext(classes, semester) : classes;
+  if (!semester) {
+    return classes;
+  }
+
+  const targetAcademicYear = normalizeAcademicYearKey(semester.academicYear);
+
+  return classes.filter((classSection) => {
+    if (Number(classSection.semester) !== Number(semester.semesterNum)) {
+      return false;
+    }
+
+    const classAcademicYear = normalizeAcademicYearKey(classSection.academicYear);
+    if (classAcademicYear && targetAcademicYear && classAcademicYear === targetAcademicYear) {
+      return true;
+    }
+
+    return isDateRangeOverlapped(
+      classSection.startDate,
+      classSection.endDate,
+      semester.startDate,
+      semester.endDate,
+    );
+  });
 }
 
 /**

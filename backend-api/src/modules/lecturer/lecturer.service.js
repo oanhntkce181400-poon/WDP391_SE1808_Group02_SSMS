@@ -104,7 +104,17 @@ async function ensureTeacherUserAccount(teacher, actorId) {
 }
 
 async function listLecturers(query = {}) {
-  const { name, dept, status, degree, gender, page = 1, limit = 12 } = query;
+  const {
+    name,
+    dept,
+    status,
+    degree,
+    gender,
+    sortBy = "createdAt",
+    sortOrder = "desc",
+    page = 1,
+    limit = 12,
+  } = query;
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 12));
@@ -123,9 +133,15 @@ async function listLecturers(query = {}) {
   if (status === "active") filter.isActive = true;
   else if (status === "inactive") filter.isActive = false;
 
+  const sortOptions = {};
+  sortOptions[sortBy || "createdAt"] = sortOrder === "asc" ? 1 : -1;
+  if (!Object.prototype.hasOwnProperty.call(sortOptions, "_id")) {
+    sortOptions._id = sortOrder === "asc" ? 1 : -1;
+  }
+
   const [total, lecturers] = await Promise.all([
     repo.countLecturers(filter),
-    repo.findLecturers(filter, { page: pageNum, limit: limitNum }),
+    repo.findLecturers(filter, { page: pageNum, limit: limitNum, sort: sortOptions }),
   ]);
 
   return {

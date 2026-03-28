@@ -239,7 +239,12 @@ export default function ClassManagement() {
     async (page = 1, keyword = "", status = "") => {
       setLoading(true);
       try {
-        const params = { page, limit: 10 };
+        const params = {
+          page,
+          limit: 10,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        };
         if (keyword) params.search = keyword;
         if (status) params.status = status;
         const res = await classService.getAllClasses(params);

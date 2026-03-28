@@ -125,21 +125,21 @@ export default function Dashboard() {
   // Each card intentionally answers a different admin question: scale, class load, and registration health.
   const statCards = [
     {
-      label: 'Total Students',
+      label: 'Active Students',
       value: stats.totalStudents,
-      helper: `${stats.registeredStudents} students registered`,
+      helper: `${stats.registeredStudents} students registered in this semester`,
       tone: 'from-blue-600 to-cyan-500',
     },
     {
-      label: 'Total Classes',
+      label: 'Current Semester Classes',
       value: stats.totalClasses,
-      helper: `${stats.totalEnrollments} enrollments recorded`,
+      helper: `${stats.totalEnrollments} enrollments recorded in ${stats.currentSemester?.code || 'the current semester'}`,
       tone: 'from-emerald-600 to-teal-500',
     },
     {
       label: 'Registration Rate',
       value: formatPercent(stats.registrationRate),
-      helper: `Capacity used: ${formatPercent(stats.capacityUtilization)}`,
+      helper: `Current semester capacity used: ${formatPercent(stats.capacityUtilization)}`,
       tone: 'from-amber-500 to-orange-500',
     },
   ];
@@ -153,7 +153,8 @@ export default function Dashboard() {
             {stats.currentSemester?.name || 'Latest semester overview'}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Last updated: {loading ? 'Loading...' : formatDateTime(stats.generatedAt)}
+            Scope: {stats.currentSemester?.code || 'Latest active semester'} · Last updated:{' '}
+            {loading ? 'Loading...' : formatDateTime(stats.generatedAt)}
           </p>
         </div>
 

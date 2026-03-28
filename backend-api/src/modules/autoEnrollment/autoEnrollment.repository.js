@@ -12,6 +12,10 @@ const {
 } = require('../../utils/studentHomeroomFromEnrollments');
 
 const ACTIVE_ENROLLMENT_STATUSES = ['enrolled', 'completed'];
+const PROMOTABLE_CLASS_SECTION_STATUSES =
+  process.env.AUTO_ENROLLMENT_INCLUDE_DRAFT === 'true'
+    ? ['published', 'scheduled', 'draft']
+    : ['published', 'scheduled'];
 
 // Debug flag: bật=true khi cần trace, tắt=false khi hoàn thiện
 const _DEBUG = false;
@@ -611,7 +615,7 @@ async function findStudentIdsWithEnrollmentInSystemSemester(
 
 // Dùng bulkWrite + upsert để chèn hàng loạt enrollment một cách hiệu quả.
 // filter(student + classSection) giúp chống tạo trùng nếu batch bị chạy lặp.
-async function bulkUpsertEnrollments(enrollmentDocs) {
+async function bulkUpsertEnrollments(enrollmentDocs, options = {}) {
   if (!Array.isArray(enrollmentDocs) || enrollmentDocs.length === 0) {
     return {
       matchedCount: 0,
@@ -635,7 +639,10 @@ async function bulkUpsertEnrollments(enrollmentDocs) {
     },
   }));
 
-  const bulkResult = await ClassEnrollment.bulkWrite(operations, { ordered: false });
+  const bulkResult = await ClassEnrollment.bulkWrite(operations, {
+    ordered: false,
+    ...(options.session ? { session: options.session } : {}),
+  });
   const insertedIndexes = new Set();
 
   if (bulkResult?.upsertedIds && typeof bulkResult.upsertedIds === 'object') {
@@ -678,7 +685,7 @@ async function bulkUpsertEnrollments(enrollmentDocs) {
 
 // Waitlist cũng được upsert theo bộ khóa student + subject + target semester + year.
 // Như vậy cùng một sinh viên sẽ không bị xếp chờ lặp nhiều lần cho cùng một môn trong cùng học kỳ.
-async function bulkUpsertWaitlists(waitlistDocs) {
+async function bulkUpsertWaitlists(waitlistDocs, options = {}) {
   if (!Array.isArray(waitlistDocs) || waitlistDocs.length === 0) {
     return {
       matchedCount: 0,
@@ -704,12 +711,15 @@ async function bulkUpsertWaitlists(waitlistDocs) {
     },
   }));
 
-  return Waitlist.bulkWrite(operations, { ordered: false });
+  return Waitlist.bulkWrite(operations, {
+    ordered: false,
+    ...(options.session ? { session: options.session } : {}),
+  });
 }
 
 // Sau khi service quyết định được các enrollment mới, repository mới ghi tăng currentEnrollment.
 // Việc cộng dồn trước trong Map rồi bulkWrite một lần giúp giảm số lần round-trip tới DB.
-async function bulkIncrementClassSections(classSectionIncrementMap) {
+async function bulkIncrementClassSections(classSectionIncrementMap, options = {}) {
   const incrementEntries =
     classSectionIncrementMap instanceof Map
       ? Array.from(classSectionIncrementMap.entries())
@@ -731,7 +741,10 @@ async function bulkIncrementClassSections(classSectionIncrementMap) {
     };
   }
 
-  return ClassSection.bulkWrite(operations, { ordered: false });
+  return ClassSection.bulkWrite(operations, {
+    ordered: false,
+    ...(options.session ? { session: options.session } : {}),
+  });
 }
 
 async function findClassSectionById(id) {
@@ -1035,7 +1048,7 @@ async function promoteWaitlist(waitlistId, { targetClassSectionId } = {}) {
       subject: waitlist.subject,
       semester: waitlist.targetSemester,
       academicYear: waitlist.targetAcademicYear,
-      status: { $in: ['open', 'scheduled'] },
+      status: { $in: PROMOTABLE_CLASS_SECTION_STATUSES },
       $expr: { $lt: ['$currentEnrollment', '$maxCapacity'] },
     })
       .sort({ currentEnrollment: 1 })

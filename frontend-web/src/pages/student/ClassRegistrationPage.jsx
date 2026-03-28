@@ -185,6 +185,9 @@ export default function ClassRegistrationPage() {
 
   const creditInfo = eligibility?.limits?.credit;
   const overloadInfo = eligibility?.limits?.overload;
+  const cohortAccess = eligibility?.limits?.cohortAccess;
+  const repeatCohortAccess = cohortAccess?.requestTypes?.repeat || null;
+  const overloadCohortAccessSummary = cohortAccess?.requestTypes?.overload || null;
 
   // Progress bar "x/y tín chỉ" dùng currentCredits và maxCredits từ BE.
   const creditPercent = useMemo(() => {
@@ -203,6 +206,11 @@ export default function ClassRegistrationPage() {
     if (occupancyPercentage >= 80) return 'Nearly full';
     return 'Available';
   };
+
+  const getCohortTone = (allowed) =>
+    allowed === false
+      ? 'border-red-200 bg-red-50 text-red-700'
+      : 'border-emerald-200 bg-emerald-50 text-emerald-700';
 
   const getPageItems = (currentPage, totalPages) => {
     if (!totalPages || totalPages <= 1) return [];
@@ -349,6 +357,29 @@ export default function ClassRegistrationPage() {
             <div className="text-sm text-slate-600">
               Cohort: <span className="font-semibold text-slate-900">K{eligibility?.student?.cohort || '-'}</span>
             </div>
+            {cohortAccess && (
+              <>
+                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${getCohortTone(cohortAccess.allowed)}`}>
+                  {cohortAccess.message}
+                </div>
+                {(repeatCohortAccess || overloadCohortAccessSummary) && (
+                  <div className="mt-2 grid gap-2">
+                    {repeatCohortAccess && (
+                      <div className={`rounded-lg border px-3 py-2 text-xs ${getCohortTone(repeatCohortAccess.allowed)}`}>
+                        Repeat registration: {repeatCohortAccess.allowed ? 'Allowed' : 'Blocked'}
+                      </div>
+                    )}
+                    {overloadCohortAccessSummary && (
+                      <div
+                        className={`rounded-lg border px-3 py-2 text-xs ${getCohortTone(overloadCohortAccessSummary.allowed)}`}
+                      >
+                        Overload registration: {overloadCohortAccessSummary.allowed ? 'Allowed' : 'Blocked'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
             <div className="mt-2 text-sm text-slate-600">
               Overload: <span className="font-semibold text-slate-900">{overloadInfo?.currentOverloadCount || 0}/2</span>
             </div>
@@ -376,6 +407,7 @@ export default function ClassRegistrationPage() {
               {classes.map((cls) => {
                 const validation = validationResults[cls._id];
                 const validationErrors = validation?.validationErrors || [];
+                const classCohortAccess = validation?.cohortAccess || null;
                 // cannotRegister là tổng hợp tất cả điều kiện chặn ở tầng UI:
                 // - lớp đầy
                 // - cohort bị chặn
@@ -462,6 +494,16 @@ export default function ClassRegistrationPage() {
                               <li key={err}>- {err}</li>
                             ))}
                           </ul>
+                        </div>
+                      )}
+
+                      {classCohortAccess && !classCohortAccess.allowed && (
+                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                          <div className="mb-1 flex items-center gap-1 font-semibold">
+                            <AlertTriangle className="h-4 w-4" />
+                            Cohort access blocked
+                          </div>
+                          <p>{classCohortAccess.message}</p>
                         </div>
                       )}
 

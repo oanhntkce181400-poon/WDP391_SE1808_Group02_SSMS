@@ -202,7 +202,10 @@ async function createSemester(data) {
     try {
       // Khi admin tạo học kỳ mới và tick "isCurrent", BE tự chạy auto-enrollment ngay.
       // Đây chính là backend của chức năng "Activate Automatic Enrollment".
-      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(String(doc._id));
+      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(
+        String(doc._id),
+        { atomic: true },
+      );
       if (autoEnrollment?.success === false) {
         throw buildAutoEnrollmentFailure(doc, autoEnrollment);
       }
@@ -278,7 +281,10 @@ async function updateSemester(id, data) {
     try {
       // Đây là nhánh quan trọng nhất của feature:
       // admin sửa học kỳ cũ và bật isCurrent = true -> tự trigger auto-enrollment.
-      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(id);
+      const autoEnrollment = await autoEnrollmentService.triggerAutoEnrollment(
+        id,
+        { atomic: true },
+      );
       if (autoEnrollment?.success === false) {
         throw buildAutoEnrollmentFailure(updated, autoEnrollment);
       }

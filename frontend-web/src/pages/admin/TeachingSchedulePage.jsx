@@ -4,6 +4,8 @@ import subjectService from '../../services/subjectService';
 import roomService from '../../services/roomService';
 import timeslotService from '../../services/timeslotService';
 
+const ALL_SEMESTERS_VALUE = 'all';
+
 const DAYS = [
   { value: 1, label: 'Thứ 2' },
   { value: 2, label: 'Thứ 3' },
@@ -47,6 +49,46 @@ function formatDateRange(startDate, endDate) {
   return `${start} - ${end}`;
 }
 
+function formatSemesterLabel(semester) {
+  if (!semester) return 'Học kỳ hiện tại';
+  if (semester.label) return semester.label;
+
+  const baseLabel =
+    semester.name ||
+    (semester.semesterNum && semester.academicYear
+      ? `Học kỳ ${semester.semesterNum} / ${semester.academicYear}`
+      : semester.code || 'Học kỳ');
+
+  return semester.isCurrent ? `${baseLabel} (hiện tại)` : baseLabel;
+}
+
+function buildClassSemesterOptions(classes = []) {
+  const options = new Map();
+
+  classes.forEach((item) => {
+    const semesterNum = Number(item?.semester);
+    const academicYear = String(item?.academicYear || '').trim();
+
+    if (!Number.isFinite(semesterNum) || !academicYear) return;
+
+    const key = `${semesterNum}::${academicYear}`;
+    if (!options.has(key)) {
+      options.set(key, {
+        id: key,
+        semesterNum,
+        academicYear,
+        label: `Học kỳ ${semesterNum} / ${academicYear}`,
+      });
+    }
+  });
+
+  return Array.from(options.values()).sort((a, b) => {
+    const yearCompare = String(b.academicYear || '').localeCompare(String(a.academicYear || ''));
+    if (yearCompare !== 0) return yearCompare;
+    return Number(b.semesterNum || 0) - Number(a.semesterNum || 0);
+  });
+}
+
 export default function TeachingSchedulePage() {
   const [userRole, setUserRole] = useState('');
   const [roleResolved, setRoleResolved] = useState(false);
@@ -56,6 +98,9 @@ export default function TeachingSchedulePage() {
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [data, setData] = useState(null);
+  const [semesterOptions, setSemesterOptions] = useState([]);
+  const [selectedSemesterId, setSelectedSemesterId] = useState('');
+  const [semesterOptionsReady, setSemesterOptionsReady] = useState(false);
 
   const [subjects, setSubjects] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -115,6 +160,15 @@ export default function TeachingSchedulePage() {
       return okFaculty && okMajor;
     });
   }, [subjects, facultyFilter, majorFilter]);
+
+  const selectedSemester = useMemo(
+    () => semesterOptions.find((item) => String(item.id) === String(selectedSemesterId)) || null,
+    [semesterOptions, selectedSemesterId],
+  );
+  const isViewingAllSemesters = selectedSemesterId === ALL_SEMESTERS_VALUE;
+  const scheduleScopeLabel = isViewingAllSemesters
+    ? 'tất cả học kỳ'
+    : formatSemesterLabel(selectedSemester);
 
   const teachingClasses = data?.classes || [];
 
@@ -181,6 +235,24 @@ export default function TeachingSchedulePage() {
     };
   }, [teachingClasses, scheduleEntries]);
 
+  const loadSemesterOptions = async () => {
+    try {
+      const response = await scheduleService.getTeachingSchedule({ includeAllClasses: true });
+      const items = buildClassSemesterOptions(response?.data?.data?.classes || []);
+      setSemesterOptions(items);
+      setSelectedSemesterId((prev) => {
+        if (prev === ALL_SEMESTERS_VALUE) return prev;
+        if (prev && items.some((item) => String(item.id) === String(prev))) return prev;
+        return items[0]?.id || ALL_SEMESTERS_VALUE;
+      });
+    } catch {
+      setSemesterOptions([]);
+      setSelectedSemesterId((prev) => prev || ALL_SEMESTERS_VALUE);
+    } finally {
+      setSemesterOptionsReady(true);
+    }
+  };
+
   const fetchSchedule = async (teacherId = '') => {
     setLoading(true);
     setError('');
@@ -188,8 +260,18 @@ export default function TeachingSchedulePage() {
 
     try {
       const params = teacherId ? { teacherId } : {};
+      if (selectedSemesterId === ALL_SEMESTERS_VALUE) {
+        params.includeAllClasses = true;
+      } else if (selectedSemester) {
+        params.semester = selectedSemester.semesterNum;
+        params.academicYear = selectedSemester.academicYear;
+      }
       const response = await scheduleService.getTeachingSchedule(params);
-      setData(response?.data?.data || null);
+      const nextData = response?.data?.data || null;
+      setData(nextData);
+      if (!nextData?.classes?.length && selectedSemesterId && selectedSemesterId !== ALL_SEMESTERS_VALUE) {
+        setHint('Không có lớp được phân công trong học kỳ đã chọn. Hãy đổi sang học kỳ khác hoặc chọn "Tất cả học kỳ".');
+      }
     } catch (err) {
       const message = err?.response?.data?.message || 'Không tải được lịch giảng dạy';
       setData(null);
@@ -258,18 +340,19 @@ export default function TeachingSchedulePage() {
 
   useEffect(() => {
     if (!roleResolved) return;
+    loadSemesterOptions();
+  }, [roleResolved]);
 
-    if (isAdminOrStaff) {
-      loadGeneratorMasterData();
-      fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
-      setHint('');
-      fetchSchedule('');
-      return;
-    }
-
-
-    fetchSchedule('');
+  useEffect(() => {
+    if (!roleResolved || !isAdminOrStaff) return;
+    loadGeneratorMasterData();
+    fetchGeneratedFromDb(generateForm.semester, generateForm.academicYear);
   }, [roleResolved, isAdminOrStaff]);
+
+  useEffect(() => {
+    if (!roleResolved || !semesterOptionsReady || !selectedSemesterId) return;
+    fetchSchedule('');
+  }, [roleResolved, semesterOptionsReady, selectedSemesterId]);
 
 
 
@@ -659,10 +742,26 @@ export default function TeachingSchedulePage() {
               type="button"
               className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               onClick={() => fetchSchedule('')}
-              disabled={loading}
+              disabled={loading || !selectedSemesterId}
             >
               {loading ? 'Đang tải...' : 'Tải lại lịch'}
             </button>
+            <div className="mt-3 space-y-2">
+              <select
+                value={selectedSemesterId}
+                onChange={(event) => setSelectedSemesterId(event.target.value)}
+                disabled={!semesterOptionsReady}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 disabled:bg-slate-100"
+              >
+                <option value={ALL_SEMESTERS_VALUE}>Tất cả học kỳ</option>
+                {semesterOptions.map((semester) => (
+                  <option key={semester.id} value={semester.id}>
+                    {formatSemesterLabel(semester)}
+                  </option>
+                ))}
+              </select>
+              <div className="text-xs text-slate-500">Đang xem dữ liệu của {scheduleScopeLabel}.</div>
+            </div>
           </div>
 
 
@@ -727,6 +826,9 @@ export default function TeachingSchedulePage() {
             <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                 <div>
+                  <div className="text-sm text-slate-600">
+                    {isViewingAllSemesters ? 'Tất cả học kỳ' : scheduleScopeLabel}
+                  </div>
                   <h3 className="text-lg font-semibold text-slate-900">Tổng quan học kỳ</h3>
                   <p className="text-sm text-slate-600">
                     Học kỳ {data.semester?.semesterNum || '-'} / {data.semester?.academicYear || '-'}

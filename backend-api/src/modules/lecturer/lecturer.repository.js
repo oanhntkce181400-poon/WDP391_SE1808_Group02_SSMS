@@ -23,10 +23,10 @@ async function countLecturers(filter) {
   return Teacher.countDocuments(filter);
 }
 
-async function findLecturers(filter, { page, limit }) {
+async function findLecturers(filter, { page, limit, sort } = {}) {
   return Teacher.find(filter)
     .populate("userId", "email status lastLoginAt")
-    .sort({ fullName: 1 })
+    .sort(sort || { createdAt: -1, _id: -1 })
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();

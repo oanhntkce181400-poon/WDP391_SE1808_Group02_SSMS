@@ -186,17 +186,26 @@ const validateAll = async (req, res) => {
       eligibility.canRegister;
 
     const validationErrors = [];
-    if (!prerequisitesResult.eligible) validationErrors.push(prerequisitesResult.message);
-    if (capacityResult.isFull) validationErrors.push(capacityResult.message);
-    if (!walletResult.isSufficient) validationErrors.push(walletResult.message);
-    if (scheduleConflictResult.hasConflict) validationErrors.push(scheduleConflictResult.message);
-    if (!eligibility.limits.overload.allowed) validationErrors.push(eligibility.limits.overload.message);
-    if (!eligibility.limits.credit.allowed) validationErrors.push(eligibility.limits.credit.message);
+    const pushValidationError = (message) => {
+      if (message && !validationErrors.includes(message)) {
+        validationErrors.push(message);
+      }
+    };
+
+    if (!prerequisitesResult.eligible) pushValidationError(prerequisitesResult.message);
+    if (capacityResult.isFull) pushValidationError(capacityResult.message);
+    if (!walletResult.isSufficient) pushValidationError(walletResult.message);
+    if (scheduleConflictResult.hasConflict) pushValidationError(scheduleConflictResult.message);
+    if (!eligibility.limits.overload.allowed) pushValidationError(eligibility.limits.overload.message);
+    if (!eligibility.limits.credit.allowed) pushValidationError(eligibility.limits.credit.message);
+    if (!eligibility.limits.cohortAccess.allowed) {
+      pushValidationError(eligibility.limits.cohortAccess.message);
+    }
     if (!eligibility.limits.registrationWindow.allowed) {
-      validationErrors.push(eligibility.limits.registrationWindow.message);
+      pushValidationError(eligibility.limits.registrationWindow.message);
     }
     if (!eligibility.limits.duplicateSubject.allowed) {
-      validationErrors.push(eligibility.limits.duplicateSubject.message);
+      pushValidationError(eligibility.limits.duplicateSubject.message);
     }
 
     return res.status(200).json({
