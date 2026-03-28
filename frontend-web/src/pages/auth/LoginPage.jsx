@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import authService from '../../services/authService';
+import { storeAuthSession } from '../../utils/authStorage';
 
 function useGoogleClientId() {
   return useMemo(
@@ -33,17 +34,10 @@ export default function LoginPage() {
         // Ignore and fallback to user from login response.
       }
 
-      if (nextUser) {
-        localStorage.setItem('auth_user', JSON.stringify(nextUser));
-      }
-
-      // Save tokens to localStorage
-      if (tokens?.accessToken) {
-        localStorage.setItem('access_token', tokens.accessToken);
-      }
-      if (tokens?.refreshToken) {
-        localStorage.setItem('refresh_token', tokens.refreshToken);
-      }
+      storeAuthSession({
+        user: nextUser,
+        accessToken: tokens?.accessToken,
+      });
 
       // Redirect based on user role
       if (nextUser?.role === 'student') {

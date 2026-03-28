@@ -115,7 +115,14 @@ export default function App() {
           />
           <Route path="tuition-fees" element={<TuitionFeeManagement />} />
           <Route path="error-logs" element={<ErrorLogsPage />} />
-          <Route path="actors" element={<ActorsManagementPage />} />
+          <Route
+            path="actors"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <ActorsManagementPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="feedback-management"
             element={<FeedbackManagementPage />}
@@ -242,7 +249,7 @@ export default function App() {
         <Route
           path="/actors"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={["admin"]}>
               <ActorsManagementPage />
             </ProtectedRoute>
           }

@@ -87,6 +87,16 @@ const feedbackSchema = new mongoose.Schema(
 
 // Query patterns used by the feedback feed, ownership lookup and moderation UI.
 feedbackSchema.index({ classSection: 1, submittedBy: 1, createdAt: -1 });
+feedbackSchema.index(
+  { classSection: 1, submittedBy: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      submittedBy: { $exists: true, $type: 'objectId' },
+    },
+    name: 'uniq_feedback_per_user_per_class',
+  },
+);
 feedbackSchema.index({ classSection: 1, status: 1 });
 feedbackSchema.index({ rating: 1 });
 

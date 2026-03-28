@@ -185,6 +185,9 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
   const [classFeedbacks, setClassFeedbacks] = useState([]);
   const [classStats, setClassStats] = useState(null);
   const [windowInfo, setWindowInfo] = useState(null);
+  const [windowInfoLoading, setWindowInfoLoading] = useState(false);
+  const [feedbackAvailability, setFeedbackAvailability] = useState(null);
+  const [feedbackAvailabilityLoading, setFeedbackAvailabilityLoading] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [activeTab, setActiveTab] = useState('classes');
   const [classSearchInput, setClassSearchInput] = useState('');
@@ -228,11 +231,19 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
   );
 
   /*
-   * Khi có feedback sẵn, API windowInfo chỉ đóng vai trò metadata để màn hình
-   * biết có nên hiển thị cảnh báo hay không. Nếu API chưa kịp trả về, ta vẫn
-   * giữ cho trạng thái edit của sinh viên mượt thay vì khóa form quá sớm.
+   * Khi sinh viên đã có feedback, màn hình chỉ mở form cập nhật sau khi
+   * windowInfo xác nhận đợt feedback vẫn còn hiệu lực.
    */
-  const canEditCurrentFeedback = isStudent && !!currentFeedback && windowInfo?.isValid !== false;
+  const isEditingCurrentFeedback = isStudent && !!currentFeedback;
+  const canEditCurrentFeedback =
+    isEditingCurrentFeedback && !windowInfoLoading && windowInfo?.isValid === true;
+  const canCreateFeedback =
+    isStudent &&
+    !currentFeedback &&
+    !feedbackAvailabilityLoading &&
+    feedbackAvailability?.isOpen === true;
+  const feedbackFormLocked =
+    isStudent && (isEditingCurrentFeedback ? !canEditCurrentFeedback : !canCreateFeedback);
 
   function resetMessages() {
     setError('');
@@ -243,6 +254,7 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
     if (!feedback) {
       setForm(emptyForm());
       setWindowInfo(null);
+      setWindowInfoLoading(false);
       return;
     }
 
@@ -303,6 +315,9 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
         setSelectedClassId(preferredClassId);
         setForm(emptyForm());
         setWindowInfo(null);
+        setWindowInfoLoading(false);
+        setFeedbackAvailability(null);
+        setFeedbackAvailabilityLoading(false);
       }
     } catch (err) {
       console.error('Error loading feedback base data:', err);
@@ -314,31 +329,113 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
   }
 
   async function loadClassDetails(classSectionId, feedbackId) {
+    const shouldLoadWindowInfo = isStudent && !!feedbackId;
+    const shouldLoadAvailability = isStudent && !feedbackId;
+
     if (!classSectionId) {
       setClassFeedbacks([]);
       setClassStats(null);
       setWindowInfo(null);
+      setWindowInfoLoading(false);
+      setFeedbackAvailability(null);
+      setFeedbackAvailabilityLoading(false);
       return;
     }
 
+    if (shouldLoadWindowInfo) {
+      setWindowInfo(null);
+      setWindowInfoLoading(true);
+    } else {
+      setWindowInfo(null);
+      setWindowInfoLoading(false);
+    }
+
+    if (shouldLoadAvailability) {
+      setFeedbackAvailability(null);
+      setFeedbackAvailabilityLoading(true);
+    } else {
+      setFeedbackAvailability(null);
+      setFeedbackAvailabilityLoading(false);
+    }
+
     try {
-      const requests = [
+      const [feedbackResult, statsResult, metadataResult] = await Promise.allSettled([
         feedbackService.getClassFeedback(classSectionId),
         feedbackService.getClassFeedbackStats(classSectionId),
-      ];
+        shouldLoadWindowInfo
+          ? feedbackService.getFeedbackWindowInfo(feedbackId)
+          : shouldLoadAvailability
+            ? feedbackService.getFeedbackAvailability()
+            : Promise.resolve(null),
+      ]);
 
-      if (isStudent && feedbackId) {
-        requests.push(feedbackService.getFeedbackWindowInfo(feedbackId));
+      if (feedbackResult.status === 'rejected') {
+        throw feedbackResult.reason;
       }
 
-      const [feedbackResponse, statsResponse, windowResponse] = await Promise.all(requests);
+      if (statsResult.status === 'rejected') {
+        throw statsResult.reason;
+      }
 
-      setClassFeedbacks(feedbackResponse?.data?.data || []);
-      setClassStats(statsResponse?.data?.data || null);
-      setWindowInfo(windowResponse?.data?.data || null);
+      setClassFeedbacks(feedbackResult.value?.data?.data || []);
+      setClassStats(statsResult.value?.data?.data || null);
+
+      if (shouldLoadWindowInfo) {
+        if (metadataResult.status === 'fulfilled') {
+          setWindowInfo(metadataResult.value?.data?.data || null);
+          return;
+        }
+
+        console.error('Error loading feedback window detail:', metadataResult.reason);
+        setWindowInfo({
+          isValid: false,
+          error:
+            metadataResult.reason?.response?.data?.message ||
+            'Không thể kiểm tra thời gian cập nhật đánh giá lúc này.',
+        });
+        return;
+      }
+
+      if (!shouldLoadAvailability) {
+        return;
+      }
+
+      if (metadataResult.status === 'fulfilled') {
+        setFeedbackAvailability(metadataResult.value?.data?.data || null);
+        return;
+      }
+
+      console.error('Error loading feedback availability:', metadataResult.reason);
+      setFeedbackAvailability({
+        isOpen: false,
+        state: 'unavailable',
+        message:
+          metadataResult.reason?.response?.data?.message ||
+          'Không thể kiểm tra thời gian gửi đánh giá lúc này.',
+      });
     } catch (err) {
       console.error('Error loading class feedback detail:', err);
+      if (shouldLoadWindowInfo) {
+        setWindowInfo((previous) =>
+          previous || {
+            isValid: false,
+            error: 'Không thể kiểm tra thời gian cập nhật đánh giá lúc này.',
+          },
+        );
+      }
+      if (shouldLoadAvailability) {
+        setFeedbackAvailability((previous) =>
+          previous || {
+            isOpen: false,
+            state: 'unavailable',
+            message: 'Không thể kiểm tra thời gian gửi đánh giá lúc này.',
+          },
+        );
+      }
       setError(err?.response?.data?.message || 'Không thể tải chi tiết đánh giá của lớp.');
+    } finally {
+      setWindowInfoLoading(false);
+      setFeedbackAvailabilityLoading(false);
     }
   }
 
@@ -382,6 +479,30 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
     if (!selectedClassId) {
       setError('Vui lòng chọn lớp học trước.');
       return;
+    }
+
+    if (currentFeedback) {
+      if (windowInfoLoading) {
+        setError('Đang kiểm tra thời gian cập nhật đánh giá. Vui lòng thử lại sau ít giây.');
+        return;
+      }
+
+      if (!canEditCurrentFeedback) {
+        setError(windowInfo?.error || 'Bạn không thể cập nhật đánh giá này.');
+        return;
+      }
+    }
+
+    if (!currentFeedback) {
+      if (feedbackAvailabilityLoading) {
+        setError('Đang kiểm tra thời gian gửi đánh giá. Vui lòng thử lại sau ít giây.');
+        return;
+      }
+
+      if (!canCreateFeedback) {
+        setError(feedbackAvailability?.message || 'Hiện chưa thể gửi đánh giá cho lớp này.');
+        return;
+      }
     }
 
     if (!form.rating) {
@@ -624,10 +745,16 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
                     </Text>
                     <Text style={styles.sectionSubTitle}>
                       {currentFeedback
-                        ? canEditCurrentFeedback
+                        ? windowInfoLoading
+                          ? 'Đang kiểm tra thời gian cập nhật đánh giá...'
+                          : canEditCurrentFeedback
                           ? 'Bạn có thể cập nhật đánh giá gần nhất cho lớp này bất kỳ lúc nào.'
                           : windowInfo?.error || 'Bạn không thể cập nhật đánh giá này.'
-                        : 'Đánh giá của bạn giúp cải thiện trải nghiệm học tập.'}
+                        : feedbackAvailabilityLoading
+                          ? 'Đang kiểm tra thời gian gửi đánh giá...'
+                          : canCreateFeedback
+                            ? 'Đánh giá của bạn giúp cải thiện trải nghiệm học tập.'
+                            : feedbackAvailability?.message || 'Hiện chưa thể gửi đánh giá cho lớp này.'}
                     </Text>
 
                     <Text style={styles.formLabel}>Đánh giá tổng thể</Text>
@@ -635,6 +762,7 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
                       value={form.rating}
                       onChange={(value) => setForm((prev) => ({ ...prev, rating: value }))}
                       size={28}
+                      disabled={feedbackFormLocked}
                     />
 
                     {CRITERIA.map((criterion) => (
@@ -651,6 +779,7 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
                               },
                             }))
                           }
+                          disabled={feedbackFormLocked}
                         />
                       </View>
                     ))}
@@ -664,6 +793,7 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
                       numberOfLines={4}
                       textAlignVertical="top"
                       style={styles.commentInput}
+                      editable={!feedbackFormLocked}
                     />
 
                     {!currentFeedback ? (
@@ -677,6 +807,7 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
                         <Switch
                           value={form.isAnonymous}
                           onValueChange={(value) => setForm((prev) => ({ ...prev, isAnonymous: value }))}
+                          disabled={feedbackFormLocked}
                           thumbColor="#ffffff"
                           trackColor={{ false: '#cbd5e1', true: '#2563eb' }}
                         />
@@ -685,8 +816,11 @@ export default function FeedbackLecturerScreen({ onNavigate }) {
 
                     <Pressable
                       onPress={handleSubmit}
-                      disabled={saving}
-                      style={[styles.submitButton, saving && styles.submitButtonDisabled]}
+                      disabled={saving || feedbackFormLocked}
+                      style={[
+                        styles.submitButton,
+                        (saving || feedbackFormLocked) && styles.submitButtonDisabled,
+                      ]}
                     >
                       <Text style={styles.submitButtonText}>
                         {saving

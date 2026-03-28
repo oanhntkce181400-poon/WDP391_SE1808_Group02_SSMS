@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import authService from '../../services/authService';
 import gpaService from '../../services/gpaService';
 import { useSocket } from '../../contexts/SocketContext';
+import { clearAuthSessionStorage } from '../../utils/authStorage';
 
 const INBOX_KEY = 'ssms_student_inbox';
 const INBOX_UNREAD_KEY = 'ssms_student_inbox_unread';
@@ -218,8 +219,8 @@ export default function StudentLayout() {
       console.error('Logout error:', error);
       // Continue anyway to clear client-side data
     } finally {
-      // Always clear all auth data from localStorage
-      localStorage.clear();
+      // Always clear auth data from localStorage
+      clearAuthSessionStorage();
       // Redirect to login
       window.location.href = '/login';
     }

@@ -17,7 +17,7 @@ export default function LecturerHomePage() {
     try {
       setLoading(true);
       setError('');
-      const response = await scheduleService.getTeachingSchedule({ includeAllClasses: true });
+      const response = await scheduleService.getTeachingSchedule();
       setScheduleData(response?.data?.data || null);
     } catch (err) {
       setError('Không thể tải danh sách lớp phụ trách. Vui lòng thử lại.');
@@ -32,6 +32,10 @@ export default function LecturerHomePage() {
   }, []);
 
   const assignedClasses = scheduleData?.classes || [];
+  const semesterSummary =
+    scheduleData?.semester?.semesterNum && scheduleData?.semester?.academicYear
+      ? `học kỳ ${scheduleData.semester.semesterNum} / ${scheduleData.semester.academicYear}`
+      : 'học kỳ hiện tại';
 
   const stats = useMemo(() => {
     const totalClasses = assignedClasses.length;
@@ -63,7 +67,7 @@ export default function LecturerHomePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Trang chủ giảng viên</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Theo dõi các lớp đang được phân công và truy cập nhanh danh sách sinh viên theo từng lớp.
+            Theo dõi các lớp được phân công trong {semesterSummary} và truy cập nhanh danh sách sinh viên theo từng lớp.
           </p>
         </div>
       </div>
@@ -87,7 +91,9 @@ export default function LecturerHomePage() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Danh sách lớp được phân công</h2>
-            <p className="text-sm text-slate-500">Bấm vào từng lớp để xem chi tiết danh sách sinh viên.</p>
+            <p className="text-sm text-slate-500">
+              Bấm vào từng lớp để xem chi tiết danh sách sinh viên. Dữ liệu đang hiển thị theo {semesterSummary}.
+            </p>
           </div>
           <button
             type="button"

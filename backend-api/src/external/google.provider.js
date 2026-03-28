@@ -6,10 +6,39 @@ try {
   OAuth2Client = null;
 }
 
+function normalizeClientId(value) {
+  return String(value || '').trim();
+}
+
+function splitClientIds(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => normalizeClientId(item))
+    .filter(Boolean);
+}
+
+function getGoogleAudiences() {
+  return Array.from(
+    new Set(
+      [
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_WEB_CLIENT_ID,
+        process.env.GOOGLE_ANDROID_CLIENT_ID,
+        process.env.GOOGLE_IOS_CLIENT_ID,
+        ...splitClientIds(process.env.GOOGLE_ALLOWED_CLIENT_IDS),
+      ]
+        .map((value) => normalizeClientId(value))
+        .filter(Boolean),
+    ),
+  );
+}
+
 function getGoogleClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    console.warn('GOOGLE_CLIENT_ID not configured - Google login will be disabled.');
+  const audiences = getGoogleAudiences();
+  if (!audiences.length) {
+    console.warn(
+      'Google client IDs are not configured - Google login will be disabled.',
+    );
     return null;
   }
 
@@ -19,7 +48,7 @@ function getGoogleClient() {
     );
   }
 
-  return new OAuth2Client(clientId);
+  return new OAuth2Client(audiences[0]);
 }
 
 async function verifyGoogleIdToken(idToken) {
@@ -27,14 +56,17 @@ async function verifyGoogleIdToken(idToken) {
     throw new Error('Missing Google ID token.');
   }
 
+  const audiences = getGoogleAudiences();
   const client = getGoogleClient();
   if (!client) {
-    throw new Error('Google login is not configured. Please set GOOGLE_CLIENT_ID in environment variables.');
+    throw new Error(
+      'Google login is not configured. Please set GOOGLE_CLIENT_ID or the platform-specific Google client IDs.',
+    );
   }
 
   const ticket = await client.verifyIdToken({
     idToken,
-    audience: process.env.GOOGLE_CLIENT_ID,
+    audience: audiences,
   });
 
   const payload = ticket.getPayload();

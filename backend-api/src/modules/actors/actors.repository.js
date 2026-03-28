@@ -10,12 +10,14 @@ function toObjectId(id) {
   return new mongoose.Types.ObjectId(id);
 }
 
-async function listRoles() {
-  return Role.find({ isActive: true }).sort({ roleCode: 1 }).lean();
+async function listRoles(options = {}) {
+  const filter = options.includeInactive ? {} : { isActive: true };
+  return Role.find(filter).sort({ roleCode: 1 }).lean();
 }
 
-async function listPermissions() {
-  return Permission.find({ isActive: true }).sort({ module: 1, action: 1 }).lean();
+async function listPermissions(options = {}) {
+  const filter = options.includeInactive ? {} : { isActive: true };
+  return Permission.find(filter).sort({ module: 1, action: 1 }).lean();
 }
 
 async function findRoleById(roleId) {
@@ -58,12 +60,16 @@ async function findPermissionsByCodes(codes = []) {
   return Permission.find({ permCode: { $in: normalizedCodes }, isActive: true });
 }
 
-async function listRolePermissions(roleIds = []) {
+async function listRolePermissions(roleIds = [], options = {}) {
   const objectIds = roleIds.map(toObjectId).filter(Boolean);
   if (objectIds.length === 0) return [];
 
+  const populateOptions = options.includeInactivePermissions
+    ? { path: 'permission' }
+    : { path: 'permission', match: { isActive: true } };
+
   return RolePermission.find({ role: { $in: objectIds } })
-    .populate({ path: 'permission', match: { isActive: true } })
+    .populate(populateOptions)
     .lean();
 }
 

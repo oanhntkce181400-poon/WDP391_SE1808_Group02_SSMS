@@ -4,11 +4,18 @@
     "slug": "ssms-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "com.wdp391.ssmsmobile",
     "assetBundlePatterns": [
       "**/*"
     ],
+    "ios": {
+      "bundleIdentifier": "com.wdp391.ssmsmobile"
+    },
     "android": {
       "package": "com.wdp391.ssmsmobile"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }

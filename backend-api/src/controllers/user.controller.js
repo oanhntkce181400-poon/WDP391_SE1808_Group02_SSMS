@@ -76,7 +76,13 @@ exports.getUserProfile = async (req, res) => {
     }
 
     const serialized = serializeUser(user);
-    const studentView = await getStudentViewForUserId(userId);
+    const studentView =
+      normalizeRole(user.role, 'student') === 'student'
+        ? await getStudentViewForUserId(userId, {
+            email: user.email,
+            autoLinkByEmail: true,
+          })
+        : null;
     if (studentView) {
       serialized.student = studentView;
     }

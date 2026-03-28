@@ -4,6 +4,7 @@ import graduateIcon from "../../assets/graduate.png";
 import notificationIcon from "../../assets/notification.png";
 import searchIcon from "../../assets/search.png";
 import authService from "../../services/authService";
+import { clearAuthSessionStorage } from "../../utils/authStorage";
 
 function normalizeRole(value) {
   if (!value || typeof value !== "string") return "";
@@ -59,8 +60,7 @@ export default function Header({ mode = "admin" }) {
 
   const normalizedUserRole = normalizeRole(user?.role);
   const isTeacherMode = mode === "teacher";
-  const isAdminLike =
-    normalizedUserRole === "admin" || normalizedUserRole === "staff";
+  const canManageRoles = normalizedUserRole === "admin";
 
   const primaryNav = isTeacherMode
     ? [
@@ -118,6 +118,9 @@ export default function Header({ mode = "admin" }) {
   const homeLink = isTeacherMode ? "/lecturer" : "/admin/dashboard";
   const profileLink = isTeacherMode ? "/lecturer/profile" : "/dashboard";
   const subtitleText = isTeacherMode ? "GIẢNG VIÊN" : "QUẢN TRỊ";
+  const visiblePrimaryNav = canManageRoles
+    ? primaryNav
+    : primaryNav.filter((item) => item?.href !== "/admin/actors");
 
   const getActiveItem = (href) => {
     if (!href || href === "#") return false;
@@ -148,7 +151,7 @@ export default function Header({ mode = "admin" }) {
     } catch (error) {
       // Ignore logout error and clear local session anyway.
     } finally {
-      localStorage.removeItem("auth_user");
+      clearAuthSessionStorage();
       window.location.href = "/login";
     }
   };
@@ -178,7 +181,7 @@ export default function Header({ mode = "admin" }) {
         </Link>
 
         <nav className="hidden items-center gap-0.5 lg:flex">
-          {primaryNav.map((item) => (
+          {visiblePrimaryNav.map((item) => (
             <Link
               key={item.href}
               className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors lg:px-3 lg:text-sm ${
@@ -322,7 +325,7 @@ export default function Header({ mode = "admin" }) {
               >
                 Hồ sơ
               </Link>
-              {isAdminLike && !isTeacherMode ? (
+              {canManageRoles && !isTeacherMode ? (
                 <Link
                   to="/actors"
                   role="menuitem"

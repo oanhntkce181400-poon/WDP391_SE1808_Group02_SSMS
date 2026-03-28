@@ -13,6 +13,8 @@ const {
   canonicalHomeroomLabel,
 } = require('../utils/studentHomeroomFromEnrollments');
 const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
+const path = require('path');
 
 // Export files use human-readable labels instead of raw enum values from MongoDB.
 const EXPORT_STATUS_LABELS = {
@@ -137,132 +139,29 @@ function buildExportTimestamp() {
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
-// The manual PDF builder only supports ASCII text safely, so we normalize early.
-function normalizeAscii(value = '') {
-  return String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7E]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const PDF_FONT_REGULAR = path.resolve(__dirname, '../../assets/fonts/dejavu/DejaVuSans.ttf');
+const PDF_FONT_BOLD = path.resolve(__dirname, '../../assets/fonts/dejavu/DejaVuSans-Bold.ttf');
 
-// Escape PDF control characters before injecting text into content streams.
-function escapePdfText(value = '') {
-  return String(value)
-    .replace(/\\/g, '\\\\')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)');
-}
+function formatExportDateTime(value = new Date()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
 
-// Long lines are wrapped manually because the lightweight PDF stream below has no layout engine.
-function wrapPdfText(text, maxChars = 92) {
-  const normalized = normalizeAscii(text);
-  if (!normalized) return [''];
-  if (normalized.length <= maxChars) return [normalized];
-
-  const words = normalized.split(' ');
-  const lines = [];
-  let currentLine = '';
-
-  for (const word of words) {
-    if (!currentLine) {
-      currentLine = word;
-      continue;
-    }
-
-    const candidate = `${currentLine} ${word}`;
-    if (candidate.length <= maxChars) {
-      currentLine = candidate;
-      continue;
-    }
-
-    lines.push(currentLine);
-    currentLine = word;
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
-}
-
-/*
- * We generate a minimal PDF buffer by hand instead of pulling in a heavier PDF library.
- * The output is simple but enough for tabular admin exports:
- * - one built-in Helvetica font,
- * - multiple pages when needed,
- * - text rows placed line-by-line.
- */
-function buildPdfBuffer(lines = []) {
-  const linesPerPage = 48;
-  const pages = [];
-
-  // Split raw lines into page-sized chunks before building low-level PDF objects.
-  for (let index = 0; index < lines.length; index += linesPerPage) {
-    pages.push(lines.slice(index, index + linesPerPage));
-  }
-
-  if (pages.length === 0) {
-    pages.push(['Student export report', '', 'No student records matched the selected filters.']);
-  }
-
-  const objects = [];
-  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-
-  const kids = [];
-  let objectId = 4;
-
-  pages.forEach((pageLines) => {
-    const pageObjectId = objectId++;
-    const contentObjectId = objectId++;
-    kids.push(`${pageObjectId} 0 R`);
-
-    // Text commands: begin text object, select font, move to top margin, then print line by line.
-    const streamLines = [
-      'BT',
-      '/F1 10 Tf',
-      '50 790 Td',
-      '14 TL',
-    ];
-
-    pageLines.forEach((line, lineIndex) => {
-      streamLines.push(`${lineIndex === 0 ? '' : 'T* ' }(${escapePdfText(line)}) Tj`.trim());
-    });
-
-    streamLines.push('ET');
-
-    const stream = streamLines.join('\n');
-    objects[contentObjectId] = `<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream`;
-    objects[pageObjectId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
+  return date.toLocaleString('vi-VN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   });
+}
 
-  objects[2] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
-
-  // Assemble PDF objects and keep byte offsets so the xref table points to every object correctly.
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-
-  for (let index = 1; index < objects.length; index += 1) {
-    if (!objects[index]) continue;
-    offsets[index] = Buffer.byteLength(pdf, 'utf8');
-    pdf += `${index} 0 obj\n${objects[index]}\nendobj\n`;
+function ensurePdfSpace(doc, requiredHeight = 110) {
+  const bottomBoundary = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + requiredHeight > bottomBoundary) {
+    doc.addPage();
   }
-
-  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
-  pdf += `xref\n0 ${objects.length}\n`;
-  pdf += '0000000000 65535 f \n';
-
-  for (let index = 1; index < objects.length; index += 1) {
-    const offset = offsets[index] || 0;
-    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
-  }
-
-  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  return Buffer.from(pdf, 'utf8');
 }
 
 // Excel export is the richer format, so we add column widths, a styled header row, and an auto filter.
@@ -306,39 +205,101 @@ async function generateStudentExcelBuffer(rows = []) {
  * PDF export trades styling for portability. Each student becomes a small text block
  * so admins can still read the file comfortably when opening it on any device.
  */
-function generateStudentPdfBuffer(rows = [], filters = {}) {
+async function generateStudentPdfBuffer(rows = [], filters = {}) {
   const filterParts = [];
-  if (filters.cohort) filterParts.push(`Cohort: K${filters.cohort}`);
-  if (filters.majorCode || filters.major) filterParts.push(`Major: ${filters.majorCode || filters.major}`);
+  if (filters.cohort) filterParts.push(`Khóa: K${filters.cohort}`);
+  if (filters.majorCode || filters.major) filterParts.push(`Ngành: ${filters.majorCode || filters.major}`);
   if (filters.academicStatus || filters.status) {
     const statusKey = filters.academicStatus || filters.status;
-    filterParts.push(`Status: ${EXPORT_STATUS_LABELS[statusKey] || statusKey}`);
+    filterParts.push(`Trạng thái: ${EXPORT_STATUS_LABELS[statusKey] || statusKey}`);
   }
 
-  const lines = [
-    'Student export report',
-    `Generated at: ${new Date().toISOString()}`,
-    filterParts.length > 0 ? `Filters: ${filterParts.join(' | ')}` : 'Filters: none',
-    '',
-  ];
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      info: {
+        Title: 'Student export report',
+        Author: 'SSMS backend-api',
+      },
+    });
+    const chunks = [];
+    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-  if (rows.length === 0) {
-    lines.push('No student records matched the selected filters.');
-    return buildPdfBuffer(lines);
-  }
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('error', reject);
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-  rows.forEach((row, index) => {
-    const mainLine = `${index + 1}. ${row.studentCode} | ${row.fullName} | ${row.majorCode} | ${row.cohortLabel} | ${row.academicStatus}`;
-    const detailLine = `   Email: ${row.email || '-'} | Phone: ${row.phoneNumber || '-'} | Lớp SH: ${row.classSection || '-'} | ID: ${row.identityNumber || '-'}`;
-    const metaLine = `   Enrollment year: ${row.enrollmentYear || '-'} | Created: ${row.createdAt || '-'}`;
+    doc.registerFont('student-export-regular', PDF_FONT_REGULAR);
+    doc.registerFont('student-export-bold', PDF_FONT_BOLD);
 
-    wrapPdfText(mainLine).forEach((line) => lines.push(line));
-    wrapPdfText(detailLine).forEach((line) => lines.push(line));
-    wrapPdfText(metaLine).forEach((line) => lines.push(line));
-    lines.push('');
+    doc
+      .font('student-export-bold')
+      .fontSize(18)
+      .fillColor('#0f172a')
+      .text('Báo cáo xuất dữ liệu sinh viên', { width: contentWidth });
+
+    doc.moveDown(0.4);
+    doc
+      .font('student-export-regular')
+      .fontSize(10)
+      .fillColor('#475569')
+      .text(`Thời gian xuất: ${formatExportDateTime()}`, { width: contentWidth });
+    doc.text(
+      filterParts.length > 0 ? `Bộ lọc: ${filterParts.join(' | ')}` : 'Bộ lọc: Không',
+      { width: contentWidth },
+    );
+    doc.moveDown(0.8);
+
+    if (rows.length === 0) {
+      doc
+        .font('student-export-regular')
+        .fontSize(11)
+        .fillColor('#111827')
+        .text('Không có sinh viên phù hợp với bộ lọc đã chọn.', { width: contentWidth });
+      doc.end();
+      return;
+    }
+
+    rows.forEach((row, index) => {
+      ensurePdfSpace(doc);
+
+      doc
+        .font('student-export-bold')
+        .fontSize(11)
+        .fillColor('#0f172a')
+        .text(
+          `${index + 1}. ${row.studentCode || '-'} | ${row.fullName || '-'} | ${row.majorCode || '-'} | ${row.cohortLabel || '-'} | ${row.academicStatus || '-'}`,
+          { width: contentWidth },
+        );
+
+      doc.moveDown(0.2);
+      doc
+        .font('student-export-regular')
+        .fontSize(9)
+        .fillColor('#334155')
+        .text(
+          `Email: ${row.email || '-'} | Điện thoại: ${row.phoneNumber || '-'} | Lớp SH: ${row.classSection || '-'}`,
+          { width: contentWidth },
+        );
+      doc.text(
+        `CCCD/CMND: ${row.identityNumber || '-'} | Năm nhập học: ${row.enrollmentYear || '-'} | Tạo lúc: ${row.createdAt || '-'}`,
+        { width: contentWidth },
+      );
+
+      const dividerY = doc.y + 8;
+      doc
+        .moveTo(doc.page.margins.left, dividerY)
+        .lineTo(doc.page.width - doc.page.margins.right, dividerY)
+        .lineWidth(1)
+        .strokeColor('#e2e8f0')
+        .stroke();
+
+      doc.y = dividerY + 10;
+    });
+
+    doc.end();
   });
-
-  return buildPdfBuffer(lines);
 }
 
 /*
@@ -364,7 +325,7 @@ async function exportStudents(filters = {}) {
 
   if (format === 'pdf') {
     return {
-      buffer: generateStudentPdfBuffer(rows, filters),
+      buffer: await generateStudentPdfBuffer(rows, filters),
       contentType: 'application/pdf',
       fileName: `students-export-${timestamp}.pdf`,
     };

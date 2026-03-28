@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import authService from '../services/authService';
+import { clearAuthSessionStorage, storeAuthSession } from '../utils/authStorage';
 
 function formatDateTime(value) {
   if (!value) return '-';
@@ -16,8 +17,6 @@ function statusPillClass(isActive) {
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('auth_user');
@@ -51,9 +50,7 @@ export default function DashboardPage() {
       const res = await authService.me();
       const nextUser = res?.data?.user || null;
       setUser(nextUser);
-      if (nextUser) {
-        localStorage.setItem('auth_user', JSON.stringify(nextUser));
-      }
+      storeAuthSession({ user: nextUser });
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || 'Failed to load profile.';
       setProfileError(message);
@@ -102,8 +99,8 @@ export default function DashboardPage() {
     try {
       await authService.logout();
     } finally {
-      localStorage.removeItem('auth_user');
-      navigate('/login', { replace: true });
+      clearAuthSessionStorage();
+      window.location.href = '/login';
     }
   }
 
@@ -111,8 +108,8 @@ export default function DashboardPage() {
     setActionState({ type: 'logout-all', familyId: '' });
     try {
       await authService.logoutAllSessions();
-      localStorage.removeItem('auth_user');
-      navigate('/login', { replace: true });
+      clearAuthSessionStorage();
+      window.location.href = '/login';
     } catch (err) {
       setSessionsError(err?.response?.data?.message || err?.message || 'Logout all failed.');
     } finally {
@@ -126,8 +123,8 @@ export default function DashboardPage() {
     try {
       await authService.revokeSession(session.familyId);
       if (session.isCurrent) {
-        localStorage.removeItem('auth_user');
-        navigate('/login', { replace: true });
+        clearAuthSessionStorage();
+        window.location.href = '/login';
         return;
       }
       await Promise.all([loadSessions(), loadHistory()]);
