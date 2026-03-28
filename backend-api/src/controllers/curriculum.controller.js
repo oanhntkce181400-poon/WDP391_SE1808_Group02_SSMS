@@ -7,11 +7,15 @@ const Curriculum = require('../models/curriculum.model');
 // Get all curriculums
 exports.getCurriculums = async (req, res) => {
   try {
-    const { page = 1, limit = 10, keyword } = req.query;
+    const { page = 1, limit = 10, keyword, includeFrameworkStart } = req.query;
+    const wantStart =
+      String(includeFrameworkStart || '').toLowerCase() === 'true' ||
+      String(includeFrameworkStart || '') === '1';
     const result = await curriculumService.getCurriculums({
       page: parseInt(page),
       limit: parseInt(limit),
       keyword,
+      includeFrameworkStart: wantStart,
     });
 
     res.json({

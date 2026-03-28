@@ -138,7 +138,7 @@ class PaymentReminderService {
    * Gửi reminder cho một sinh viên
    */
   async sendReminder(studentId, options = {}) {
-    const { type = 'all', template = 'default', customMessage, sentBy } = options;
+    const { type = 'email', template = 'default', customMessage, sentBy } = options;
     
     const student = await Student.findById(studentId).populate('userId');
     if (!student) throw new Error('Không tìm thấy sinh viên');
@@ -289,7 +289,7 @@ class PaymentReminderService {
           const skipReason = `Giới hạn ${process.env.PAYMENT_REMINDER_COOLDOWN_HOURS || 24}h: đã gửi nhắc gần đây; thử lại sau khoảng ${canSend.hoursRemaining} giờ nữa.`;
           await PaymentReminder.create({
             student: studentId,
-            reminderType: options.type || 'all',
+            reminderType: options.type || 'email',
             template: options.template || 'default',
             customMessage: options.customMessage,
             sentBy: options.sentBy,

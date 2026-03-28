@@ -32,8 +32,10 @@ exports.getStudentsWithOutstandingFees = async (req, res) => {
  */
 exports.sendReminders = async (req, res) => {
   try {
-    const { studentIds, type, template, customMessage, overrideCooldown } = req.body;
+    const { studentIds, template, customMessage, overrideCooldown } = req.body;
     const sentBy = req.auth.sub;
+    /** Chỉ hỗ trợ email — bỏ qua type từ client để không gửi SMS/in-app */
+    const reminderChannel = 'email';
 
     if (!studentIds || studentIds.length === 0) {
       return res.status(400).json({ 
@@ -50,7 +52,7 @@ exports.sendReminders = async (req, res) => {
     }
 
     const results = await paymentReminderService.sendBatchReminders(studentIds, {
-      type: type || 'all',
+      type: reminderChannel,
       template: template || 'default',
       customMessage,
       sentBy,

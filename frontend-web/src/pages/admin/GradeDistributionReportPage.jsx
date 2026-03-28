@@ -249,7 +249,7 @@ export default function GradeDistributionReportPage() {
                           <td className="px-4 py-3 text-center text-gray-700">{enrollment.semester}</td>
                           <td className="px-4 py-3 text-center">
                             <span className={`font-semibold ${
-                              enrollment.grade === null ? 'text-gray-500' :
+                              typeof enrollment.grade !== 'number' ? 'text-gray-500' :
                               enrollment.grade >= 8.5 ? 'text-green-600' :
                               enrollment.grade >= 8.0 ? 'text-blue-600' :
                               enrollment.grade >= 7.0 ? 'text-green-600' :
@@ -257,7 +257,7 @@ export default function GradeDistributionReportPage() {
                               enrollment.grade >= 4.0 ? 'text-orange-600' :
                               'text-red-600'
                             }`}>
-                              {enrollment.grade !== null ? enrollment.grade.toFixed(2) : 'N/A'}
+                              {typeof enrollment.grade === 'number' ? enrollment.grade.toFixed(2) : 'N/A'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">{enrollment.gradeName}</td>

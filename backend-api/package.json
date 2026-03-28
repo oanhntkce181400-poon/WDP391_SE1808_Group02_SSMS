@@ -19,6 +19,7 @@
     "seed:nguyen-van-rot": "node scripts/seed-NguyenVanRot.js",
     "verify:repeat-enrollment-test": "node scripts/verify-repeat-enrollment-test.js",
     "fix:registration-period-date": "node scripts/fix-registration-period-date.js",
+    "update:tuition-100": "node update-all-prices-to-100.js",
     "backfill:teacher-accounts": "node backfill-teacher-accounts.js",
     "migrate": "node src/database/migrations/index.js up",
     "migrate:down": "node src/database/migrations/index.js down",

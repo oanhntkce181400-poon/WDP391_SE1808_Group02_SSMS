@@ -1,8 +1,3 @@
-// RegistrationPeriodManagement.jsx
-// Trang quản lý đợt đăng ký môn học - dành cho Admin / Staff
-// Chức năng: View, Create, Update, Toggle Status, Delete
-// Tác giả: Group02 - WDP391
-
 import { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -90,8 +85,17 @@ export default function RegistrationPeriodManagement() {
 
   async function loadSemesters() {
     try {
-      const res = await registrationPeriodService.getSemesters();
-      setSemesters(res.data.data || []);
+      const limit = 100;
+      const first = await registrationPeriodService.getSemesters({ limit, page: 1 });
+      let allSemesters = first.data?.data || [];
+      const totalPages = Number(first.data?.pagination?.totalPages || 1);
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const resp = await registrationPeriodService.getSemesters({ limit, page });
+        allSemesters = allSemesters.concat(resp.data?.data || []);
+      }
+
+      setSemesters(allSemesters);
     } catch (err) {
       console.error('Lỗi tải semesters:', err);
     }

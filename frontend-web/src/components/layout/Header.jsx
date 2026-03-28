@@ -214,7 +214,7 @@ export default function Header({ mode = "admin" }) {
               </button>
 
               {isMoreOpen ? (
-                <div className="absolute left-0 top-full z-50 mt-1.5 w-56 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-slate-900/10">
+                <div className="absolute left-0 top-full z-50 mt-1.5 w-56 max-h-96 overflow-y-auto rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-slate-900/10">
                   {moreNav.map((item, index) => {
                     if (!item.href) {
                       return (

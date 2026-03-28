@@ -1,16 +1,18 @@
 // update-all-prices-to-100.js
 // Script cập nhật tất cả giá tín chỉ về 100 VNĐ
-// Chạy: node update-all-prices-to-100.js
+// Chạy: npm run update:tuition-100   (từ thư mục backend-api, cần .env giống API)
 
 const mongoose = require('mongoose');
 require('dotenv').config();
+const { getDbConfig } = require('./src/configs/db.config');
 
 const PRICE_PER_CREDIT = 100; // 100 VNĐ / tín chỉ
 
 async function updatePrices() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/sms');
-    console.log('✅ Đã kết nối MongoDB\n');
+    const { uri, dbName, appName } = getDbConfig();
+    await mongoose.connect(uri, { dbName, appName });
+    console.log(`✅ Đã kết nối MongoDB (${dbName})\n`);
 
     const Subject = require('./src/models/subject.model');
     const TuitionFee = require('./src/models/tuitionFee.model');
@@ -96,10 +98,10 @@ async function updatePrices() {
 
   } catch (error) {
     console.error('❌ Lỗi:', error);
+    process.exitCode = 1;
   } finally {
     await mongoose.disconnect();
     console.log('✅ Đã ngắt kết nối MongoDB');
-    process.exit(0);
   }
 }
 

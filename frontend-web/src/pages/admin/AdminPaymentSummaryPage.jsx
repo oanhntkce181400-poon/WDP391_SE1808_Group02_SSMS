@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import financeService from '../../services/financeService';
 
 function formatMoney(amount) {
@@ -11,10 +12,9 @@ function formatMoney(amount) {
 }
 
 export default function AdminPaymentSummaryPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [sendingReminderId, setSendingReminderId] = useState('');
-  const [isBulkSending, setIsBulkSending] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [filters, setFilters] = useState({
     semesterId: '',
@@ -78,29 +78,22 @@ export default function AdminPaymentSummaryPage() {
     }, 2600);
   };
 
-  const handleSendReminder = async (student) => {
-    if (!student?.studentId) return;
-    setSendingReminderId(String(student.studentId));
-    try {
-      const semesterCode = data?.summary?.semesterCode || '';
-      const response = await financeService.remindStudentTuition(student.studentId, semesterCode || null);
-      const result = response?.data?.data;
-
-      if (result?.sent) {
-        showToast(`Đã gửi nhắc học phí cho ${student.fullName}`);
-      } else {
-        showToast(response?.data?.message || 'Không gửi được email nhắc học phí', 'error');
-      }
-    } catch (error) {
-      showToast(error?.response?.data?.message || 'Gửi email nhắc học phí thất bại', 'error');
-    } finally {
-      setSendingReminderId('');
-    }
+  const goToPaymentReminders = (studentIds) => {
+    navigate('/admin/payment-reminders', {
+      state: { preselectStudentIds: studentIds },
+    });
   };
 
-  const handleSendBulkReminders = async () => {
-    const students = data?.students || [];
-    const unpaidStudents = students.filter((item) => Number(item.remainingDebt || 0) > 0);
+  const handleOpenReminderForStudent = (student) => {
+    if (!student || !student.studentId) {
+      return;
+    }
+    goToPaymentReminders([student.studentId]);
+  };
+
+  const handleOpenReminderForAllUnpaid = () => {
+    const list = data && data.students ? data.students : [];
+    const unpaidStudents = list.filter((item) => Number(item.remainingDebt || 0) > 0);
 
     if (unpaidStudents.length === 0) {
       showToast('Không có sinh viên nào đang nợ học phí', 'error');
@@ -108,45 +101,14 @@ export default function AdminPaymentSummaryPage() {
     }
 
     const confirmed = window.confirm(
-      `Gửi nhắc học phí cho ${unpaidStudents.length} sinh viên còn nợ?`,
+      `Chuyển sang trang nhắc nhở để gửi email cho ${unpaidStudents.length} sinh viên còn nợ?`,
     );
-    if (!confirmed) return;
-
-    setIsBulkSending(true);
-    try {
-      const semesterCode = data?.summary?.semesterCode || '';
-      const results = await Promise.allSettled(
-        unpaidStudents.map((student) =>
-          financeService.remindStudentTuition(student.studentId, semesterCode || null),
-        ),
-      );
-
-      let successCount = 0;
-      let failCount = 0;
-
-      results.forEach((result) => {
-        if (result.status !== 'fulfilled') {
-          failCount += 1;
-          return;
-        }
-
-        if (result.value?.data?.data?.sent) {
-          successCount += 1;
-        } else {
-          failCount += 1;
-        }
-      });
-
-      if (failCount === 0) {
-        showToast(`Đã gửi email nhắc học phí cho ${successCount} sinh viên`);
-      } else {
-        showToast(`Đã gửi ${successCount}, lỗi ${failCount}`, 'error');
-      }
-    } catch (_error) {
-      showToast('Gửi nhắc học phí hàng loạt thất bại', 'error');
-    } finally {
-      setIsBulkSending(false);
+    if (!confirmed) {
+      return;
     }
+
+    const ids = unpaidStudents.map((s) => s.studentId);
+    goToPaymentReminders(ids);
   };
 
   return (
@@ -270,11 +232,11 @@ export default function AdminPaymentSummaryPage() {
               <h2 className="text-lg font-semibold text-slate-800">Danh sách sinh viên</h2>
               <button
                 type="button"
-                onClick={handleSendBulkReminders}
-                disabled={isBulkSending || isLoading}
+                onClick={handleOpenReminderForAllUnpaid}
+                disabled={isLoading}
                 className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isBulkSending ? 'Đang gửi hàng loạt...' : 'Nhắc tất cả còn nợ'}
+                Nhắc tất cả còn nợ
               </button>
             </div>
           </div>
@@ -340,14 +302,10 @@ export default function AdminPaymentSummaryPage() {
                         {student.remainingDebt > 0 ? (
                           <button
                             type="button"
-                            disabled={
-                              isBulkSending ||
-                              sendingReminderId === String(student.studentId)
-                            }
-                            onClick={() => handleSendReminder(student)}
-                            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => handleOpenReminderForStudent(student)}
+                            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100"
                           >
-                            {sendingReminderId === String(student.studentId) ? 'Đang gửi...' : 'Nhắc học phí'}
+                            Nhắc học phí
                           </button>
                         ) : (
                           <span className="text-xs text-slate-400">-</span>

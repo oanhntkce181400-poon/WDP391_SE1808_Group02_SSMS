@@ -131,7 +131,7 @@ class CurriculumSemesterService {
       }
 
       const courses = await CurriculumCourse.find({ semester: semesterId })
-        .populate('subject', 'subjectCode subjectName')
+        .populate('subject', 'subjectCode subjectName credits tuitionFee')
         .lean();
 
       return {
@@ -153,7 +153,7 @@ class CurriculumSemesterService {
       // Get all courses for these semesters
       const semesterIds = semesters.map(s => s._id);
       const courses = await CurriculumCourse.find({ semester: { $in: semesterIds } })
-        .populate('subject', 'subjectCode subjectName')
+        .populate('subject', 'subjectCode subjectName credits tuitionFee')
         .lean();
 
       // Group courses by semester

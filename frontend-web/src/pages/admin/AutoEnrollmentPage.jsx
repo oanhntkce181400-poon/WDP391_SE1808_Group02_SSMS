@@ -292,6 +292,8 @@ export default function AutoEnrollmentPage() {
   const [snapshotNote, setSnapshotNote] = useState("");
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState("");
+  /** Hiển thị kết quả summary sau Live run (phân biệt với error) */
+  const [liveRunMessage, setLiveRunMessage] = useState("");
   /** Khi lưu snapshot (sau Live): cập nhật maxCapacity các ClassSection cùng nhóm + HK */
   const [applyMaxCapacityOnSnapshot, setApplyMaxCapacityOnSnapshot] =
     useState(true);
@@ -766,13 +768,30 @@ export default function AutoEnrollmentPage() {
         selectedSemesterId,
         buildTriggerPayload(dryRunFlag === true, { selectedStudentCodes: codes }),
       );
+      const summary = response?.data?.data?.summary;
+      const totalEnrolled = summary?.totalEnrollments || 0;
+      const totalWaitlisted = summary?.waitlisted || 0;
+      const totalSkipped = (summary?.duplicates || 0) + (summary?.studentsNoActionNeeded || 0);
       setResult(response?.data?.data || null);
       setSnapshotMessage("");
-      setAssignMessage(
-        dryRunFlag
-          ? `Xem trước (${codes.length} SV): không ghi CSDL — sĩ số / danh sách lớp sẽ không đổi cho đến khi bạn bấm «Ghi vào CSDL…».`
-          : `Đã ghi CSDL cho ${codes.length} SV — ClassEnrollment đã tạo, sĩ số lớp đã cập nhật. Tải lại trang «Nhóm lớp học phần» hoặc Quản lý lớp để xem.`,
-      );
+
+      if (dryRunFlag) {
+        setAssignMessage(
+          `Xem trước: ${codes.length} SV — mô phỏng sẽ ghi: ~${totalEnrolled} enrollment, ~${totalWaitlisted} waitlist, ~${totalSkipped} skip. Không ghi CSDL.`,
+        );
+      } else if (totalEnrolled > 0) {
+        setAssignMessage(
+          `Đã ghi CSDL: ${totalEnrolled} enrollment (sĩ số tăng), ${totalWaitlisted} waitlist. Tải lại trang «Nhóm lớp học phần» để xem.`,
+        );
+      } else if (totalWaitlisted > 0) {
+        setAssignMessage(
+          `Chưa có enrollment mới: ${totalWaitlisted} sinh viên đã được đưa vào waitlist (lớp đầy hoặc không khớp HK/nhóm). Không tăng sĩ số. Kiểm tra log chi tiết phía dưới.`,
+        );
+      } else {
+        setAssignMessage(
+          `Đã xử lý ${codes.length} SV nhưng không tạo enrollment — xem log chi tiết phía dưới (Enrolled / Skipped / Errors) để biết lý do.`,
+        );
+      }
     } catch (err) {
       setError(
         err?.response?.data?.message || "Failed to trigger auto enrollment",
@@ -816,12 +835,35 @@ export default function AutoEnrollmentPage() {
         selectedSemesterId,
         buildTriggerPayload(false),
       );
+      const summary = response?.data?.data?.summary;
+      const totalEnrolled = summary?.totalEnrollments || 0;
+      const totalWaitlisted = summary?.waitlisted || 0;
+      const totalSkipped =
+        (summary?.duplicates || 0) + (summary?.studentsNoActionNeeded || 0) +
+        (summary?.excludedAlreadyAssignedInSemester || 0);
       setResult(response?.data?.data || null);
       setSnapshotMessage("");
+
+      if (totalEnrolled > 0) {
+        setLiveRunMessage(
+          totalWaitlisted > 0
+            ? `Ghi thành công: ${totalEnrolled} enrollment (sĩ số tăng), ${totalWaitlisted} waitlist.${totalSkipped > 0 ? ` ${totalSkipped} skip.` : ""}`
+            : `Ghi thành công: ${totalEnrolled} enrollment — sĩ số các lớp đã tăng.`,
+        );
+      } else if (totalWaitlisted > 0) {
+        setLiveRunMessage(
+          `Không tạo enrollment mới: ${totalWaitlisted} sinh viên được đưa vào waitlist (lớp đầy hoặc không khớp HK/nhóm). Xem log chi tiết phía dưới.`,
+        );
+      } else {
+        setLiveRunMessage(
+          `Đã xử lý nhưng không có enrollment mới — xem log bên dưới (Enrolled / Skipped / Errors) để biết lý do.`,
+        );
+      }
     } catch (err) {
       setError(
         err?.response?.data?.message || "Failed to trigger auto enrollment",
       );
+      setLiveRunMessage("");
       setResult(null);
     } finally {
       setRunning(false);
@@ -1468,10 +1510,14 @@ export default function AutoEnrollmentPage() {
           ) : (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <p className="font-semibold">Lần chạy này đã ghi vào CSDL (Live)</p>
-              <p className="mt-1 text-emerald-900">
-                Enrollment và waitlist (nếu có) đã được lưu. Bản «Lưu bản log»
-                phía dưới chỉ là snapshot tra cứu, không phải bước gán lớp.
-              </p>
+              {liveRunMessage ? (
+                <p className="mt-1 font-medium text-emerald-800">{liveRunMessage}</p>
+              ) : (
+                <p className="mt-1 text-emerald-900">
+                  Enrollment và waitlist (nếu có) đã được lưu. Bản «Lưu bản log»
+                  phía dưới chỉ là snapshot tra cứu, không phải bước gán lớp.
+                </p>
+              )}
             </div>
           )}
           {/* Lưu kết quả form */}

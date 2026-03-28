@@ -734,6 +734,42 @@ async function bulkIncrementClassSections(classSectionIncrementMap) {
   return ClassSection.bulkWrite(operations, { ordered: false });
 }
 
+/**
+ * Sau khi ghi ClassEnrollment mới, đồng bộ Student.classSection = classGroup
+ * của ClassSection mà SV vừa được gán (lấy enrollment mới nhất theo enrollmentDate).
+ * Điều này giúp trang danh sách SV hiển thị đúng nhóm lớp học phần.
+ */
+async function syncStudentClassSection(enrolledStudentIds, classSectionsById) {
+  if (!Array.isArray(enrolledStudentIds) || enrolledStudentIds.length === 0) return;
+
+  // Lấy enrollment mới nhất của mỗi SV
+  const latestEnrollments = await ClassEnrollment.aggregate([
+    { $match: { student: { $in: enrolledStudentIds }, status: 'enrolled' } },
+    { $sort: { enrollmentDate: -1 } },
+    { $group: { _id: '$student', latestClassSectionId: { $first: '$classSection' } } },
+  ]);
+
+  if (!latestEnrollments.length) return;
+
+  const bulkOps = latestEnrollments
+    .map((e) => {
+      const cs = classSectionsById.get(String(e.latestClassSectionId));
+      const cg = cs?.classGroup ? String(cs.classGroup).trim() : null;
+      if (!cg) return null;
+      return {
+        updateOne: {
+          filter: { _id: e._id, classSection: { $ne: cg } },
+          update: { $set: { classSection: cg } },
+        },
+      };
+    })
+    .filter(Boolean);
+
+  if (bulkOps.length) {
+    await Student.bulkWrite(bulkOps, { ordered: false });
+  }
+}
+
 async function findClassSectionById(id) {
   return ClassSection.findById(id).lean();
 }
@@ -1134,6 +1170,7 @@ module.exports = {
   bulkUpsertEnrollments,
   bulkUpsertWaitlists,
   bulkIncrementClassSections,
+  syncStudentClassSection,
   findClassSectionById,
   getEnrollmentStatus,
   deleteEnrollments,

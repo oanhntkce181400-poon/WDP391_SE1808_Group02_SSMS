@@ -20,6 +20,9 @@ function _svc(...a) { if (_DEBUG_SVC) console.log('[Service]', ...a); }
 // 4. Chọn class section còn chỗ
 // 5. Tạo enrollment hoặc đưa vào waitlist nếu hết chỗ
 //
+// Học phí môn (Subject.tuitionFee) do seed quyết định — ví dụ seedSEK26Curriculum.js (PRICE_PER_CREDIT);
+// module này không ghi đơn giá vào DB.
+//
 // Cách đọc file:
 // - Nhóm helper đầu file: chuẩn hóa dữ liệu, cache, tạo key, gom state trong RAM
 // - Các hàm giữa file: thao tác enrollment/waitlist cho từng trường hợp nhỏ
@@ -1542,13 +1545,22 @@ async function prepareAutoEnrollmentBatchContext(
   // Chặng 3: dựng lookup/cache trong RAM để tránh query lặp trong vòng for lớn.
   // Normal mode vẫn cần nới academicYear để khớp niên khóa curriculum,
   // nhưng không được tràn sang semester khác của hệ thống.
+  //
+  // Gán tay theo nhóm (FE gửi studentCodes + classGroup): pool phải là mọi lớp mở
+  // của đúng nhóm — không ép semesterNum/academicYear của HK hệ thống đang chọn.
+  // Nếu ép (VD: chọn «Học kỳ 1 khung → HK2 2025-2026» trong khi lớp nhóm là HK1 2026-2027)
+  // thì pool rỗng → rơi luồng curriculum_semester → log «No subjects… SEK25» / 0 enrollment.
   if (enrollmentMode === 'normal') {
-    classSections = await repo.findOpenClassSectionsBySemesterYears({
-      semesterNum: semester.semesterNum,
-      academicYears: normalModeAcademicYears,
-      statuses: OPEN_CLASS_STATUSES,
-      classGroup: classGroupFilter,
-    });
+    const manualAssignIntoClassGroup =
+      requestedStudentCodes.length > 0 && classGroupFilter;
+    if (!manualAssignIntoClassGroup) {
+      classSections = await repo.findOpenClassSectionsBySemesterYears({
+        semesterNum: semester.semesterNum,
+        academicYears: normalModeAcademicYears,
+        statuses: OPEN_CLASS_STATUSES,
+        classGroup: classGroupFilter,
+      });
+    }
   }
 
   const { classSectionsById, classSectionsBySubject, classSectionsByGroup } =
@@ -2255,6 +2267,18 @@ async function triggerAutoEnrollment(semesterId, options = {}) {
         enrollmentPersistResult.insertedClassSectionCounts,
       );
       await repo.bulkUpsertWaitlists(pendingWaitlistDocs);
+
+      // Đồng bộ Student.classSection = classGroup của ClassSection vừa gán
+      if (pendingEnrollmentDocs.length > 0) {
+        const enrolledStudentIds = [
+          ...new Set(
+            pendingEnrollmentDocs
+              .map((doc) => doc.student)
+              .filter(Boolean),
+          ),
+        ];
+        await repo.syncStudentClassSection(enrolledStudentIds, classSectionsById);
+      }
     } catch (error) {
       const persistError = formatAutoEnrollmentPersistenceError(error);
       persistError.statusCode = 500;

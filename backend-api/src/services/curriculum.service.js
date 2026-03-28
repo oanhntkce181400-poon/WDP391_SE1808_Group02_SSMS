@@ -58,6 +58,7 @@ function normalizeResolvedSubject(subject) {
     subjectCode: subject.subjectCode,
     subjectName: subject.subjectName,
     credits: subject.credits,
+    tuitionFee: subject.tuitionFee,
   };
 }
 
@@ -83,7 +84,7 @@ async function resolveRelationalCourseSubjects(courses = []) {
   const fallbackSubjects = await Subject.find({
     subjectCode: { $in: missingSubjectCodes },
   })
-    .select('_id subjectCode subjectName credits')
+    .select('_id subjectCode subjectName credits tuitionFee')
     .lean();
 
   const fallbackByCode = new Map(
@@ -140,6 +141,7 @@ function mapRelationalCourseForClient(course) {
     hasPrerequisite: !!course.hasPrerequisite,
     subjectId: subject?._id || null,
     subject,
+    tuitionFee: subject?.tuitionFee,
   };
 }
 
@@ -406,7 +408,12 @@ async function getCurriculumForStudent(student, options = {}) {
 
 const curriculumService = {
   // Get all curriculums with optional pagination
-  async getCurriculums({ page = 1, limit = 10, keyword = '' } = {}) {
+  async getCurriculums({
+    page = 1,
+    limit = 10,
+    keyword = '',
+    includeFrameworkStart = false,
+  } = {}) {
     try {
       const query = keyword
         ? {
@@ -419,10 +426,44 @@ const curriculumService = {
         : {};
 
       const total = await Curriculum.countDocuments(query);
-      const curriculums = await Curriculum.find(query)
+      const q = Curriculum.find(query)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit);
+
+      let curriculums = includeFrameworkStart ? await q.lean() : await q;
+
+      if (includeFrameworkStart && Array.isArray(curriculums) && curriculums.length > 0) {
+        const CurriculumSemester = require('../models/curriculumSemester.model');
+        const ids = curriculums.map((c) => c._id);
+        const rows = await CurriculumSemester.aggregate([
+          {
+            $match: {
+              curriculum: { $in: ids },
+              startDate: { $exists: true, $ne: null },
+            },
+          },
+          {
+            $group: {
+              _id: '$curriculum',
+              frameworkStartAt: { $min: '$startDate' },
+            },
+          },
+        ]);
+        const byCur = new Map(
+          rows.map((r) => [String(r._id), r.frameworkStartAt]),
+        );
+        for (const c of curriculums) {
+          const dt = byCur.get(String(c._id));
+          c.frameworkStartAt = dt || null;
+          if (dt) {
+            const y = new Date(dt).getFullYear();
+            c.cohortFromFrameworkStart = Number.isFinite(y) ? y % 100 : null;
+          } else {
+            c.cohortFromFrameworkStart = null;
+          }
+        }
+      }
 
       return {
         data: curriculums,
@@ -465,7 +506,7 @@ const curriculumService = {
         // Get courses for each semester (CurriculumCourse uses subjectCode/subjectName)
         for (const sem of semesters) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
-            .populate('subject', 'subjectCode subjectName credits');
+            .populate('subject', 'subjectCode subjectName credits tuitionFee');
           const resolvedCourses = await resolveRelationalCourseSubjects(courses);
           sem.courses = resolvedCourses.map(mapRelationalCourseForClient);
           sem.id = sem.semesterOrder;
@@ -720,7 +761,7 @@ const curriculumService = {
         // Attach courses for each semester so legacy consumers still receive full data
         for (const sem of semestersDocs) {
           const courses = await CurriculumCourse.find({ semester: sem._id })
-            .populate('subject', 'subjectCode subjectName credits');
+            .populate('subject', 'subjectCode subjectName credits tuitionFee');
           const resolvedCourses = await resolveRelationalCourseSubjects(courses);
 
           let mapped = resolvedCourses.map(mapRelationalCourseForClient);
@@ -780,7 +821,7 @@ const curriculumService = {
 
         // Get courses for this semester
         const courses = await CurriculumCourse.find({ semester: semesterDoc._id })
-          .populate('subject', 'subjectCode subjectName credits');
+          .populate('subject', 'subjectCode subjectName credits tuitionFee');
         const resolvedCourses = await resolveRelationalCourseSubjects(courses);
 
         return resolvedCourses.map((course) => ({

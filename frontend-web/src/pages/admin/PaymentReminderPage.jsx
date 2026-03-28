@@ -1,20 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import paymentReminderService from '../../services/paymentReminderService';
 
-const REMINDER_TYPES = [
-  { value: 'all', label: 'Tất cả (Email + SMS + In-app)', icon: '📢' },
-  { value: 'email', label: 'Chỉ Email', icon: '📧' },
-  { value: 'sms', label: 'Chỉ SMS', icon: '📱' },
-  { value: 'inapp', label: 'Chỉ In-app', icon: '🔔' }
-];
+/** Nhãn lịch sử (bản ghi cũ có thể còn all/sms/inapp) */
+function reminderTypeLabel(type) {
+  if (type === 'email') {
+    return 'Email';
+  }
+  if (type === 'all') {
+    return 'Tất cả (lịch sử cũ)';
+  }
+  if (type === 'sms') {
+    return 'SMS (lịch sử cũ)';
+  }
+  if (type === 'inapp') {
+    return 'In-app (lịch sử cũ)';
+  }
+  return String(type || '—');
+}
 
 const PaymentReminderPage = () => {
+  const location = useLocation();
+  const preselectIdsFromSummaryRef = useRef(undefined);
+  const preselectFromSummaryAppliedRef = useRef(false);
+
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [students, setStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState([]);
-  const [reminderType, setReminderType] = useState('all');
   const [customMessage, setCustomMessage] = useState('');
   const [activeTab, setActiveTab] = useState('compose');
   const [history, setHistory] = useState([]);
@@ -23,8 +37,52 @@ const PaymentReminderPage = () => {
   const [overrideCooldown, setOverrideCooldown] = useState(false);
 
   useEffect(() => {
+    if (preselectIdsFromSummaryRef.current !== undefined) {
+      return;
+    }
+    const st = location.state;
+    if (st && Array.isArray(st.preselectStudentIds) && st.preselectStudentIds.length > 0) {
+      preselectIdsFromSummaryRef.current = st.preselectStudentIds.map((id) => String(id));
+    } else {
+      preselectIdsFromSummaryRef.current = [];
+    }
+  }, [location]);
+
+  useEffect(() => {
     fetchStudents();
   }, [filters]);
+
+  useEffect(() => {
+    if (preselectFromSummaryAppliedRef.current) {
+      return;
+    }
+    if (loading) {
+      return;
+    }
+    if (preselectIdsFromSummaryRef.current === undefined) {
+      return;
+    }
+    preselectFromSummaryAppliedRef.current = true;
+    const pending = preselectIdsFromSummaryRef.current;
+    if (pending.length === 0) {
+      return;
+    }
+    const want = new Set(pending);
+    const matched = [];
+    for (const s of students) {
+      if (want.has(String(s.studentId))) {
+        matched.push(s.studentId);
+      }
+    }
+    if (matched.length > 0) {
+      setSelectedStudents(matched);
+      toast.info('Đã chọn sinh viên từ Tổng hợp thanh toán — kiểm tra danh sách và bấm gửi email.');
+    } else {
+      toast.warning(
+        'Không tìm thấy sinh viên đã chọn trong danh sách nợ của trang này (có thể khác kỳ / bộ lọc).',
+      );
+    }
+  }, [students, loading]);
 
   const fetchStudents = async () => {
     try {
@@ -75,7 +133,7 @@ const PaymentReminderPage = () => {
       setSending(true);
       const response = await paymentReminderService.sendReminders({
         studentIds: selectedStudents,
-        type: reminderType,
+        type: 'email',
         customMessage: customMessage || undefined,
         overrideCooldown,
       });
@@ -126,7 +184,9 @@ const PaymentReminderPage = () => {
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Nhắc nhở thanh toán</h1>
-        <p className="text-gray-500">Gửi thông báo nhắc nhở học phí cho sinh viên</p>
+        <p className="text-gray-500">
+          Gửi email nhắc nhở học phí tới địa chỉ đăng ký của sinh viên (chỉ kênh email).
+        </p>
       </div>
 
       {/* Tabs */}
@@ -155,41 +215,24 @@ const PaymentReminderPage = () => {
 
       {activeTab === 'compose' ? (
         <>
-          {/* Reminder Type Selection */}
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Loại thông báo</h3>
-            <div className="flex flex-wrap gap-4">
-              {REMINDER_TYPES.map(option => (
-                <label
-                  key={option.value}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border cursor-pointer ${
-                    reminderType === option.value 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="reminderType"
-                    value={option.value}
-                    checked={reminderType === option.value}
-                    onChange={(e) => setReminderType(e.target.value)}
-                    className="sr-only"
-                  />
-                  <span>{option.icon}</span>
-                  <span className="text-sm font-medium">{option.label}</span>
-                </label>
-              ))}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex gap-3 items-start">
+            <span className="text-2xl leading-none" aria-hidden>📧</span>
+            <div>
+              <p className="font-semibold text-blue-900">Kênh gửi: chỉ Email</p>
+              <p className="text-sm text-blue-800 mt-1">
+                Hệ thống không gửi SMS hay thông báo in-app từ trang này. Nội dung nhắc nhở được gửi qua
+                mẫu email mặc định hoặc đoạn tùy chỉnh bên dưới (nếu có).
+              </p>
             </div>
           </div>
 
           {/* Custom Message */}
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h3 className="font-semibold text-gray-800 mb-4">Tin nhắn tùy chỉnh (không bắt buộc)</h3>
+            <h3 className="font-semibold text-gray-800 mb-4">Nội dung email tùy chỉnh (không bắt buộc)</h3>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="Nhập tin nhắn tùy chỉnh hoặc để trống để sử dụng mẫu mặc định..."
+              placeholder="Nhập nội dung email hoặc để trống để dùng mẫu mặc định..."
               className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
             />
 
@@ -303,7 +346,7 @@ const PaymentReminderPage = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
-                <span>Gửi {selectedStudents.length} thông báo</span>
+                <span>Gửi {selectedStudents.length} email nhắc nhở</span>
               </>
             )}
           </button>
@@ -336,7 +379,7 @@ const PaymentReminderPage = () => {
                     </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-1 bg-gray-100 rounded text-sm">
-                        {reminder.reminderType}
+                        {reminderTypeLabel(reminder.reminderType)}
                       </span>
                     </td>
                     <td className="px-4 py-3">{getStatusBadge(reminder.status)}</td>

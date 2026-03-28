@@ -29,7 +29,8 @@ const MAJOR_CODE = 'SE';
 const DOMAIN = 'fpt.edu.vn';
 const PASSWORD = 'Student@123';
 const SALT_ROUNDS = Number(process.env.PASSWORD_SALT_ROUNDS || 10);
-const PRICE_PER_CREDIT = 350000;
+/** Đơn giá 1 tín chỉ (VNĐ) — dùng cho Subject.tuitionFee = credits × giá này */
+const PRICE_PER_CREDIT = 100;
 
 // Khoi HK1 bat dau 5/4/2026; moi ky 4 thang; ngay ket thuc = ngay truoc ngay bat dau ky sau
 const CURRICULUM_SEMESTER_START_DAY = { y: 2026, m: 4, d: 5 };
@@ -37,20 +38,14 @@ const MONTHS_PER_CURRICULUM_SEMESTER = 4;
 
 // Xen ke: Thu 2,4,6 roi 3,5,7 (Sat)
 const SCHEDULE_DOW_PATTERN = [1, 3, 5, 2, 4, 6];
-const SCHEDULE_CA_PERIODS = [
-  { startPeriod: 1, endPeriod: 2 },
-  { startPeriod: 3, endPeriod: 4 },
-  { startPeriod: 5, endPeriod: 6 },
-  { startPeriod: 7, endPeriod: 8 },
-  { startPeriod: 9, endPeriod: 10 },
-];
 
-const TIMESLOT_DEFS = [
-  { groupName: 'CA1', description: 'Ca 1 - Sang', startTime: '07:30', endTime: '09:00', startPeriod: 1, endPeriod: 2 },
-  { groupName: 'CA2', description: 'Ca 2 - Sang', startTime: '09:30', endTime: '11:00', startPeriod: 3, endPeriod: 4 },
-  { groupName: 'CA3', description: 'Ca 3 - Chieu', startTime: '12:30', endTime: '14:00', startPeriod: 5, endPeriod: 6 },
-  { groupName: 'CA4', description: 'Ca 4 - Chieu', startTime: '14:30', endTime: '16:00', startPeriod: 7, endPeriod: 8 },
-  { groupName: 'CA5', description: 'Ca 5 - Toi', startTime: '17:00', endTime: '18:30', startPeriod: 9, endPeriod: 10 },
+// Chi doc khung gio co san (Ca 1..Ca 4) — khong upsert timeslot
+// TKB: Ca 1 = tiet 1, Ca 2 = tiet 2, Ca 3 = tiet 3, Ca 4 = tiet 4 (startPeriod = endPeriod)
+const DEFAULT_CA_GROUP_NAME_CANDIDATES = [
+  ['Ca 1', 'CA1', 'Ca1'],
+  ['Ca 2', 'CA2', 'Ca2'],
+  ['Ca 3', 'CA3', 'Ca3'],
+  ['Ca 4', 'CA4', 'Ca4'],
 ];
 
 // ===== 1. TEACHERS =====
@@ -175,24 +170,66 @@ function formatYmdUtc(date) {
   return `${y}-${m}-${d}`;
 }
 
-async function ensureTimeslotsForSchedule() {
-  for (const ts of TIMESLOT_DEFS) {
-    await Timeslot.findOneAndUpdate(
-      { groupName: ts.groupName },
-      {
-        $set: {
-          groupName: ts.groupName,
-          description: ts.description,
-          startTime: ts.startTime,
-          endTime: ts.endTime,
-          startPeriod: ts.startPeriod,
-          endPeriod: ts.endPeriod,
-          status: 'active',
-        },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+// Trang admin hien "Tiết" tu timeslot.startPeriod — can sua collection timeslots, khong chi Schedule
+async function syncDefaultCaTimeslotPeriodsInDb() {
+  for (let i = 0; i < DEFAULT_CA_GROUP_NAME_CANDIDATES.length; i += 1) {
+    const names = DEFAULT_CA_GROUP_NAME_CANDIDATES[i];
+    const lessonNo = i + 1;
+    let doc = null;
+    for (let j = 0; j < names.length; j += 1) {
+      doc = await Timeslot.findOne({ groupName: names[j], status: 'active' });
+      if (doc) {
+        break;
+      }
+    }
+    if (!doc) {
+      const preferred = names[0];
+      throw new Error(
+        `[SEK26] Dong bo tiết: khong tim thay khung gio active "${preferred}". `
+          + 'Hay tao san Ca 1 - Ca 4 trong Quan ly khung gio.',
+      );
+    }
+
+    const prevSp = doc.startPeriod;
+    const prevEp = doc.endPeriod;
+    await Timeslot.updateOne(
+      { _id: doc._id },
+      { $set: { startPeriod: lessonNo, endPeriod: lessonNo } },
+    );
+    console.log(
+      `[SEK26] Timeslot "${doc.groupName}": tiet ${prevSp}-${prevEp} -> ${lessonNo}-${lessonNo} | gio ${doc.startTime}-${doc.endTime} (giu nguyen)`,
     );
   }
+}
+
+async function loadDefaultCaTimeslotsFromDb() {
+  const slots = [];
+  for (let i = 0; i < DEFAULT_CA_GROUP_NAME_CANDIDATES.length; i += 1) {
+    const names = DEFAULT_CA_GROUP_NAME_CANDIDATES[i];
+    const lessonNo = i + 1;
+    let doc = null;
+    for (let j = 0; j < names.length; j += 1) {
+      doc = await Timeslot.findOne({ groupName: names[j], status: 'active' }).lean();
+      if (doc) {
+        break;
+      }
+    }
+    if (!doc) {
+      const preferred = names[0];
+      throw new Error(
+        `[SEK26] Khong tim thay khung gio active "${preferred}" (hoac ten tuong duong). `
+          + 'Hay tao san Ca 1 - Ca 4 trong Quan ly khung gio roi chay lai seed.',
+      );
+    }
+
+    slots.push({
+      timeslotId: doc._id,
+      groupName: doc.groupName,
+      scheduleStartPeriod: lessonNo,
+      scheduleEndPeriod: lessonNo,
+    });
+  }
+  return slots;
 }
 
 async function ensureRoomsSE26() {
@@ -220,47 +257,21 @@ async function ensureRoomsSE26() {
   return rooms;
 }
 
-async function syncClassSectionPrimarySchedule(classSectionId) {
-  const activeSchedules = await Schedule.find({
-    classSection: classSectionId,
-    status: 'active',
-  })
-    .sort({ dayOfWeek: 1, startPeriod: 1, endPeriod: 1, startDate: 1, _id: 1 })
-    .lean();
-
-  if (activeSchedules.length === 0) {
-    await ClassSection.findByIdAndUpdate(classSectionId, {
-      $unset: {
-        room: '',
-        timeslot: '',
-        dayOfWeek: '',
-        startDate: '',
-        endDate: '',
-      },
-    });
-    return;
-  }
-
-  const primarySchedule = activeSchedules[0];
-  const matchedTimeslot = await Timeslot.findOne({
-    startPeriod: primarySchedule.startPeriod,
-    endPeriod: primarySchedule.endPeriod,
-    status: 'active',
-  })
-    .select('_id')
-    .lean();
-
-  await ClassSection.findByIdAndUpdate(classSectionId, {
-    room: primarySchedule.room || null,
-    timeslot: matchedTimeslot ? matchedTimeslot._id : null,
-    dayOfWeek: primarySchedule.dayOfWeek,
-    startDate: primarySchedule.startDate,
-    endDate: primarySchedule.endDate,
-  });
-}
-
 async function seedAlternatingSchedules(curriculum) {
-  await ensureTimeslotsForSchedule();
+  console.log('[SEK26] Dong bo tiết Ca 1-4 trong collection timeslots (theo UI admin)...');
+  await syncDefaultCaTimeslotPeriodsInDb();
+
+  const caSlots = await loadDefaultCaTimeslotsFromDb();
+  console.log(
+    '[SEK26] TKB: ',
+    caSlots
+      .map(
+        (s) =>
+          `${s.groupName} -> tiet ${s.scheduleStartPeriod} (Schedule ${s.scheduleStartPeriod}-${s.scheduleEndPeriod})`,
+      )
+      .join(' | '),
+  );
+
   const rooms = await ensureRoomsSE26();
   const windows = buildCurriculumSemesterWindows(9);
 
@@ -310,17 +321,18 @@ async function seedAlternatingSchedules(curriculum) {
         const attempt = slotCursor + tries;
         const dow = SCHEDULE_DOW_PATTERN[attempt % SCHEDULE_DOW_PATTERN.length];
         const ca =
-          SCHEDULE_CA_PERIODS[
-            Math.floor(attempt / SCHEDULE_DOW_PATTERN.length) % SCHEDULE_CA_PERIODS.length
-          ];
+          caSlots[Math.floor(attempt / SCHEDULE_DOW_PATTERN.length) % caSlots.length];
         const room = rooms[attempt % rooms.length];
 
-        const roomKey = `${String(room._id)}|${dow}|${ca.startPeriod}|${ca.endPeriod}`;
+        const sp = ca.scheduleStartPeriod;
+        const ep = ca.scheduleEndPeriod;
+
+        const roomKey = `${String(room._id)}|${dow}|${sp}|${ep}`;
         if (roomSlotKeys.has(roomKey)) {
           continue;
         }
 
-        const teacherKey = teacherId ? `${teacherId}|${dow}|${ca.startPeriod}|${ca.endPeriod}` : '';
+        const teacherKey = teacherId ? `${teacherId}|${dow}|${sp}|${ep}` : '';
         if (teacherKey && teacherSlotKeys.has(teacherKey)) {
           continue;
         }
@@ -329,11 +341,19 @@ async function seedAlternatingSchedules(curriculum) {
           classSection: cls._id,
           room: room._id,
           dayOfWeek: dow,
-          startPeriod: ca.startPeriod,
-          endPeriod: ca.endPeriod,
+          startPeriod: sp,
+          endPeriod: ep,
           startDate,
           endDate,
           status: 'active',
+        });
+
+        await ClassSection.findByIdAndUpdate(cls._id, {
+          room: room._id,
+          timeslot: ca.timeslotId,
+          dayOfWeek: dow,
+          startDate,
+          endDate,
         });
 
         roomSlotKeys.add(roomKey);
@@ -351,12 +371,8 @@ async function seedAlternatingSchedules(curriculum) {
     }
   }
 
-  for (const id of classIds) {
-    await syncClassSectionPrimarySchedule(id);
-  }
-
   const n = await Schedule.countDocuments({ classSection: { $in: classIds }, status: 'active' });
-  console.log(`[SEK26] Da tao ${n} Schedule (TKB xen ke) + dong bo ClassSection`);
+  console.log(`[SEK26] Da tao ${n} Schedule (TKB xen ke, Ca 1-4 = tiet 1-4) + cap nhat ClassSection`);
 }
 
 // ===== SEED FUNCTIONS =====
@@ -368,11 +384,11 @@ async function seedTeachers() {
   for (const teacher of teachersData) {
     const normalizedEmail = `${normalizeText(teacher.fullName.replace(/\s/g, ''))}@${DOMAIN}`.toLowerCase();
 
+    // Cap nhat password cho user cu — $setOnInsert chi chay khi insert, can $set de update user cu
     const user = await User.findOneAndUpdate(
       { email: normalizedEmail },
       {
-        $setOnInsert: {
-          email: normalizedEmail,
+        $set: {
           password: passwordHash,
           fullName: teacher.fullName,
           role: 'lecturer',
@@ -380,6 +396,9 @@ async function seedTeachers() {
           status: 'active',
           isActive: true,
           mustChangePassword: false,
+        },
+        $setOnInsert: {
+          email: normalizedEmail,
         },
       },
       { new: true, upsert: true, setDefaultsOnInsert: true },
@@ -402,8 +421,13 @@ async function seedTeachers() {
       teacherMap[teacher.teacherCode] = t._id;
       console.log(`[SEK26] Teacher created: ${teacher.fullName} (${teacher.teacherCode})`);
     } else {
+      // Dong bo userId phong khi email bi thay doi hoac user bi tao moi
+      await Teacher.updateOne(
+        { _id: existing._id },
+        { $set: { userId: user._id, email: normalizedEmail } },
+      );
       teacherMap[teacher.teacherCode] = existing._id;
-      console.log(`[SEK26] Teacher exists:  ${teacher.fullName} (${teacher.teacherCode})`);
+      console.log(`[SEK26] Teacher exists:  ${teacher.fullName} (${teacher.teacherCode}) — password reset to "${PASSWORD}"`);
     }
   }
   return teacherMap;
@@ -529,8 +553,7 @@ async function seedStudents(curriculum) {
       const user = await User.findOneAndUpdate(
         { email },
         {
-          $setOnInsert: {
-            email,
+          $set: {
             password: passwordHash,
             fullName,
             role: 'student',
@@ -538,6 +561,9 @@ async function seedStudents(curriculum) {
             status: 'active',
             isActive: true,
             mustChangePassword: false,
+          },
+          $setOnInsert: {
+            email,
           },
         },
         { new: true, upsert: true, setDefaultsOnInsert: true },
