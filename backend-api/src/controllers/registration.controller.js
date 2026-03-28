@@ -170,15 +170,26 @@ const validateAll = async (req, res) => {
       });
     }
 
-    const [prerequisitesResult, capacityResult, walletResult, scheduleConflictResult, eligibility] = await Promise.all([
+    const [
+      prerequisitesResult,
+      capacityResult,
+      walletResult,
+      scheduleConflictResult,
+      eligibility,
+      enrolledInClass,
+    ] = await Promise.all([
       registrationService.validatePrerequisites(student._id, classId),
       registrationService.validateClassCapacity(classId),
       registrationService.validateWallet(student._id, classId),
       registrationService.checkScheduleConflict(student._id, classId, semesterId || null),
       registrationService.getStudentEligibilitySummary(student._id, classId, semesterId || null),
+      registrationService.checkEnrolledInClassSection(student._id, classId),
     ]);
 
+    const enrolledInThisClass = enrolledInClass.enrolled === true;
+
     const isEligible =
+      !enrolledInThisClass &&
       prerequisitesResult.eligible &&
       !capacityResult.isFull &&
       walletResult.isSufficient &&
@@ -186,6 +197,7 @@ const validateAll = async (req, res) => {
       eligibility.canRegister;
 
     const validationErrors = [];
+    if (enrolledInThisClass) validationErrors.push('Bạn đã đăng ký lớp này');
     if (!prerequisitesResult.eligible) validationErrors.push(prerequisitesResult.message);
     if (capacityResult.isFull) validationErrors.push(capacityResult.message);
     if (!walletResult.isSufficient) validationErrors.push(walletResult.message);
@@ -204,6 +216,7 @@ const validateAll = async (req, res) => {
       message: isEligible ? 'Eligible for registration' : 'Not eligible for registration',
       data: {
         isEligible,
+        enrolledInThisClass,
         prerequisites: prerequisitesResult,
         capacity: capacityResult,
         wallet: walletResult,

@@ -376,12 +376,15 @@ export default function ClassRegistrationPage() {
               {classes.map((cls) => {
                 const validation = validationResults[cls._id];
                 const validationErrors = validation?.validationErrors || [];
+                const enrolledInThisClass = validation?.enrolledInThisClass === true;
                 // cannotRegister là tổng hợp tất cả điều kiện chặn ở tầng UI:
                 // - lớp đầy
+                // - đã đăng ký lớp này
                 // - cohort bị chặn
                 // - validation backend trả class không đủ điều kiện
                 const cannotRegister =
                   cls.isFull ||
+                  enrolledInThisClass ||
                   (validation ? !validation.isEligible : false);
 
                 return (
@@ -442,7 +445,16 @@ export default function ClassRegistrationPage() {
                         </div>
                       </div>
 
-                      {validation?.isEligible && (
+                      {enrolledInThisClass && (
+                        <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800">
+                          <div className="flex items-center gap-1 font-semibold">
+                            <CheckCircle className="h-4 w-4" />
+                            Đã đăng ký lớp này
+                          </div>
+                        </div>
+                      )}
+
+                      {!enrolledInThisClass && validation?.isEligible && (
                         <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
                           <div className="flex items-center gap-1 font-semibold">
                             <CheckCircle className="h-4 w-4" />
@@ -451,7 +463,7 @@ export default function ClassRegistrationPage() {
                         </div>
                       )}
 
-                      {!validation?.isEligible && validationErrors.length > 0 && (
+                      {!enrolledInThisClass && !validation?.isEligible && validationErrors.length > 0 && (
                         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                           <div className="mb-1 flex items-center gap-1 font-semibold">
                             <XCircle className="h-4 w-4" />
@@ -509,9 +521,13 @@ export default function ClassRegistrationPage() {
                             handleRegister(cls);
                           }}
                           disabled={cannotRegister}
-                          className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed ${
+                            enrolledInThisClass
+                              ? 'border border-sky-300 bg-sky-100 text-sky-800'
+                              : 'bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-300'
+                          }`}
                         >
-                          Đăng ký
+                          {enrolledInThisClass ? 'Đã đăng ký' : 'Đăng ký'}
                         </button>
                       </div>
                     </div>

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const ClassSection = require("../../models/classSection.model");
 const ClassEnrollment = require("../../models/classEnrollment.model");
 const Schedule = require("../../models/schedule.model");
+const Timeslot = require("../../models/timeslot.model");
 const Student = require("../../models/student.model");
 const User = require("../../models/user.model");
 const Teacher = require("../../models/teacher.model");
@@ -804,6 +805,75 @@ async function getMyClasses(userId) {
   }));
 }
 
+/**
+ * Lớp có thể đã có lịch trong Schedule (admin gán ca) nhưng ClassSection.timeslot / room chưa đồng bộ.
+ * Trang đăng ký SV chỉ đọc timeslot trên ClassSection → bổ sung từ lịch active đầu tiên.
+ */
+async function enrichClassListFromPrimarySchedule(classes) {
+  if (!Array.isArray(classes) || classes.length === 0) return classes;
+
+  const ids = classes.map((c) => c._id).filter(Boolean);
+  if (ids.length === 0) return classes;
+
+  const schedules = await Schedule.find({
+    classSection: { $in: ids },
+    status: "active",
+  })
+    .populate("room", "roomCode roomName capacity")
+    .sort({ dayOfWeek: 1, startPeriod: 1, endPeriod: 1, _id: 1 })
+    .lean();
+
+  const primaryByClass = new Map();
+  for (const sch of schedules) {
+    const key = String(sch.classSection);
+    if (!primaryByClass.has(key)) primaryByClass.set(key, sch);
+  }
+
+  const periodSet = new Set();
+  for (const sch of primaryByClass.values()) {
+    periodSet.add(`${sch.startPeriod}-${sch.endPeriod}`);
+  }
+
+  const orConds = [...periodSet].map((pair) => {
+    const [sp, ep] = pair.split("-").map((n) => parseInt(n, 10));
+    return { startPeriod: sp, endPeriod: ep };
+  });
+
+  const periodToTimeslot = new Map();
+  if (orConds.length > 0) {
+    const slotDocs = await Timeslot.find({
+      $or: orConds,
+      status: { $ne: "inactive" },
+    })
+      .select("groupName startTime endTime startPeriod endPeriod")
+      .lean();
+    for (const ts of slotDocs) {
+      const k = `${ts.startPeriod}-${ts.endPeriod}`;
+      if (!periodToTimeslot.has(k)) periodToTimeslot.set(k, ts);
+    }
+  }
+
+  return classes.map((cls) => {
+    const sch = primaryByClass.get(String(cls._id));
+    if (!sch) return cls;
+
+    const needTime = !cls.timeslot?.startTime;
+    const needRoom = !cls.room || (!cls.room.roomCode && !cls.room.roomName);
+
+    if (!needTime && !needRoom) return cls;
+
+    let next = cls;
+    if (needTime) {
+      const ts = periodToTimeslot.get(`${sch.startPeriod}-${sch.endPeriod}`);
+      if (ts) next = { ...next, timeslot: ts };
+    }
+    if (needRoom && sch.room && (sch.room.roomCode || sch.room.roomName)) {
+      next = { ...next, room: sch.room };
+    }
+    return next;
+  });
+}
+
 // ─── UC22 - Search Available Classes ────────────────────────────────
 
 /**
@@ -882,8 +952,10 @@ async function searchAvailableClasses(criteria = {}) {
     }),
   ]);
 
+  const enriched = await enrichClassListFromPrimarySchedule(classes);
+
   // Add occupancy info
-  const classesWithOccupancy = classes.map((cls) => {
+  const classesWithOccupancy = enriched.map((cls) => {
     const occupancy = Math.round((cls.currentEnrollment / cls.maxCapacity) * 100) || 0;
     return {
       ...cls,

@@ -16,6 +16,7 @@
     "normalize:user-roles": "node scripts/normalize-user-roles.js",
     "verify:feature-flows": "node scripts/verify-feature-flows.js",
     "seed:repeat-enrollment-test": "node scripts/seed-repeat-enrollment-test.js",
+    "seed:nguyen-van-rot": "node scripts/seed-NguyenVanRot.js",
     "verify:repeat-enrollment-test": "node scripts/verify-repeat-enrollment-test.js",
     "fix:registration-period-date": "node scripts/fix-registration-period-date.js",
     "backfill:teacher-accounts": "node backfill-teacher-accounts.js",

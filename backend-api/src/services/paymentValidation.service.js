@@ -223,7 +223,11 @@ async function findTuitionByCurriculumSemester(
 
 /**
  * Tổng tín chỉ đã đăng ký trong năm học + học kỳ hệ thống (theo lớp học phần),
- * gom theo môn (một môn nhiều ca chỉ tính một lần) — khớp logic cần thu học phí thực tế.
+ * gom theo môn (một môn nhiều ca chỉ tính một lần).
+ *
+ * KHÔNG lọc theo courseFeeCleared: học lại thường để courseFeeCleared=false cho đến khi nộp tiền
+ * môn đó — vẫn phải tính vào tổng tín chỉ / học phí kỳ (trang Tài chính đồng bộ với trang chủ).
+ * (TKB/điểm danh vẫn chỉ dùng enrollment đã cleared ở schedule.service.)
  */
 async function sumEnrolledCreditsForTeachingPeriod(studentId, semesterNum, academicYear) {
   if (!academicYear || semesterNum == null || semesterNum === "") {
@@ -233,7 +237,6 @@ async function sumEnrolledCreditsForTeachingPeriod(studentId, semesterNum, acade
   const enrollments = await ClassEnrollment.find({
     student: studentId,
     status: { $in: ["enrolled", "completed"] },
-    courseFeeCleared: { $ne: false },
   })
     .populate({
       path: "classSection",

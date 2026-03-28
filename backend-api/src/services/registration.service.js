@@ -189,6 +189,21 @@ function resolveEntityId(value) {
   return value;
 }
 
+/** SV đã có enrollment (đang học / hoàn thành) đúng lớp học phần này — không cho đăng ký lại. */
+async function checkEnrolledInClassSection(studentId, classSectionId) {
+  if (!studentId || !classSectionId) {
+    return { enrolled: false, enrollment: null };
+  }
+  const enrollment = await ClassEnrollment.findOne({
+    student: studentId,
+    classSection: classSectionId,
+    status: { $in: ['enrolled', 'completed'] },
+  })
+    .select('_id status')
+    .lean();
+  return { enrolled: Boolean(enrollment), enrollment };
+}
+
 async function findSameSubjectEnrollmentInSemester(studentId, classSection) {
   const subjectId = resolveEntityId(classSection?.subject);
   if (!subjectId || !classSection?.semester || !classSection?.academicYear) {
@@ -491,8 +506,8 @@ const validateWallet = async (studentId, classId) => {
 
   const subject = classSection.subject;
   const credits = Number(subject?.credits || 0);
-  const pricePerCredit = Number(subject?.tuitionFee || 100);
-  const totalFee = credits * pricePerCredit;
+  // 1 tín chỉ = 100đ (trên toàn bộ hệ thống)
+  const totalFee = credits * 100;
 
   // Auto-create wallet for legacy accounts that do not have one yet.
   const wallet = await getOrCreateWallet(student.userId);
@@ -505,7 +520,6 @@ const validateWallet = async (studentId, classId) => {
     currentBalance: wallet.balance,
     totalFee,
     credits,
-    pricePerCredit,
   };
 };
 
@@ -902,4 +916,5 @@ module.exports = {
   checkCreditLimit,
   getStudentEligibilitySummary,
   hasSubjectEnrollmentHistory,
+  checkEnrolledInClassSection,
 };
