@@ -27,6 +27,21 @@ function formatTimeslotPeriodLabel(ts) {
   return `Tiết ${start}–${end}`;
 }
 
+/** Ghép ca học trong danh mục với tiết của lịch (giao tiết) */
+function findTimeslotForSchedule(timeslotList, schedule) {
+  const sp = Number(schedule?.startPeriod);
+  const ep = Number(schedule?.endPeriod ?? schedule?.startPeriod);
+  if (!Number.isFinite(sp) || !Number.isFinite(ep)) return null;
+  return (
+    timeslotList.find((ts) => {
+      const tsSp = Number(ts.startPeriod);
+      const tsEp = Number(ts.endPeriod ?? ts.startPeriod);
+      if (!Number.isFinite(tsSp) || !Number.isFinite(tsEp)) return false;
+      return !(ep < tsSp || sp > tsEp);
+    }) || null
+  );
+}
+
 function toInputDate(value) {
   if (value == null || value === "") return "";
   if (typeof value === "string") {
@@ -479,6 +494,13 @@ export default function AssignScheduleModal({
     return date.toLocaleDateString("vi-VN");
   };
 
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "-";
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
@@ -762,7 +784,10 @@ export default function AssignScheduleModal({
 
         {/* Existing Schedules */}
         <div className="flex-1 overflow-y-auto px-6 py-4 min-h-[200px]">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3 sticky top-0 bg-white py-2">Lịch học hiện tại</h3>
+          <h3 className="text-sm font-semibold text-slate-900 mb-1 sticky top-0 bg-white py-2">Lịch học hiện tại</h3>
+          <p className="text-xs text-slate-500 mb-3 sticky top-8 bg-white pb-2">
+            Chi tiết từng buổi: thứ, tiết, ca — khung giờ, phòng, sức chứa và khoảng ngày hiệu lực.
+          </p>
           
           {loading ? (
             <div className="flex items-center justify-center py-8 text-slate-400">
@@ -776,37 +801,99 @@ export default function AssignScheduleModal({
             </div>
           ) : (
             <div className="space-y-3">
-              {schedules.map((schedule) => (
+              {schedules.map((schedule) => {
+                const matchedTs = findTimeslotForSchedule(timeslots, schedule);
+                const dayLabel =
+                  DAYS_OF_WEEK.find((d) => d.value === schedule.dayOfWeek)?.label ||
+                  `Thứ ${schedule.dayOfWeek}`;
+                const periodLabel =
+                  Number(schedule.startPeriod) === Number(schedule.endPeriod)
+                    ? `Tiết ${schedule.startPeriod}`
+                    : `Tiết ${schedule.startPeriod}–${schedule.endPeriod}`;
+                return (
                 <div
                   key={schedule._id}
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200"
+                  className="flex items-start justify-between gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
                       <Calendar size={20} className="text-indigo-600" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">
-                          {DAYS_OF_WEEK.find(d => d.value === schedule.dayOfWeek)?.label || `Thứ ${schedule.dayOfWeek}`}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                        <span className="font-semibold text-slate-900">
+                          {dayLabel}
                         </span>
-                        <span className="text-slate-400">|</span>
-                        <span className="text-slate-600">
-                          {Number(schedule.startPeriod) === Number(schedule.endPeriod)
-                            ? `Tiết ${schedule.startPeriod}`
-                            : `Tiết ${schedule.startPeriod}–${schedule.endPeriod}`}
-                        </span>
+                        <span className="text-slate-300">·</span>
+                        <span className="text-slate-700 font-medium">{periodLabel}</span>
+                        {schedule.status && schedule.status !== "active" && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            {schedule.status === "cancelled" ? "Đã hủy" : schedule.status}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <MapPin size={14} />
-                          {schedule.room?.roomCode} - {schedule.room?.roomName}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock size={14} />
-                          {formatDate(schedule.startDate)} - {formatDate(schedule.endDate)}
-                        </span>
-                      </div>
+                      <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                        {matchedTs && (
+                          <>
+                            <div className="flex flex-col sm:flex-row sm:gap-2 sm:items-baseline">
+                              <dt className="text-slate-500 shrink-0">Ca học</dt>
+                              <dd className="text-slate-800 font-medium break-words">
+                                {matchedTs.groupName}
+                                {matchedTs.description ? (
+                                  <span className="font-normal text-slate-600"> — {matchedTs.description}</span>
+                                ) : null}
+                              </dd>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:gap-2 sm:items-baseline">
+                              <dt className="text-slate-500 shrink-0">Khung giờ</dt>
+                              <dd className="text-slate-800 tabular-nums">
+                                {matchedTs.startTime} – {matchedTs.endTime}
+                              </dd>
+                            </div>
+                          </>
+                        )}
+                        {!matchedTs && (
+                          <div className="sm:col-span-2 text-xs text-slate-500">
+                            Không khớp ca trong danh mục — chỉ hiển thị theo tiết đã lưu.
+                          </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row sm:gap-2 sm:items-start sm:col-span-2">
+                          <dt className="text-slate-500 shrink-0 flex items-center gap-1">
+                            <MapPin size={14} className="opacity-70" />
+                            Phòng
+                          </dt>
+                          <dd className="text-slate-800">
+                            <span className="font-medium">{schedule.room?.roomCode}</span>
+                            {schedule.room?.roomName ? (
+                              <span className="text-slate-600"> — {schedule.room.roomName}</span>
+                            ) : null}
+                          </dd>
+                        </div>
+                        {schedule.room?.capacity != null && (
+                          <div className="flex flex-col sm:flex-row sm:gap-2 sm:items-baseline">
+                            <dt className="text-slate-500 shrink-0 flex items-center gap-1">
+                              <Users size={14} className="opacity-70" />
+                              Sức chứa phòng
+                            </dt>
+                            <dd className="text-slate-800">{schedule.room.capacity} chỗ</dd>
+                          </div>
+                        )}
+                        <div className="flex flex-col sm:flex-row sm:gap-2 sm:items-baseline sm:col-span-2">
+                          <dt className="text-slate-500 shrink-0 flex items-center gap-1">
+                            <Clock size={14} className="opacity-70" />
+                            Hiệu lực
+                          </dt>
+                          <dd className="text-slate-800 tabular-nums">
+                            {formatDate(schedule.startDate)} → {formatDate(schedule.endDate)}
+                          </dd>
+                        </div>
+                        {(schedule.updatedAt || schedule.createdAt) && (
+                          <div className="sm:col-span-2 text-xs text-slate-400 border-t border-slate-200/80 pt-2 mt-1">
+                            Cập nhật hệ thống:{" "}
+                            {formatDateTime(schedule.updatedAt || schedule.createdAt)}
+                          </div>
+                        )}
+                      </dl>
                     </div>
                   </div>
                   
@@ -820,7 +907,8 @@ export default function AssignScheduleModal({
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
