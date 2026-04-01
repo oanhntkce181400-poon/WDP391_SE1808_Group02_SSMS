@@ -45,6 +45,7 @@ backend-api/SEED_DATA_DOCUMENTATION.md
 *.drawio
 *.drawio.xml
 *.puml
+!bang-feature-evidence.md
 !payos-demo-reactJS-main/public/robots.txt
 
 # Docs folder (UC descriptions, helper scripts)
